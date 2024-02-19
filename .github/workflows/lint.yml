@@ -1,0 +1,19 @@
+name: Lint
+on:
+  push:
+permissions:
+  contents: read
+jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: cachix/install-nix-action@v18
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Run tests
+        env:
+          NETWORK: ${{ matrix.network }}
+        run: |
+          nix develop -c make lint
