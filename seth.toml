@@ -21,7 +21,7 @@ trace_to_json = false
 name = "Anvil"
 chain_id = "31337"
 transaction_timeout = "30s"
-urls = ["ws://localhost:8545"]
+urls_secret = ["ws://localhost:8545"]
 transfer_gas_fee = 21_000
 gas_limit = 10_000_000
 # legacy transactions
@@ -35,7 +35,7 @@ gas_tip_cap = 1_000_000_000
 name = "Geth"
 chain_id = "1337"
 transaction_timeout = "30s"
-urls = ["ws://localhost:8546"]
+urls_secret = ["ws://localhost:8546"]
 transfer_gas_fee = 21_000
 gas_limit = 8_000_000
 # legacy transactions

@@ -149,7 +149,7 @@ gas_price = 1_000_000_000
 eip_1559_dynamic_fees = true
 gas_fee_cap = 25_000_000_000
 gas_tip_cap = 1_800_000_000
-urls = ["..."]
+urls_secret = ["..."]
 ```
 
 If you want to re-use previously deployed contracts you can indicate file name in `seth.toml`:

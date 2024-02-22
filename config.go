@@ -54,7 +54,7 @@ type NonceManagerCfg struct {
 type Network struct {
 	Name               string    `toml:"name"`
 	ChainID            string    `toml:"chain_id"`
-	URLs               []string  `toml:"urls"`
+	URLs               []string  `toml:"urls_secret"`
 	EIP1559DynamicFees bool      `toml:"eip_1559_dynamic_fees"`
 	GasPrice           int64     `toml:"gas_price"`
 	GasFeeCap          int64     `toml:"gas_fee_cap"`
@@ -62,7 +62,7 @@ type Network struct {
 	GasLimit           uint64    `toml:"gas_limit"`
 	TxnTimeout         *Duration `toml:"transaction_timeout"`
 	TransferGasFee     int64     `toml:"transfer_gas_fee"`
-	PrivateKeys        []string  `toml:"private_keys"`
+	PrivateKeys        []string  `toml:"private_keys_secret"`
 }
 
 func ReadConfig() (*Config, error) {
