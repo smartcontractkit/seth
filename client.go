@@ -5,13 +5,14 @@ import (
 	"crypto/ecdsa"
 	verr "errors"
 	"fmt"
-	"github.com/avast/retry-go"
-	"github.com/ethereum/go-ethereum"
 	"math/big"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/avast/retry-go"
+	"github.com/ethereum/go-ethereum"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -80,6 +81,10 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 	nm, err := NewNonceManager(cfg, addrs, pkeys)
 	if err != nil {
 		return nil, errors.Wrap(err, ErrCreateNonceManager)
+	}
+
+	if !cfg.IsSimulatedNetwork() && cfg.SaveDeployedContractsMap && cfg.ContractMapFile == "" {
+		cfg.ContractMapFile = cfg.GenerateContractMapFileName()
 	}
 
 	// this part is kind of duplicated in NewClientRaw, but we need to create contract map before creating Tracer
@@ -642,7 +647,7 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 		m.ContractStore.AddABI(name, abi)
 	}
 
-	if m.Cfg.IsSimulatedNetwork() {
+	if !m.Cfg.ShoulSaveDeployedContractMap() {
 		return DeploymentData{Address: address, Transaction: tx, BoundContract: contract}, nil
 	}
 

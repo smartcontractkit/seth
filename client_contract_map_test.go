@@ -60,6 +60,7 @@ func TestContractMapNonSimulatedClientSavesAndReadsContractMap(t *testing.T) {
 	client, err := seth.NewClient()
 	require.NoError(t, err, "failed to create client")
 
+	client.Cfg.SaveDeployedContractsMap = true
 	client.Cfg.ContractMapFile = file.Name()
 	// change network name so that is not treated as simulated
 	client.Cfg.Network.Name = "geth2"
@@ -84,6 +85,7 @@ func TestContractMapSimulatedClientDoesntSaveContractMap(t *testing.T) {
 	client, err := seth.NewClient()
 	require.NoError(t, err, "failed to create client")
 
+	client.Cfg.SaveDeployedContractsMap = true
 	_, err = client.DeployContractFromContractStore(client.NewTXOpts(), "NetworkDebugSubContract")
 	require.NoError(t, err, "failed to deploy contract")
 
@@ -95,6 +97,7 @@ func TestContractMapSimulatedClientDoesntSaveContractMap(t *testing.T) {
 func TestContractMapNewClientIsCreatedEvenIfNoContractMapFileExists(t *testing.T) {
 	cfg := deepcopy.MustAnything(TestEnv.Client.Cfg).(*seth.Config)
 
+	cfg.SaveDeployedContractsMap = true
 	// change network name so that is not treated as simulated
 	cfg.Network.Name = "geth2"
 	// set timeout manually, because deep copy fails to copy it
