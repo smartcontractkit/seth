@@ -31,15 +31,16 @@ type Config struct {
 	ephemeral      bool
 	EphemeralAddrs *int64 `toml:"ephemeral_addresses_number"`
 
-	ABIDir          string `toml:"abi_dir"`
-	BINDir          string `toml:"bin_dir"`
-	ContractMapFile string `toml:"contract_map_file"`
-	KeyFilePath     string
-	Network         *Network         `toml:"network"`
-	Networks        []*Network       `toml:"networks"`
-	NonceManager    *NonceManagerCfg `toml:"nonce_manager"`
-	TracingEnabled  bool             `toml:"tracing_enabled"`
-	TraceToJson     bool             `toml:"trace_to_json"`
+	ABIDir                   string `toml:"abi_dir"`
+	BINDir                   string `toml:"bin_dir"`
+	ContractMapFile          string `toml:"contract_map_file"`
+	SaveDeployedContractsMap bool   `toml:"save_deployed_contracts_map"`
+	KeyFilePath              string
+	Network                  *Network         `toml:"network"`
+	Networks                 []*Network       `toml:"networks"`
+	NonceManager             *NonceManagerCfg `toml:"nonce_manager"`
+	TracingEnabled           bool             `toml:"tracing_enabled"`
+	TraceToJson              bool             `toml:"trace_to_json"`
 	// internal fields
 	ConfigDir string `toml:"abs_path"`
 }
@@ -65,6 +66,7 @@ type Network struct {
 	PrivateKeys        []string  `toml:"private_keys_secret"`
 }
 
+// ReadConfig reads the TOML config file from location specified by env var "SETH_CONFIG_PATH" and returns a Config struct
 func ReadConfig() (*Config, error) {
 	cfgPath := os.Getenv("SETH_CONFIG_PATH")
 	if cfgPath == "" {
@@ -105,13 +107,11 @@ func ReadConfig() (*Config, error) {
 	if err := readKeyFileConfig(cfg); err != nil {
 		return nil, err
 	}
-	if !cfg.IsSimulatedNetwork() && cfg.ContractMapFile == "" {
-		cfg.ContractMapFile = cfg.GenerateContractMapFileName()
-	}
 	L.Trace().Interface("Config", cfg).Msg("Parsed seth config")
 	return cfg, nil
 }
 
+// ParseKeys parses private keys from the config
 func (c *Config) ParseKeys() ([]common.Address, []*ecdsa.PrivateKey, error) {
 	addresses := make([]common.Address, 0)
 	privKeys := make([]*ecdsa.PrivateKey, 0)
@@ -132,15 +132,22 @@ func (c *Config) ParseKeys() ([]common.Address, []*ecdsa.PrivateKey, error) {
 	return addresses, privKeys, nil
 }
 
+// IsSimulatedNetwork returns true if the network is simulated (i.e. Geth or Anvil)
 func (c *Config) IsSimulatedNetwork() bool {
 	networkName := strings.ToLower(c.Network.Name)
 	return networkName == strings.ToLower(GETH) || networkName == strings.ToLower(ANVIL)
 }
 
+// GenerateContractMapFileName generates a file name for the contract map
 func (c *Config) GenerateContractMapFileName() string {
 	networkName := strings.ToLower(c.Network.Name)
 	now := time.Now().Format("2006-01-02-15-04-05")
 	return fmt.Sprintf(ContractMapFilePattern, networkName, now)
+}
+
+// ShoulSaveDeployedContractMap returns true if the contract map should be saved (i.e. not a simulated network and functionality is enabled)
+func (c *Config) ShoulSaveDeployedContractMap() bool {
+	return !c.IsSimulatedNetwork() && c.SaveDeployedContractsMap
 }
 
 func readKeyFileConfig(cfg *Config) error {
