@@ -162,7 +162,7 @@ If you want to re-use previously deployed contracts you can indicate file name i
 ```
 contract_map_file = "deployed_contracts_mumbai.toml"
 ```
-Both features only works for live networks, otherwise they are ignored and nothing is saved/read from for simulated networks.
+Both features only work for live networks. Otherwise, they are ignored, and nothing is saved/read from for simulated networks.
 
 ## CLI
 
