@@ -42,7 +42,8 @@ type Config struct {
 	TracingEnabled           bool             `toml:"tracing_enabled"`
 	TraceToJson              bool             `toml:"trace_to_json"`
 	// internal fields
-	ConfigDir string `toml:"abs_path"`
+	ConfigDir                string `toml:"abs_path"`
+	RevertedTransactionsFile string
 }
 
 type NonceManagerCfg struct {

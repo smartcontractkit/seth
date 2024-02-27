@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"time"
@@ -297,4 +298,50 @@ func saveAsJson(v any, dirName, name string) (string, error) {
 	err = os.WriteFile(confPath, f, 0600)
 
 	return confPath, err
+}
+
+func OpenJsonFileAsStruct(path string, v any) error {
+	jsonFile, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer jsonFile.Close()
+	b, _ := io.ReadAll(jsonFile)
+	err = json.Unmarshal(b, v)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateOrAppendToJsonArray appends to a JSON array in a file or creates a new JSON array if the file is empty or doesn't exist
+func CreateOrAppendToJsonArray(filePath string, newItem any) error {
+	f, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	size, err := f.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+
+	jsonBytes, err := json.Marshal(newItem)
+	if err != nil {
+		return err
+	}
+	jsonValue := string(jsonBytes)
+
+	if size == 0 {
+		_, err = f.WriteString(fmt.Sprintf("[%s]", jsonValue))
+	} else {
+		// Move cursor back by one character, so we can append data just before array end.
+		_, err = f.Seek(-1, io.SeekEnd)
+		if err != nil {
+			return err
+		}
+		_, err = f.WriteString(fmt.Sprintf(",\n%s]", jsonValue))
+	}
+	return err
 }

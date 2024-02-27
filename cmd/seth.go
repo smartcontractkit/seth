@@ -1,9 +1,12 @@
 package seth
 
 import (
-	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 
+	"github.com/naoina/toml"
+	"github.com/pkg/errors"
 	"github.com/smartcontractkit/seth"
 	"github.com/urfave/cli/v2"
 )
@@ -24,15 +27,17 @@ func RunCLI(args []string) error {
 			&cli.StringFlag{Name: "networkName", Aliases: []string{"n"}},
 		},
 		Before: func(cCtx *cli.Context) error {
+			var err error
 			networkName := cCtx.String("networkName")
 			if networkName == "" {
 				return errors.New(ErrNoNetwork)
 			}
 			_ = os.Setenv("NETWORK", networkName)
-			var err error
-			C, err = seth.NewClient()
-			if err != nil {
-				return err
+			if cCtx.Args().Len() > 0 && cCtx.Args().First() != "trace" {
+				C, err = seth.NewClient()
+				if err != nil {
+					return err
+				}
 			}
 			return nil
 		},
@@ -109,6 +114,77 @@ func RunCLI(args []string) error {
 							return os.Remove(C.Cfg.KeyFilePath)
 						},
 					},
+				},
+			},
+			{
+				Name:        "trace",
+				HelpName:    "trace",
+				Aliases:     []string{"t"},
+				Description: "trace transactions loaded from JSON file",
+				Flags: []cli.Flag{
+					&cli.StringFlag{Name: "file", Aliases: []string{"f"}},
+				},
+				Action: func(cCtx *cli.Context) error {
+					file := cCtx.String("file")
+					var transactions []string
+					err := seth.OpenJsonFileAsStruct(file, &transactions)
+					if err != nil {
+						return err
+					}
+
+					_ = os.Setenv(seth.LogLevelEnvVar, "debug")
+
+					cfgPath := os.Getenv("SETH_CONFIG_PATH")
+					if cfgPath == "" {
+						return errors.New(seth.ErrEmptyConfigPath)
+					}
+					var cfg *seth.Config
+					d, err := os.ReadFile(cfgPath)
+					if err != nil {
+						return errors.Wrap(err, seth.ErrReadSethConfig)
+					}
+					err = toml.Unmarshal(d, &cfg)
+					if err != nil {
+						return errors.Wrap(err, seth.ErrUnmarshalSethConfig)
+					}
+					absPath, err := filepath.Abs(cfgPath)
+					if err != nil {
+						return err
+					}
+					cfg.ConfigDir = filepath.Dir(absPath)
+
+					snet := os.Getenv("NETWORK")
+					if snet == "" {
+						return errors.New(ErrNoNetwork)
+					}
+
+					for _, n := range cfg.Networks {
+						if n.Name == snet {
+							cfg.Network = n
+						}
+					}
+					if cfg.Network == nil {
+						return fmt.Errorf("network %s not found", snet)
+					}
+
+					zero := int64(0)
+					cfg.EphemeralAddrs = &zero
+
+					client, err := seth.NewClientWithConfig(cfg)
+					if err != nil {
+						return err
+					}
+
+					seth.L.Info().Msgf("Tracing transactions from %s file", file)
+
+					for _, tx := range transactions {
+						seth.L.Info().Msgf("Tracing transaction %s", tx)
+						err = client.Tracer.TraceGethTX(tx)
+						if err != nil {
+							return err
+						}
+					}
+					return err
 				},
 			},
 		},

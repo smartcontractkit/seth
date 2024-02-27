@@ -152,11 +152,17 @@ gas_tip_cap = 1_800_000_000
 urls_secret = ["..."]
 ```
 
+If you want to save addresses of deployed contracts, you can enable it with:
+```
+save_deployed_contracts_map = true
+```
+
+
 If you want to re-use previously deployed contracts you can indicate file name in `seth.toml`:
 ```
 contract_map_file = "deployed_contracts_mumbai.toml"
 ```
-This feature only works for live networks, otherwise it's ignored and nothing is read from it for simulated networks.
+Both features only works for live networks, otherwise they are ignored and nothing is saved/read from for simulated networks.
 
 ## CLI
 
@@ -192,6 +198,24 @@ seth -n Fuji gas -b 10000 -tp 0.99
 This will analyze last 10k blocks and give you 25/50/75/99th/Max percentiles for base fees and tip fees
 
 `-tp 0.99` requests the 99th tip percentile across all the transaction in one block and calculates 25/50/75/99th/Max across all blocks
+
+### Bulk tracing
+You can trace multiple transactions at once using `seth trace` command. Example:
+```
+SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go -n=Geth trace -f reverted_transactions.json
+```
+
+You need to pass a file with a list of transaction hashes to trace. The file should be a JSON array of transaction hashes, like this:
+```
+[
+  "0x...",
+  "0x...",
+  "0x...",
+  ...
+]
+```
+
+(Note that currently Seth automatically creates `reverted_transactions_<network>_<date>.json` with all reverted transactions, so you can use this file as input for the `trace` command.)
 
 
 ## Features
