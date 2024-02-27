@@ -1,6 +1,7 @@
 package seth_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -18,6 +19,9 @@ func TestCLITracing(t *testing.T) {
 
 	tx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomError(c.NewTXOpts())
 	require.NoError(t, txErr, "transaction should have reverted")
+
+	_, err = c.WaitMined(context.Background(), seth.L, c.Client, tx)
+	require.NoError(t, err, "should have waited for transaction to be mined")
 
 	err = seth.CreateOrAppendToJsonArray(file.Name(), tx.Hash().Hex())
 	require.NoError(t, err, "should have written to file")
