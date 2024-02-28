@@ -33,7 +33,8 @@ const (
 	ErrReadContractMap    = "failed to read deployed contract map"
 	ErrNoKeyLoaded        = "failed to load private key"
 
-	ContractMapFilePattern = "deployed_contracts_%s_%s.toml"
+	ContractMapFilePattern          = "deployed_contracts_%s_%s.toml"
+	RevertedTransactionsFilePattern = "reverted_transactions_%s_%s.json"
 )
 
 var (
@@ -62,6 +63,7 @@ type Client struct {
 
 // NewClientWithConfig creates a new seth client with all deps setup from config
 func NewClientWithConfig(cfg *Config) (*Client, error) {
+	initDefaultLogging()
 	cfg.setEphemeralAddrs()
 	cs, err := NewContractStore(filepath.Join(cfg.ConfigDir, cfg.ABIDir), filepath.Join(cfg.ConfigDir, cfg.BINDir))
 	if err != nil {
@@ -118,7 +120,6 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 
 // NewClient creates a new raw seth client with all deps setup from env vars
 func NewClient() (*Client, error) {
-	initDefaultLogging()
 	cfg, err := ReadConfig()
 	if err != nil {
 		return nil, err
@@ -184,8 +185,10 @@ func NewClientRaw(
 	}
 	if c.NonceManager != nil {
 		c.NonceManager.Client = c
-		if err := c.NonceManager.UpdateNonces(); err != nil {
-			return nil, err
+		if len(c.Cfg.Network.PrivateKeys) > 0 {
+			if err := c.NonceManager.UpdateNonces(); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -241,6 +244,9 @@ func NewClientRaw(
 		c.Tracer = tr
 	}
 
+	now := time.Now().Format("2006-01-02-15-04-05")
+	c.Cfg.RevertedTransactionsFile = fmt.Sprintf(RevertedTransactionsFilePattern, c.Cfg.Network.Name, now)
+
 	return c, nil
 }
 
@@ -266,6 +272,13 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 		return &DecodedTransaction{}, err
 	}
 	if receipt.Status == 0 {
+		err = CreateOrAppendToJsonArray(m.Cfg.RevertedTransactionsFile, tx.Hash().Hex())
+		if err != nil {
+			l.Warn().
+				Err(err).
+				Str("TXHash", tx.Hash().Hex()).
+				Msg("Failed to save reverted transaction to file")
+		}
 		if err := m.callAndGetRevertReason(tx, receipt); err != nil {
 			return &DecodedTransaction{}, err
 		}
