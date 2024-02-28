@@ -58,6 +58,7 @@ keyfile_test_api.toml
 examples/keyfile_test_example.toml
 
 /traces
+reverted_transactions*.json
 
 #map of address -> ABI name of deployed contracts
 deployed_contracts*.toml
