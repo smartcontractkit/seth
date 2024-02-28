@@ -241,11 +241,20 @@ func (m *Client) DecodeCustomABIErr(txErr error) (string, error) {
 
 // CallMsgFromTx creates ethereum.CallMsg from tx, used in simulated calls
 func (m *Client) CallMsgFromTx(tx *types.Transaction) ethereum.CallMsg {
+	if tx.Type() == types.LegacyTxType {
+		return ethereum.CallMsg{
+			From:     m.Addresses[0],
+			To:       tx.To(),
+			Gas:      tx.Gas(),
+			GasPrice: tx.GasPrice(),
+			Value:    tx.Value(),
+			Data:     tx.Data(),
+		}
+	}
 	return ethereum.CallMsg{
 		From:      m.Addresses[0],
 		To:        tx.To(),
 		Gas:       tx.Gas(),
-		GasPrice:  tx.GasPrice(),
 		GasFeeCap: tx.GasFeeCap(),
 		GasTipCap: tx.GasTipCap(),
 		Value:     tx.Value(),
