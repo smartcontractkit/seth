@@ -633,7 +633,9 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 	// I had this one failing sometimes, when transaction has been minted, but contract cannot be found yet at address
 	if err := retry.Do(
 		func() error {
-			_, err := bind.WaitDeployed(context.Background(), m.Client, tx)
+			ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
+			_, err := bind.WaitDeployed(ctx, m.Client, tx)
+			cancel()
 			return err
 		}, retry.OnRetry(func(i uint, _ error) {
 			L.Debug().Uint("Attempt", i).Msg("Waiting for contract to be deployed")
