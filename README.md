@@ -278,6 +278,24 @@ If network is simulated, we never estimate gas, but use hardcoded values.
 6. We set the `gas_fee_cap` to a sum of base fee and tip fee.
 7. Based on `gas_estimation_tx_priority` we add a buffer to `gas_fee_cap` to make sure the transaction is included in the block.
 
+It must be mentioned that `gas_estimation_tx_priority` is also used, when deciding, which percentile to use for base fee and tip fee for historical fee data. Here's how that looks:
+```go
+		case Priority_Ultra:
+			baseFee = stats.GasPrice.Max
+			historicalGasTipCap = stats.TipCap.Max
+		case Priority_Fast:
+			baseFee = stats.GasPrice.Perc99
+			historicalGasTipCap = stats.TipCap.Perc99
+		case Priority_Standard:
+			baseFee = stats.GasPrice.Perc50
+			historicalGasTipCap = stats.TipCap.Perc50
+		case Priority_Slow:
+			baseFee = stats.GasPrice.Perc25
+			historicalGasTipCap = stats.TipCap.Perc25
+```
+
+**For `ultra` priority we will use historically highest base fee and tip fee and then even further increase it by the adjustment factor and buffer! So use this with caution and only if you want your transaction to be included in the next block no matter what.**
+
 ##### Adjustment factor
 ```go
 	case Priority_Ultra:
