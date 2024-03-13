@@ -51,7 +51,8 @@ func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy 
 		if err != nil {
 			return nil, err
 		}
-		m.BlockCache.Set(block)
+		// ignore the error here as at this points is very improbable that block is nil and there's no error
+		_ = m.BlockCache.Set(block)
 		return block, nil
 	}
 
