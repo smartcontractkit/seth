@@ -57,32 +57,14 @@ func (m *GasEstimator) Stats(fromNumber uint64, priorityPerc float64) (GasSugges
 	if err != nil {
 		return GasSuggestions{}, err
 	}
-	L.Info().
-		Interface("Max", gasPercs.Max).
-		Interface("99", gasPercs.Perc99).
-		Interface("75", gasPercs.Perc75).
-		Interface("50", gasPercs.Perc50).
-		Interface("25", gasPercs.Perc25).
-		Msg("Base fee (Wei)")
-	L.Info().
-		Interface("Max", tipPercs.Max).
-		Interface("99", tipPercs.Perc99).
-		Interface("75", tipPercs.Perc75).
-		Interface("50", tipPercs.Perc50).
-		Interface("25", tipPercs.Perc25).
-		Msg("Priority fee (Wei)")
-	L.Info().
-		Interface("GasPrice", suggestedGasPrice).
-		Msg("Suggested gas price now")
-	L.Info().
-		Interface("GasTipCap", suggestedGasTipCap).
-		Msg("Suggested gas tip cap now")
-	L.Debug().
+	L.Trace().
 		Interface("History", hist).
 		Msg("Fee history")
 	return GasSuggestions{
-		GasPrice: gasPercs,
-		TipCap:   tipPercs,
+		GasPrice:           gasPercs,
+		TipCap:             tipPercs,
+		SuggestedGasPrice:  suggestedGasPrice,
+		SuggestedGasTipCap: suggestedGasTipCap,
 	}, nil
 }
 
@@ -96,8 +78,10 @@ type GasPercentiles struct {
 }
 
 type GasSuggestions struct {
-	GasPrice *GasPercentiles
-	TipCap   *GasPercentiles
+	GasPrice           *GasPercentiles
+	TipCap             *GasPercentiles
+	SuggestedGasPrice  *big.Int
+	SuggestedGasTipCap *big.Int
 }
 
 // quantilesFromFloatArray calculates quantiles from a float array

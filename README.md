@@ -150,6 +150,16 @@ eip_1559_dynamic_fees = true
 gas_fee_cap = 25_000_000_000
 gas_tip_cap = 1_800_000_000
 urls_secret = ["..."]
+# if set to true we will estimate gas for every transaction
+gas_estimation_enabled = true
+# how many last blocks to use, when estimating gas for a transaction
+gas_estimation_blocks = 1000
+# maximum tip to which tip estimation will be capped (for EIP-1559 transactions)
+gas_estimation_max_tip_cap = 10_000_000_000
+# maximum gas price to which gas price estimation will be capped (for legacy transactions)
+gas_estimation_max_gas_price = 10_000_000_000
+# priority of the transaction, can be "ultra", "fast", "standard" or "slow" (the higher the priority, the higher adjustment factor will be used for gas estimation) [default: "standard"]
+gas_estimation_tx_priority = "slow"
 ```
 
 If you want to save addresses of deployed contracts, you can enable it with:
@@ -217,7 +227,6 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 
 (Note that currently Seth automatically creates `reverted_transactions_<network>_<date>.json` with all reverted transactions, so you can use this file as input for the `trace` command.)
 
-
 ## Features
 - [x] Decode named inputs
 - [x] Decode named outputs
@@ -241,5 +250,58 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 - [ ] More tests for corner cases of decoding/tracing
 - [x] Saving of deployed contracts mapping (`address -> ABI_name`) for live networks
 - [x] Reading of deployed contracts mappings for live networks
+- [x] Automatic gas estimator (experimental)
 
 You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
+
+### Autmoatic gas estimator
+
+Regardless whether you are using automatic gas estimator or not, you still need to set all expected default gas-related values for your network. If it doesn't support EIP-1559, you need to set `gas_price` and if it does, you need to set `eip_1559_dynamic_fees`, `gas_fee_cap`, `gas_tip_cap`. They will be used as fallback in case gas estimation fails.
+
+Now, how does gas estimation work?
+
+If network is simulated, we never estimate gas, but use hardcoded values.
+
+#### Legacy transactions
+1. We ask the node for suggested gas price.
+2. We fetch last `gas_estimation_blocks` blocks and calculate congestion rate for each block using a logarithmic function that gives higher weight to the most recent blocks.
+3. Based on congestion rate, we adjust suggested gas price by a factor that is calculated based on `gas_estimation_tx_priority`. The higher the priority, the higher the adjustment factor.
+4. We cap the gas price to `gas_estimation_max_gas_price` if it's higher than that.
+5. Based on `gas_estimation_tx_priority` we add a buffer to gas price to make sure the transaction is included in the block.
+
+#### EIP-1559 transactions
+1. We ask the node for suggested tip fee.
+2. We get base fee and tip fee history for last `gas_estimation_blocks` blocks.
+3. We fetch last `gas_estimation_blocks` blocks and calculate congestion rate for each block using a logarithmic function that gives higher weight to the most recent blocks.
+4. Based on congestion rate, we adjust suggested tip fee and base fee by a factor that is calculated based on `gas_estimation_tx_priority`. The higher the priority, the higher the adjustment factor.
+5. We cap the tip fee to `gas_estimation_max_tip_cap` if it's higher than that.
+6. We set the `gas_fee_cap` to a sum of base fee and tip fee.
+7. Based on `gas_estimation_tx_priority` we add a buffer to `gas_fee_cap` to make sure the transaction is included in the block.
+
+##### Adjustment factor
+```go
+	case Priority_Ultra:
+		return 1.5
+	case Priority_Fast:
+		return 1.2
+	case Priority_Standard:
+		return 1.0
+	case Priority_Slow:
+		return 0.8
+```
+
+##### Buffer precents
+```go
+	case Congestion_Low:
+		return 0.05, nil
+	case Congestion_Medium:
+		return 0.10, nil
+	case Congestion_High:
+		return 0.15, nil
+	case Congestion_Ultra:
+		return 0.20, nil
+```
+
+We cache block data in an in-memory cache, so we don't have to fetch it every time we estimate gas. The cache has capacity equal to `gas_estimation_blocks` and every time we add a new element, we remove one that is least frequently used and oldest (with block number being a constant and chain always moving forward it makes no sense to keep old blocks).
+
+For both transaction types if any of the steps fails, we fallback to hardcoded values.

@@ -55,7 +55,27 @@ func RunCLI(args []string) error {
 					ge := seth.NewGasEstimator(C)
 					blocks := cCtx.Uint64("blocks")
 					tipPerc := cCtx.Float64("tipPercentile")
-					_, err := ge.Stats(blocks, tipPerc)
+					stats, err := ge.Stats(blocks, tipPerc)
+					seth.L.Info().
+						Interface("Max", stats.GasPrice.Max).
+						Interface("99", stats.GasPrice.Perc99).
+						Interface("75", stats.GasPrice.Perc75).
+						Interface("50", stats.GasPrice.Perc50).
+						Interface("25", stats.GasPrice.Perc25).
+						Msg("Base fee (Wei)")
+					seth.L.Info().
+						Interface("Max", stats.TipCap.Max).
+						Interface("99", stats.TipCap.Perc99).
+						Interface("75", stats.TipCap.Perc75).
+						Interface("50", stats.TipCap.Perc50).
+						Interface("25", stats.TipCap.Perc25).
+						Msg("Priority fee (Wei)")
+					seth.L.Info().
+						Interface("GasPrice", stats.SuggestedGasPrice).
+						Msg("Suggested gas price now")
+					seth.L.Info().
+						Interface("GasTipCap", stats.SuggestedGasTipCap).
+						Msg("Suggested gas tip cap now")
 					return err
 				},
 			},
