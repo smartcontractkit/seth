@@ -5,7 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/naoina/toml"
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/pkg/errors"
 	"github.com/smartcontractkit/seth"
 	"github.com/urfave/cli/v2"

@@ -10,7 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/naoina/toml"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
 )
 

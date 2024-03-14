@@ -12,7 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/naoina/toml"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
 	network_debug_contract "github.com/smartcontractkit/seth/contracts/bind/debug"
 	network_sub_debug_contract "github.com/smartcontractkit/seth/contracts/bind/sub"

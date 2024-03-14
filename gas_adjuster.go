@@ -223,8 +223,10 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.In
 	maxAsBig := big.NewInt(int64(m.Cfg.Network.GasEsimationMaxGasTipCap))
 
 	// Ensure the adjusted tip does not exceed the max priority fee cap
+	tipCapped := false
 	if adjustedTipCap.Cmp(maxAsBig) > 0 {
 		L.Debug().Msg("Adjusted tip exceeds max tip cap")
+		tipCapped = true
 		adjustedTipCap.Set(maxAsBig)
 	}
 
@@ -247,7 +249,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.In
 		Str("Diff", big.NewInt(0).Sub(adjustedTipCap, suggestedGasTip).String()).
 		Str("Original GasTipCap", suggestedGasTip.String()).
 		Str("Final GasTipCap", adjustedTipCap.String()).
-		Bool("Capped", adjustedTipCap.Cmp(maxAsBig) > 0).
+		Bool("Capped", tipCapped).
 		Msg("Suggested EIP-1559 fees")
 
 	L.Debug().
@@ -301,8 +303,10 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context) (adjustedGasPrice *
 	maxAsBig := big.NewInt(int64(m.Cfg.Network.GasEsimationMaxGasPrice))
 
 	// Ensure the adjusted gas price does not exceed the max gas price
+	gasCapped := false
 	if adjustedGasPrice.Cmp(maxAsBig) > 0 {
 		L.Debug().Msg("Adjusted tip exceeds max tip cap")
+		gasCapped = true
 		adjustedGasPrice.Set(maxAsBig)
 	}
 
@@ -322,7 +326,7 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context) (adjustedGasPrice *
 		Str("Diff", big.NewInt(0).Sub(adjustedGasPrice, suggestedGasPrice).String()).
 		Str("Original GasPrice", suggestedGasPrice.String()).
 		Str("Final GasPrice", adjustedGasPrice.String()).
-		Bool("Capped", adjustedGasPrice.Cmp(maxAsBig) > 0).
+		Bool("Capped", gasCapped).
 		Msg("Suggested Legacy fees")
 
 	L.Debug().

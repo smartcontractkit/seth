@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/naoina/toml"
+	"github.com/pelletier/go-toml/v2"
 )
 
 func SaveDeployedContract(filename, contractName, address string) error {
