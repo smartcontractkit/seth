@@ -38,7 +38,7 @@ func LoadDeployedContracts(filename string) (map[string]string, error) {
 
 	b, _ := io.ReadAll(tomlFile)
 	rawContracts := map[common.Address]string{}
-	err = toml.Unmarshal(b, rawContracts)
+	err = toml.Unmarshal(b, &rawContracts)
 	if err != nil {
 		return map[string]string{}, err
 	}
