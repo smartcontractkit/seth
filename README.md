@@ -263,15 +263,15 @@ If network is simulated, we never estimate gas, but use hardcoded values.
 
 #### Legacy transactions
 1. We ask the node for suggested gas price.
-2. We fetch last `gas_estimation_blocks` blocks and calculate congestion rate for each block using a logarithmic function that gives higher weight to the most recent blocks.
+2. We fetch last `gas_estimation_blocks` block headers and calculate congestion rate for each block using a logarithmic function that gives higher weight to the most recent block headers.
 3. Based on congestion rate, we adjust suggested gas price by a factor that is calculated based on `gas_estimation_tx_priority`. The higher the priority, the higher the adjustment factor.
 5. Based on `gas_estimation_tx_priority` we add a buffer to gas price to make sure the transaction is included in the block (see below).
 6. Using `gas_limit` we calculate maximum possible cost of the transaction and if it's higher than `gas_estimation_max_tx_cost_wei` we divide the max cost by `gas_limit` and set the gas price to that value.
 
 #### EIP-1559 transactions
 1. We ask the node for suggested tip fee.
-2. We get base fee and tip fee history for last `gas_estimation_blocks` blocks.
-3. We fetch last `gas_estimation_blocks` blocks and calculate congestion rate for each block using a logarithmic function that gives higher weight to the most recent blocks.
+2. We get base fee and tip fee history for last `gas_estimation_blocks` block headers.
+3. We fetch last `gas_estimation_blocks` block headers and calculate congestion rate for each block using a logarithmic function that gives higher weight to the most recent block headers.
 4. Based on congestion rate, we adjust suggested tip fee and base fee by a factor that is calculated based on `gas_estimation_tx_priority`. The higher the priority, the higher the adjustment factor.
 5. We sum base fee and the tip to get the gas fee cap, which we then multiply by `gas_limit` to get the maximum possible cost of the transaction.
 6. If the maximum possible cost is higher than `gas_estimation_max_tx_cost_wei` we divide the max cost by `gas_limit` and set the gas fee cap to that value. Then we calculate the ratio by which we have lowered the maximum possible cost and we lower the tip cap by the same ratio. E.g. if highest possible cost is 20% higher than `gas_estimation_max_tx_cost_wei`, we lower the tip cap by 20%.
