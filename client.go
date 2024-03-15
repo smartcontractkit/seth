@@ -59,7 +59,7 @@ type Client struct {
 	TraceReverted            bool
 	ContractAddressToNameMap ContractMap
 	ABIFinder                *ABIFinder
-	BlockCache               *LFUBlockCache
+	HeaderCache              *LFUHeaderCache
 }
 
 // NewClientWithConfig creates a new seth client with all deps setup from config
@@ -285,7 +285,7 @@ func NewClientRaw(
 	if c.Cfg.Network.GasEstimationEnabled {
 		L.Debug().Msg("Gas estimation is enabled")
 		L.Debug().Msg("Initialising LFU block cache")
-		c.BlockCache = NewLFUBlockCache(c.Cfg.Network.GasEstimationBlocks)
+		c.HeaderCache = NewLFUBlockCache(c.Cfg.Network.GasEstimationBlocks)
 	}
 
 	return c, nil

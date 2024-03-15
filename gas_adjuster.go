@@ -32,10 +32,10 @@ const (
 // CalculateNetworkCongestionMetric calculates a simple congestion metric based on the last N blocks
 // by averaging the trend in base fee and the gas used ratio.
 func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy string) (float64, error) {
-	var getBlockData = func(bn *big.Int) (*types.Block, error) {
-		cachedBlock, ok := m.BlockCache.Get(bn.Int64())
+	var getHeaderData = func(bn *big.Int) (*types.Header, error) {
+		cachedHeader, ok := m.HeaderCache.Get(bn.Int64())
 		if ok {
-			return cachedBlock, nil
+			return cachedHeader, nil
 		}
 
 		var timeout uint64 = uint64(blocksNumber / 100)
@@ -47,13 +47,13 @@ func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy 
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 		defer cancel()
-		block, err := m.Client.BlockByNumber(ctx, bn)
+		header, err := m.Client.HeaderByNumber(ctx, bn)
 		if err != nil {
 			return nil, err
 		}
 		// ignore the error here as at this points is very improbable that block is nil and there's no error
-		_ = m.BlockCache.Set(block)
-		return block, nil
+		_ = m.HeaderCache.Set(header)
+		return header, nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(2*time.Second))
@@ -65,13 +65,13 @@ func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy 
 
 	L.Trace().Msgf("Block range for gas calculation: %d - %d", lastBlockNumber-blocksNumber, lastBlockNumber)
 
-	lastBlock, err := getBlockData(big.NewInt(int64(lastBlockNumber)))
+	lastBlock, err := getHeaderData(big.NewInt(int64(lastBlockNumber)))
 	if err != nil {
 		return 0, err
 	}
 
-	var blocks []*types.Block
-	blocks = append(blocks, lastBlock)
+	var headers []*types.Header
+	headers = append(headers, lastBlock)
 
 	channelSize := blocksNumber
 	if blocksNumber > 20 {
@@ -79,11 +79,11 @@ func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy 
 	}
 
 	var wg sync.WaitGroup
-	dataCh := make(chan *types.Block, channelSize)
+	dataCh := make(chan *types.Header, channelSize)
 
 	go func() {
-		for block := range dataCh {
-			blocks = append(blocks, block)
+		for header := range dataCh {
+			headers = append(headers, header)
 		}
 	}()
 
@@ -96,12 +96,12 @@ func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy 
 		wg.Add(1)
 		go func(bn *big.Int) {
 			defer wg.Done()
-			block, err := getBlockData(bn)
+			header, err := getHeaderData(bn)
 			if err != nil {
-				L.Error().Err(err).Msgf("Failed to get block %d data", bn.Int64())
+				L.Error().Err(err).Msgf("Failed to get block %d header", bn.Int64())
 				return
 			}
-			dataCh <- block
+			dataCh <- header
 		}(big.NewInt(int64(i)))
 	}
 
@@ -109,50 +109,50 @@ func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy 
 	close(dataCh)
 
 	endTime := time.Now()
-	L.Debug().Msgf("Time to fetch %d blocks: %v", blocksNumber, endTime.Sub(startTime))
+	L.Debug().Msgf("Time to fetch %d block headers: %v", blocksNumber, endTime.Sub(startTime))
 
 	minBlockCount := int(float64(blocksNumber) * 0.8)
-	if len(blocks) < minBlockCount {
-		return 0, fmt.Errorf("Failed to fetch enough blocks for congestion calculation. Wanted at least %d, got %d", minBlockCount, len(blocks))
+	if len(headers) < minBlockCount {
+		return 0, fmt.Errorf("Failed to fetch enough block headers for congestion calculation. Wanted at least %d, got %d", minBlockCount, len(headers))
 	}
 
 	switch strategy {
 	case CongestionStrategy_Simple:
-		return calculateSimpleNetworkCongestionMetric(blocks), nil
+		return calculateSimpleNetworkCongestionMetric(headers), nil
 	case CongestionStrategy_NewestFirst:
-		return calculateNewestFirstNetworkCongestionMetric(blocks), nil
+		return calculateNewestFirstNetworkCongestionMetric(headers), nil
 	default:
 		return 0, fmt.Errorf("Unknown congestion strategy: %s", strategy)
 	}
 }
 
 // average the trend and gas used ratio for a basic congestion metric
-func calculateSimpleNetworkCongestionMetric(blocks []*types.Block) float64 {
-	trend := calculateTrend(blocks)
-	gasUsedRatio := calculateGasUsedRatio(blocks)
+func calculateSimpleNetworkCongestionMetric(headers []*types.Header) float64 {
+	trend := calculateTrend(headers)
+	gasUsedRatio := calculateGasUsedRatio(headers)
 
 	congestionMetric := (trend + gasUsedRatio) / 2
 
 	return congestionMetric
 }
 
-// calculates a congestion metric using a logarithmic function that gives more weight to most recent blocks
-func calculateNewestFirstNetworkCongestionMetric(blocks []*types.Block) float64 {
+// calculates a congestion metric using a logarithmic function that gives more weight to most recent block headers
+func calculateNewestFirstNetworkCongestionMetric(headers []*types.Header) float64 {
 	// sort blocks so that we are sure they are in ascending order
-	slices.SortFunc(blocks, func(i, j *types.Block) int {
-		return int(i.NumberU64() - j.NumberU64())
+	slices.SortFunc(headers, func(i, j *types.Header) int {
+		return int(i.Number.Uint64() - j.Number.Uint64())
 	})
 
 	var weightedSum, totalWeight float64
 	// Determines how quickly the weight decreases. The lower the number, the higher the weight of newer blocks.
 	scaleFactor := 10.0
 
-	// Calculate weights starting from the older to most recent blocks.
-	for i, block := range blocks {
-		congestion := float64(block.GasUsed()) / float64(block.GasLimit())
+	// Calculate weights starting from the older to most recent block header.
+	for i, header := range headers {
+		congestion := float64(header.GasUsed) / float64(header.GasLimit)
 
 		// Applying a logarithmic scale for weights.
-		distance := float64(len(blocks) - 1 - i)
+		distance := float64(len(headers) - 1 - i)
 		weight := 1.0 / math.Log10(distance+scaleFactor)
 
 		weightedSum += congestion * weight
@@ -469,26 +469,26 @@ func (m *Client) HistoricalFeeData(priority string) (baseFee float64, historical
 }
 
 // CalculateTrend analyzes the change in base fee to determine congestion trend
-func calculateTrend(blocks []*types.Block) float64 {
+func calculateTrend(headers []*types.Header) float64 {
 	var totalIncrease float64
-	for i := 1; i < len(blocks); i++ {
-		if blocks[i].BaseFee().Cmp(blocks[i-1].BaseFee()) > 0 {
+	for i := 1; i < len(headers); i++ {
+		if headers[i].BaseFee.Cmp(headers[i-1].BaseFee) > 0 {
 			totalIncrease += 1
 		}
 	}
 	// Normalize the increase by the number of transitions to get an average trend
-	trend := totalIncrease / float64(len(blocks)-1)
+	trend := totalIncrease / float64(len(headers)-1)
 	return trend
 }
 
 // CalculateGasUsedRatio averages the gas used ratio for a sense of how full blocks are
-func calculateGasUsedRatio(blocks []*types.Block) float64 {
+func calculateGasUsedRatio(headers []*types.Header) float64 {
 	var totalRatio float64
-	for _, block := range blocks {
-		ratio := float64(block.GasUsed()) / float64(block.GasLimit())
+	for _, header := range headers {
+		ratio := float64(header.GasUsed) / float64(header.GasLimit)
 		totalRatio += ratio
 	}
-	averageRatio := totalRatio / float64(len(blocks))
+	averageRatio := totalRatio / float64(len(headers))
 	return averageRatio
 }
 
