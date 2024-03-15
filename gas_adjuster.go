@@ -167,6 +167,7 @@ func calculateNewestFirstNetworkCongestionMetric(blocks []*types.Block) float64 
 
 // AdjustPriorityFee adjusts the priority fee within a calculated range based on historical data, current congestion, and priority.
 func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.Int, adjustedTipCap *big.Int, err error) {
+	L.Info().Msg("Calculating suggested EIP-1559 fees")
 	var currentGasTip *big.Int
 	currentGasTip, err = m.Client.SuggestGasTipCap(ctx)
 	if err != nil {
@@ -296,10 +297,18 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.In
 		Str("Priority", m.Cfg.Network.GasEstimationTxPriority).
 		Msg("Adjustment factors")
 
+	L.Info().
+		Str("GasTipCap", fmt.Sprintf("%s wei / %s ether", adjustedTipCap.String(), WeiToEther(adjustedTipCap).Text('f', -1))).
+		Str("GasFeeCap", fmt.Sprintf("%s wei / %s ether", maxFeeCap.String(), WeiToEther(maxFeeCap).Text('f', -1))).
+		Msg("Calculated suggested EIP-1559 fees")
+
 	return
 }
 
 func (m *Client) GetSuggestedLegacyFees(ctx context.Context) (adjustedGasPrice *big.Int, err error) {
+	L.Info().
+		Msg("Calculating suggested Legacy fees")
+
 	var suggestedGasPrice *big.Int
 	suggestedGasPrice, err = m.Client.SuggestGasPrice(ctx)
 	if err != nil {
@@ -374,6 +383,10 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context) (adjustedGasPrice *
 		Float64("AdjustmentFactor", adjustmentFactor).
 		Str("Priority", m.Cfg.Network.GasEstimationTxPriority).
 		Msg("Suggested Legacy fees")
+
+	L.Info().
+		Str("GasPrice", fmt.Sprintf("%s wei / %s ether", adjustedGasPrice.String(), WeiToEther(adjustedGasPrice).Text('f', -1))).
+		Msg("Calculated suggested Legacy fees")
 
 	return
 }
