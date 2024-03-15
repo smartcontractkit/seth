@@ -311,15 +311,17 @@ func (m *Client) TransferETHFromKey(ctx context.Context, fromKeyNum int, to stri
 	if err != nil {
 		return errors.Wrap(err, "failed to get network ID")
 	}
-	rawTx := &types.LegacyTx{
-		Nonce:    m.NonceManager.NextNonce(m.Addresses[fromKeyNum]).Uint64(),
-		To:       &toAddr,
-		Value:    value,
-		Gas:      uint64(m.Cfg.Network.TransferGasFee),
-		GasPrice: big.NewInt(m.Cfg.Network.GasPrice),
+	rawTx := &types.DynamicFeeTx{
+		ChainID:   chainID,
+		Nonce:     m.NonceManager.NextNonce(m.Addresses[fromKeyNum]).Uint64(),
+		GasTipCap: big.NewInt(m.Cfg.Network.GasTipCap),
+		GasFeeCap: big.NewInt(m.Cfg.Network.GasFeeCap),
+		Gas:       uint64(m.Cfg.Network.TransferGasFee),
+		To:        &toAddr,
+		Value:     value,
 	}
 	L.Debug().Interface("TransferTx", rawTx).Send()
-	signedTx, err := types.SignNewTx(m.PrivateKeys[fromKeyNum], types.NewEIP155Signer(chainID), rawTx)
+	signedTx, err := types.SignNewTx(m.PrivateKeys[fromKeyNum], types.LatestSignerForChainID(chainID), rawTx)
 	if err != nil {
 		return errors.Wrap(err, "failed to sign tx")
 	}
