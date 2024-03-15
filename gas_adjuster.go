@@ -174,7 +174,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.In
 	}
 
 	L.Debug().
-		Str("CurrentGasTip (Wei/Ether)", fmt.Sprintf("%s/%s", currentGasTip.String(), WeiToEther(currentGasTip).Text('f', -1))).
+		Str("CurrentGasTip", fmt.Sprintf("%s wei / %s ether", currentGasTip.String(), WeiToEther(currentGasTip).Text('f', -1))).
 		Msg("Current suggested gas tip")
 
 	// Fetch the baseline historical base fee and tip for the selected priority
@@ -185,15 +185,20 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.In
 	}
 
 	L.Debug().
-		Str("HistoricalBaseFee (Wei/Ether)", fmt.Sprintf("%.0f/%s", baseFee64, WeiToEther(big.NewInt(int64(baseFee64))).Text('f', -1))).
-		Str("HistoricalSuggestedTip (Wei/Ether)", fmt.Sprintf("%.0f/%s", historicalSuggestedTip64, WeiToEther(big.NewInt(int64(historicalSuggestedTip64))).Text('f', -1))).
+		Str("HistoricalBaseFee", fmt.Sprintf("%.0f wei / %s ether", baseFee64, WeiToEther(big.NewInt(int64(baseFee64))).Text('f', -1))).
+		Str("HistoricalSuggestedTip", fmt.Sprintf("%.0f wei / %s ether", historicalSuggestedTip64, WeiToEther(big.NewInt(int64(historicalSuggestedTip64))).Text('f', -1))).
 		Str("Priority", m.Cfg.Network.GasEstimationTxPriority).
 		Msg("Historical fee data")
 
+	L.Debug().
+		Msgf("Historical tip is %s than suggested tip", calculateMagnitudeDifference(big.NewFloat(historicalSuggestedTip64), new(big.Float).SetInt(currentGasTip)))
+
 	suggestedGasTip := currentGasTip
 	if big.NewInt(int64(historicalSuggestedTip64)).Cmp(suggestedGasTip) > 0 {
-		L.Debug().Msg("Historical suggested tip is higher than current suggested tip")
+		L.Debug().Msg("Historical suggested tip is higher than current suggested tip. Will use it instead.")
 		suggestedGasTip = big.NewInt(int64(historicalSuggestedTip64))
+	} else {
+		L.Debug().Msg("Suggested tip is higher than historical tip. Will use suggested tip.")
 	}
 
 	// Adjust the suggestedTip based on current congestion, keeping within reasonable bounds
@@ -241,48 +246,55 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.In
 
 	maxAllowedTxCost := big.NewInt(m.Cfg.Network.GasEstimationMaxTxCostWei)
 	maxPossibleTxCost := big.NewInt(0).Mul(maxProposedFeeCap, big.NewInt(int64(m.Cfg.Network.GasLimit)))
+	gasTipDiffText := "none"
+	gasCapDiffText := "none"
+	totalCostDiffText := "none"
 
 	if maxPossibleTxCost.Cmp(maxAllowedTxCost) > 0 {
 		L.Debug().
-			Str("Overflow (Wei/Ether)", fmt.Sprintf("%s/%s", big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost).String(), WeiToEther(big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost)).Text('f', -1))).
-			Msg("Max possible tx cost exceeds max allowed tx cost. Capping it.")
+			Str("Overflow", fmt.Sprintf("%s wei / %s ether", big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost).String(), WeiToEther(big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost)).Text('f', -1))).
+			Msgf("Max possible tx cost is %s than allowed tx cost and exceeds it. Will cap it.", calculateMagnitudeDifference(new(big.Float).SetInt(maxPossibleTxCost), (new(big.Float).SetInt(maxAllowedTxCost))))
 
 		maxFeeCap = big.NewInt(0).Div(maxAllowedTxCost, big.NewInt(int64(m.Cfg.Network.GasLimit)))
-		changeRatio, _ := big.NewFloat(0).Quo(new(big.Float).SetInt(maxFeeCap), new(big.Float).SetInt(rawMaxFeeCap)).Int64()
+		changeRatio := big.NewFloat(0).Quo(new(big.Float).SetInt(maxFeeCap), new(big.Float).SetInt(rawMaxFeeCap))
 
-		newAdjustedTipCap := new(big.Int).Mul(adjustedTipCap, big.NewInt(0).SetInt64(changeRatio))
+		newAdjustedTipCap, _ := new(big.Float).Mul(new(big.Float).SetInt(adjustedTipCap), changeRatio).Int64()
+		newAdjustedTipCapBigInt := big.NewInt(newAdjustedTipCap)
 
 		L.Debug().
-			Str("Change (Wei/Ether)", fmt.Sprintf("%s/%s", big.NewInt(0).Sub(adjustedTipCap, newAdjustedTipCap).String(), WeiToEther(big.NewInt(0).Sub(adjustedTipCap, newAdjustedTipCap)).Text('f', -1))).
-			Msg("Decreasing tip to fit within max allowed tx cost.")
+			Str("Change", fmt.Sprintf("%s wei / %s ether", big.NewInt(0).Sub(adjustedTipCap, newAdjustedTipCapBigInt).String(), WeiToEther(big.NewInt(0).Sub(adjustedTipCap, newAdjustedTipCapBigInt)).Text('f', -1))).
+			Msg("Proportionally decreasing tip to fit within max allowed tx cost.")
 
-		adjustedTipCap = newAdjustedTipCap
+		adjustedTipCap = newAdjustedTipCapBigInt
+		gasTipDiffText = fmt.Sprintf("%s wei / %s ether", big.NewInt(0).Sub(adjustedTipCap, suggestedGasTip).String(), WeiToEther(big.NewInt(0).Sub(adjustedTipCap, suggestedGasTip)).Text('f', -1))
+		totalCostDiffText = fmt.Sprintf("%s wei / %s ether", big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost).String(), WeiToEther(big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost)).Text('f', -1))
+		gasCapDiffText = fmt.Sprintf("%s wei / %s ether", big.NewInt(0).Sub(maxProposedFeeCap, maxFeeCap).String(), WeiToEther(big.NewInt(0).Sub(maxProposedFeeCap, maxFeeCap)).Text('f', -1))
 	}
 
 	L.Debug().
-		Str("Diff (Wei/Ether)", fmt.Sprintf("%s/%s", big.NewInt(0).Sub(adjustedTipCap, suggestedGasTip).String(), WeiToEther(big.NewInt(0).Sub(adjustedTipCap, suggestedGasTip)).Text('f', -1))).
-		Str("Initial GasTipCap (Wei/Ether)", fmt.Sprintf("%s/%s", suggestedGasTip.String(), WeiToEther(suggestedGasTip).Text('f', -1))).
-		Str("Final GasTipCap (Wei/Ether)", fmt.Sprintf("%s/%s", adjustedTipCap.String(), WeiToEther(adjustedTipCap).Text('f', -1))).
-		Msg("Suggested EIP-1559 fees")
+		Str("Diff", gasTipDiffText).
+		Str("Initial GasTipCap", fmt.Sprintf("%s wei / %s ether", suggestedGasTip.String(), WeiToEther(suggestedGasTip).Text('f', -1))).
+		Str("Final GasTipCap", fmt.Sprintf("%s wei / %s ether", adjustedTipCap.String(), WeiToEther(adjustedTipCap).Text('f', -1))).
+		Msg("Tip Cap adjustment")
 
 	L.Debug().
-		Str("Diff (Wei/Ether)", fmt.Sprintf("%s/%s", big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost).String(), WeiToEther(big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost)).Text('f', -1))).
-		Str("MaxAllowedTxCost (Wei/Ether)", fmt.Sprintf("%s/%s", maxAllowedTxCost.String(), WeiToEther(maxAllowedTxCost).Text('f', -1))).
-		Str("MaxPossibleTxCost", fmt.Sprintf("%s/%s", maxPossibleTxCost.String(), WeiToEther(maxPossibleTxCost).Text('f', -1))).
-		Msg("Suggested EIP-1559 fees")
+		Str("Diff", gasCapDiffText).
+		Str("Initial Fee Cap", fmt.Sprintf("%s wei / %s ether", maxProposedFeeCap.String(), WeiToEther(maxProposedFeeCap).Text('f', -1))).
+		Str("Final Fee Cap", fmt.Sprintf("%s wei / %s ether", maxFeeCap.String(), WeiToEther(maxFeeCap).Text('f', -1))).
+		Msg("Fee Cap adjustment")
 
 	L.Debug().
-		Str("Diff (Wei/Ether)", fmt.Sprintf("%s/%s", big.NewInt(0).Sub(maxProposedFeeCap, maxFeeCap).String(), WeiToEther(big.NewInt(0).Sub(maxProposedFeeCap, maxFeeCap)).Text('f', -1))).
-		Str("Initial Fee Cap (Wei/Ether)", fmt.Sprintf("%s/%s", maxProposedFeeCap.String(), WeiToEther(maxProposedFeeCap).Text('f', -1))).
-		Str("Final Fee Cap (Wei/Ether)", fmt.Sprintf("%s/%s", maxFeeCap.String(), WeiToEther(maxFeeCap).Text('f', -1))).
-		Msg("Suggested EIP-1559 fees")
+		Str("Diff", totalCostDiffText).
+		Str("MaxAllowedTxCost", fmt.Sprintf("%s wei / %s ether", maxAllowedTxCost.String(), WeiToEther(maxAllowedTxCost).Text('f', -1))).
+		Str("MaxPossibleTxCost", fmt.Sprintf("%s wei / %s ether", maxPossibleTxCost.String(), WeiToEther(maxPossibleTxCost).Text('f', -1))).
+		Msg("Tx cost adjustment")
 
 	L.Debug().
-		Float64("CongestionMetric", congestionMetric).
+		Str("CongestionMetric", fmt.Sprintf("%.4f", congestionMetric)).
 		Str("CongestionClassificaion", congestionClassificaion).
 		Float64("AdjustmentFactor", adjustmentFactor).
 		Str("Priority", m.Cfg.Network.GasEstimationTxPriority).
-		Msg("Suggested EIP-1559 fees")
+		Msg("Adjustment factors")
 
 	return
 }
@@ -310,7 +322,7 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context) (adjustedGasPrice *
 	congestionClassificaion := classifyCongestion(congestionMetric)
 
 	L.Debug().
-		Float64("CongestionMetric", congestionMetric).
+		Str("CongestionMetric", fmt.Sprintf("%.4f", congestionMetric)).
 		Str("CongestionClassificaion", congestionClassificaion).
 		Msg("Calculated congestion metric")
 
@@ -357,7 +369,7 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context) (adjustedGasPrice *
 		Msg("Suggested Legacy fees")
 
 	L.Debug().
-		Float64("CongestionMetric", congestionMetric).
+		Str("CongestionMetric", fmt.Sprintf("%.4f", congestionMetric)).
 		Str("CongestionClassificaion", congestionClassificaion).
 		Float64("AdjustmentFactor", adjustmentFactor).
 		Str("Priority", m.Cfg.Network.GasEstimationTxPriority).
@@ -465,4 +477,29 @@ func calculateGasUsedRatio(blocks []*types.Block) float64 {
 	}
 	averageRatio := totalRatio / float64(len(blocks))
 	return averageRatio
+}
+
+func calculateMagnitudeDifference(first, second *big.Float) string {
+	// Convert big.Int to float64 (approximation)
+	firstFloat, _ := first.Float64()
+
+	// Convert big.Float to float64 (approximation)
+	secondFloat, _ := second.Float64()
+
+	// Calculate orders of magnitude using base-10 logarithm
+	orderOfMagnitudeBigInt := math.Log10(firstFloat)
+	orderOfMagnitudeBigFloat := math.Log10(secondFloat)
+
+	// Calculate the difference in orders of magnitude
+	diff := orderOfMagnitudeBigInt - orderOfMagnitudeBigFloat
+
+	if diff < 0 {
+		intDiff := math.Floor(diff)
+		return fmt.Sprintf("%d orders of magnitude smaller", int(math.Abs(intDiff)))
+	} else if diff > 0 && diff <= 1 {
+		return "the same order of magnitude"
+	}
+
+	intDiff := math.Ceil(diff)
+	return fmt.Sprintf("%d orders of magnitude larger", int(intDiff))
 }
