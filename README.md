@@ -154,11 +154,9 @@ urls_secret = ["..."]
 gas_estimation_enabled = true
 # how many last blocks to use, when estimating gas for a transaction
 gas_estimation_blocks = 1000
-# maximum tip to which tip estimation will be capped (for EIP-1559 transactions)
-gas_estimation_max_tip_cap = 10_000_000_000
-# maximum gas price to which gas price estimation will be capped (for legacy transactions)
-gas_estimation_max_gas_price = 10_000_000_000
-# priority of the transaction, can be "ultra", "fast", "standard" or "slow" (the higher the priority, the higher adjustment factor will be used for gas estimation) [default: "standard"]
+# maximum price we are willing to pay for a transaction (will be used to calculate gas price or tip/fee cap according to gas limit)
+gas_estimation_max_tx_cost_wei = 10_000_000_000
+# priority of the transaction, can be "fast", "standard" or "slow" (the higher the priority, the higher adjustment factor will be used for gas estimation) [default: "standard"]
 gas_estimation_tx_priority = "slow"
 ```
 
@@ -251,6 +249,7 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 - [x] Saving of deployed contracts mapping (`address -> ABI_name`) for live networks
 - [x] Reading of deployed contracts mappings for live networks
 - [x] Automatic gas estimator (experimental)
+- [x] Check if address has a pending nonce (transaction) and panic if it does
 
 You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
 
@@ -266,23 +265,19 @@ If network is simulated, we never estimate gas, but use hardcoded values.
 1. We ask the node for suggested gas price.
 2. We fetch last `gas_estimation_blocks` blocks and calculate congestion rate for each block using a logarithmic function that gives higher weight to the most recent blocks.
 3. Based on congestion rate, we adjust suggested gas price by a factor that is calculated based on `gas_estimation_tx_priority`. The higher the priority, the higher the adjustment factor.
-4. We cap the gas price to `gas_estimation_max_gas_price` if it's higher than that.
-5. Based on `gas_estimation_tx_priority` we add a buffer to gas price to make sure the transaction is included in the block.
+5. Based on `gas_estimation_tx_priority` we add a buffer to gas price to make sure the transaction is included in the block (see below).
+6. Using `gas_limit` we calculate maximum possible cost of the transaction and if it's higher than `gas_estimation_max_tx_cost_wei` we divide the max cost by `gas_limit` and set the gas price to that value.
 
 #### EIP-1559 transactions
 1. We ask the node for suggested tip fee.
 2. We get base fee and tip fee history for last `gas_estimation_blocks` blocks.
 3. We fetch last `gas_estimation_blocks` blocks and calculate congestion rate for each block using a logarithmic function that gives higher weight to the most recent blocks.
 4. Based on congestion rate, we adjust suggested tip fee and base fee by a factor that is calculated based on `gas_estimation_tx_priority`. The higher the priority, the higher the adjustment factor.
-5. We cap the tip fee to `gas_estimation_max_tip_cap` if it's higher than that.
-6. We set the `gas_fee_cap` to a sum of base fee and tip fee.
-7. Based on `gas_estimation_tx_priority` we add a buffer to `gas_fee_cap` to make sure the transaction is included in the block.
+5. We sum base fee and the tip to get the gas fee cap, which we then multiply by `gas_limit` to get the maximum possible cost of the transaction.
+6. If the maximum possible cost is higher than `gas_estimation_max_tx_cost_wei` we divide the max cost by `gas_limit` and set the gas fee cap to that value. Then we calculate the ratio by which we have lowered the maximum possible cost and we lower the tip cap by the same ratio. E.g. if highest possible cost is 20% higher than `gas_estimation_max_tx_cost_wei`, we lower the tip cap by 20%.
 
 It must be mentioned that `gas_estimation_tx_priority` is also used, when deciding, which percentile to use for base fee and tip fee for historical fee data. Here's how that looks:
 ```go
-		case Priority_Ultra:
-			baseFee = stats.GasPrice.Max
-			historicalGasTipCap = stats.TipCap.Max
 		case Priority_Fast:
 			baseFee = stats.GasPrice.Perc99
 			historicalGasTipCap = stats.TipCap.Perc99
@@ -294,12 +289,8 @@ It must be mentioned that `gas_estimation_tx_priority` is also used, when decidi
 			historicalGasTipCap = stats.TipCap.Perc25
 ```
 
-**For `ultra` priority we will use historically highest base fee and tip fee and then even further increase it by the adjustment factor and buffer! So use this with caution and only if you want your transaction to be included in the next block no matter what.**
-
 ##### Adjustment factor
 ```go
-	case Priority_Ultra:
-		return 1.5
 	case Priority_Fast:
 		return 1.2
 	case Priority_Standard:

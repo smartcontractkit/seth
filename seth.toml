@@ -17,6 +17,10 @@ trace_to_json = false
 # with the value equal to (root_balance / ephemeral_addresses_number) - transfer_fee * ephemeral_addresses_number
 ephemeral_addresses_number = 0
 
+# If enabled we will panic when getting transaction options if current key/address has a pending transaction
+# That's because the one we are about to send would get queued, possibly for a very long time
+#pending_nonce_protection_enabled = true
+
 [[networks]]
 name = "Anvil"
 chain_id = "31337"
@@ -58,9 +62,8 @@ gas_fee_cap = 30_000_000_000
 gas_tip_cap = 1_800_000_000
 gas_estimation_enabled = true
 gas_estimation_blocks = 100
-gas_estimation_max_tip_cap = 10_000_000_000
+gas_estimation_max_tx_cost_wei = 1_000_000_000_000_000_000 #1 AVAX
 gas_estimation_tx_priority = "standard"
-gas_estimation_max_gas_price = 10_000_000_000
 
 [[networks]]
 name = "Sepolia"
@@ -76,9 +79,8 @@ gas_fee_cap = 25_000_000_000
 gas_tip_cap = 5_000_000_000
 gas_estimation_enabled = true
 gas_estimation_blocks = 100
-gas_estimation_max_tip_cap = 10_000_000_000
-gas_estimation_tx_priority = "fast"
-gas_estimation_max_gas_price = 10_000_000_000
+gas_estimation_max_tx_cost_wei = 1_000_000_000_000_000_000 #1 ETH
+gas_estimation_tx_priority = "standard"
 
 [[networks]]
 name = "Mumbai"
@@ -93,9 +95,8 @@ gas_fee_cap = 1_800_000_000
 gas_tip_cap = 30460480806
 gas_estimation_enabled = true
 gas_estimation_blocks = 100
-gas_estimation_max_tip_cap = 10_000_000_000
-gas_estimation_tx_priority = "slow"
-gas_estimation_max_gas_price = 10_000_000_000
+gas_estimation_max_tx_cost_wei = 1_000_000_000_000_000_000 #1 Matic
+gas_estimation_tx_priority = "standard"
 
 [[networks]]
 name = "zkEVM"
@@ -111,9 +112,8 @@ gas_fee_cap = 1_800_000_000
 gas_tip_cap = 1_800_000_000
 gas_estimation_enabled = true
 gas_estimation_blocks = 100
-gas_estimation_max_tip_cap = 10_000_000_000
+gas_estimation_max_tx_cost_wei = 1_000_000_000_000_000_000 #1 Matic
 gas_estimation_tx_priority = "standard"
-gas_estimation_max_gas_price = 10_000_000_000
 
 [nonce_manager]
 key_sync_rate_limit_per_sec = 10
