@@ -284,7 +284,7 @@ func NewClientRaw(
 
 	if c.Cfg.Network.GasEstimationEnabled {
 		L.Debug().Msg("Gas estimation is enabled")
-		L.Debug().Msg("Initialising LFU block cache")
+		L.Debug().Msg("Initialising LFU block header cache")
 		c.HeaderCache = NewLFUBlockCache(c.Cfg.Network.GasEstimationBlocks)
 	}
 
