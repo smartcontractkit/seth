@@ -131,9 +131,9 @@ func validateConfig(cfg *Config) error {
 		if cfg.Network.GasEstimationBlocks == 0 {
 			return errors.New("when automating gas estimation is enabled blocks must be greater than 0. fix it or disable gas estimation")
 		}
-		if cfg.Network.GasEsimationMaxGasTipCap == 0 {
-			return errors.New("when automating gas estimation is enabled max tip cap must be greater than 0. fix it or disable gas estimation")
-		}
+		// if cfg.Network.GasEsimationMaxGasTipCap == 0 {
+		// 	return errors.New("when automating gas estimation is enabled max tip cap must be greater than 0. fix it or disable gas estimation")
+		// }
 		cfg.Network.GasEstimationTxPriority = strings.ToLower(cfg.Network.GasEstimationTxPriority)
 
 		if cfg.Network.GasEstimationTxPriority == "" {
@@ -549,7 +549,7 @@ func WithGasTipCap(gasTipCap *big.Int) TransactOpt {
 // sets opts.GasPrice and opts.GasLimit from seth.toml or override with options
 func (m *Client) NewTXOpts(o ...TransactOpt) *bind.TransactOpts {
 	opts, nonce, estimations := m.getProposedTransactionOptions(0)
-	m.configureTransactionOpts(opts, nonce, estimations, o...)
+	m.configureTransactionOpts(opts, nonce.PendingNonce, estimations, o...)
 	L.Debug().
 		Interface("Nonce", opts.Nonce).
 		Interface("Value", opts.Value).
@@ -568,8 +568,9 @@ func (m *Client) NewTXKeyOpts(keyNum int, o ...TransactOpt) *bind.TransactOpts {
 		Interface("KeyNum", keyNum).
 		Interface("Address", m.Addresses[keyNum]).
 		Msg("Estimating transaction")
-	opts, nonce, estimations := m.getProposedTransactionOptions(keyNum)
-	m.configureTransactionOpts(opts, nonce, estimations, o...)
+	opts, nonceStatus, estimations := m.getProposedTransactionOptions(keyNum)
+
+	m.configureTransactionOpts(opts, nonceStatus.PendingNonce, estimations, o...)
 	L.Debug().
 		Interface("KeyNum", keyNum).
 		Interface("Nonce", opts.Nonce).
@@ -593,15 +594,45 @@ type GasEstimations struct {
 	GasFeeCap *big.Int
 }
 
-// getProposedTransactionOptions gets all the tx info that network proposed
-func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, uint64, GasEstimations) {
+type NonceStatus struct {
+	LastNonce    uint64
+	PendingNonce uint64
+}
+
+func (m *Client) getNonceStatus(keyNum int) (NonceStatus, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
 	defer cancel()
-	nonce, err := m.Client.PendingNonceAt(ctx, m.Addresses[keyNum])
+	pendingNonce, err := m.Client.PendingNonceAt(ctx, m.Addresses[keyNum])
+	if err != nil {
+		return NonceStatus{}, err
+	}
+
+	lastNonce, err := m.Client.NonceAt(ctx, m.Addresses[keyNum], nil)
+	if err != nil {
+		return NonceStatus{}, err
+	}
+
+	return NonceStatus{
+		LastNonce:    lastNonce,
+		PendingNonce: pendingNonce,
+	}, nil
+}
+
+// getProposedTransactionOptions gets all the tx info that network proposed
+func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, NonceStatus, GasEstimations) {
+	nonceStatus, err := m.getNonceStatus(keyNum)
 	if err != nil {
 		m.Errors = append(m.Errors, err)
 		// can't return nil, otherwise RPC wrapper will panic
-		return &bind.TransactOpts{}, 0, GasEstimations{}
+		return &bind.TransactOpts{}, NonceStatus{}, GasEstimations{}
+	}
+
+	if m.Cfg.PendingNonceProtectionEnabled {
+		if nonceStatus.PendingNonce > nonceStatus.LastNonce {
+			panic(fmt.Errorf("pending nonce is higher than last nonce, there are %d pending transactions. Speed them up before continuing, otherwise future transactions might get stuck", nonceStatus.PendingNonce-nonceStatus.LastNonce))
+		}
+		L.Debug().
+			Msg("Pending nonce protection is enabled. Nonce status is OK")
 	}
 
 	estimations := GasEstimations{}
@@ -613,6 +644,9 @@ func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, 
 	}
 
 	if !m.Cfg.IsSimulatedNetwork() && m.Cfg.Network.GasEstimationEnabled {
+		ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
+		defer cancel()
+
 		if m.Cfg.Network.EIP1559DynamicFees {
 			maxFee, priorityFee, err := m.GetSuggestedEIP1559Fees(ctx)
 			if err != nil {
@@ -638,16 +672,16 @@ func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, 
 
 	L.Debug().
 		Interface("KeyNum", keyNum).
-		Uint64("Nonce", nonce).
+		Uint64("Nonce", nonceStatus.PendingNonce).
 		Interface("GasEstimations", estimations).
 		Msg("Proposed transaction options")
 
 	opts, err := bind.NewKeyedTransactorWithChainID(m.PrivateKeys[keyNum], big.NewInt(m.ChainID))
 	if err != nil {
 		m.Errors = append(m.Errors, err)
-		return &bind.TransactOpts{}, 0, GasEstimations{}
+		return &bind.TransactOpts{}, NonceStatus{}, GasEstimations{}
 	}
-	return opts, nonce, estimations
+	return opts, nonceStatus, estimations
 }
 
 // configureTransactionOpts configures transaction for legacy or type-2
