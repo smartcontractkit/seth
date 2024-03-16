@@ -2,7 +2,7 @@ name: Decoding tests
 on:
   push:
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-decode
   cancel-in-progress: true
 jobs:
   test:

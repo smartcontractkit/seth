@@ -87,7 +87,7 @@ func (m *Client) CalculateSubKeyFunding(addrs int64) (*FundingDetails, error) {
 		Interface("FreeBalance", bd.FreeBalance.String()).
 		Interface("EachAddrGets", bd.AddrFunding.String()).
 		Msg("Splitting funds from the root account")
-	if freeBalance.Int64() < 0 {
+	if freeBalance.Cmp(big.NewInt(0)) <= 0 {
 		return nil, errors.New(fmt.Sprintf(ErrInsufficientRootKeyBalance, freeBalance.String()))
 	}
 	return bd, nil

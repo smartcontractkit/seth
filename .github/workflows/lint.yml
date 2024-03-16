@@ -1,6 +1,9 @@
 name: Lint
 on:
   push:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-lint
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:

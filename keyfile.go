@@ -39,6 +39,10 @@ func UpdateAndSplitFunds(c *Client, opts *FundKeyFileCmdOpts) error {
 	if err != nil {
 		return err
 	}
+	suggestedGasTipCap, err := c.Client.SuggestGasTipCap(context.Background())
+	if err != nil {
+		return err
+	}
 	bd, err := c.CalculateSubKeyFunding(opts.Addrs)
 	if err != nil {
 		return err
@@ -51,7 +55,7 @@ func UpdateAndSplitFunds(c *Client, opts *FundKeyFileCmdOpts) error {
 		kfd := kfd
 		eg.Go(func() error {
 			kfd.Funds = bd.AddrFunding.String()
-			return c.TransferETHFromKey(egCtx, 0, kfd.Address, bd.AddrFunding)
+			return c.TransferETHFromKey(egCtx, 0, kfd.Address, bd.AddrFunding, suggestedGasTipCap)
 		})
 	}
 	if err := eg.Wait(); err != nil {
@@ -68,6 +72,10 @@ func UpdateAndSplitFunds(c *Client, opts *FundKeyFileCmdOpts) error {
 func ReturnFunds(c *Client, toAddr string) error {
 	if toAddr == "" {
 		toAddr = c.Addresses[0].Hex()
+	}
+	suggestedGasTipCap, err := c.Client.SuggestGasTipCap(context.Background())
+	if err != nil {
+		return err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -87,7 +95,7 @@ func ReturnFunds(c *Client, toAddr string) error {
 				Interface("NetworkFee", c.Cfg.Network.GasPrice*21).
 				Interface("ReturnedFunds", fundsToReturn).
 				Msg("KeyFile key balance")
-			return c.TransferETHFromKey(egCtx, i, toAddr, fundsToReturn)
+			return c.TransferETHFromKey(egCtx, i, toAddr, fundsToReturn, suggestedGasTipCap)
 		})
 	}
 	if err := eg.Wait(); err != nil {
