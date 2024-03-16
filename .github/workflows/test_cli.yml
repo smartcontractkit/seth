@@ -2,7 +2,7 @@ name: CLI tests
 on:
   push:
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-cli
   cancel-in-progress: true
 jobs:
   test:

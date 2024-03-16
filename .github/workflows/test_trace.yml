@@ -2,7 +2,7 @@ name: Tracing tests
 on:
   push:
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-trace
   cancel-in-progress: true
 jobs:
   test:
