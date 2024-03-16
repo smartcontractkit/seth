@@ -203,6 +203,10 @@ func NewClientRaw(
 		Msg("Created new client")
 
 	if cfg.ephemeral {
+		suggestedGasTipCap, err := c.Client.SuggestGasTipCap(context.Background())
+		if err != nil {
+			return nil, err
+		}
 		bd, err := c.CalculateSubKeyFunding(*cfg.EphemeralAddrs)
 		if err != nil {
 			return nil, err
@@ -216,7 +220,7 @@ func NewClientRaw(
 		for _, addr := range c.Addresses[1:] {
 			addr := addr
 			eg.Go(func() error {
-				return c.TransferETHFromKey(egCtx, 0, addr.Hex(), bd.AddrFunding)
+				return c.TransferETHFromKey(egCtx, 0, addr.Hex(), bd.AddrFunding, suggestedGasTipCap)
 			})
 		}
 		if err := eg.Wait(); err != nil {
@@ -302,7 +306,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 	return decoded, nil
 }
 
-func (m *Client) TransferETHFromKey(ctx context.Context, fromKeyNum int, to string, value *big.Int) error {
+func (m *Client) TransferETHFromKey(ctx context.Context, fromKeyNum int, to string, value *big.Int, tipCap *big.Int) error {
 	if fromKeyNum > len(m.PrivateKeys) || fromKeyNum > len(m.Addresses) {
 		return errors.Wrap(errors.New(ErrNoKeyLoaded), fmt.Sprintf("requested key: %d", fromKeyNum))
 	}
@@ -314,8 +318,8 @@ func (m *Client) TransferETHFromKey(ctx context.Context, fromKeyNum int, to stri
 	rawTx := &types.DynamicFeeTx{
 		ChainID:   chainID,
 		Nonce:     m.NonceManager.NextNonce(m.Addresses[fromKeyNum]).Uint64(),
-		GasTipCap: big.NewInt(m.Cfg.Network.GasTipCap),
-		GasFeeCap: big.NewInt(m.Cfg.Network.GasFeeCap),
+		GasFeeCap: tipCap,
+		GasTipCap: tipCap,
 		Gas:       uint64(m.Cfg.Network.TransferGasFee),
 		To:        &toAddr,
 		Value:     value,
