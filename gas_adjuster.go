@@ -166,7 +166,7 @@ func calculateNewestFirstNetworkCongestionMetric(headers []*types.Header) float6
 }
 
 // AdjustPriorityFee adjusts the priority fee within a calculated range based on historical data, current congestion, and priority.
-func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.Int, adjustedTipCap *big.Int, err error) {
+func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (maxFeeCap *big.Int, adjustedTipCap *big.Int, err error) {
 	L.Info().Msg("Calculating suggested EIP-1559 fees")
 	var currentGasTip *big.Int
 	currentGasTip, err = m.Client.SuggestGasTipCap(ctx)
@@ -180,7 +180,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.In
 
 	// Fetch the baseline historical base fee and tip for the selected priority
 	var baseFee64, historicalSuggestedTip64 float64
-	baseFee64, historicalSuggestedTip64, err = m.HistoricalFeeData(m.Cfg.Network.GasEstimationTxPriority)
+	baseFee64, historicalSuggestedTip64, err = m.HistoricalFeeData(priority)
 	if err != nil {
 		return
 	}
@@ -188,7 +188,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.In
 	L.Debug().
 		Str("HistoricalBaseFee", fmt.Sprintf("%.0f wei / %s ether", baseFee64, WeiToEther(big.NewInt(int64(baseFee64))).Text('f', -1))).
 		Str("HistoricalSuggestedTip", fmt.Sprintf("%.0f wei / %s ether", historicalSuggestedTip64, WeiToEther(big.NewInt(int64(historicalSuggestedTip64))).Text('f', -1))).
-		Str("Priority", m.Cfg.Network.GasEstimationTxPriority).
+		Str("Priority", priority).
 		Msg("Historical fee data")
 
 	L.Debug().
@@ -204,7 +204,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.In
 
 	// Adjust the suggestedTip based on current congestion, keeping within reasonable bounds
 	var adjustmentFactor float64
-	adjustmentFactor, err = getAdjustmentFactor(m.Cfg.Network.GasEstimationTxPriority)
+	adjustmentFactor, err = getAdjustmentFactor(priority)
 	if err != nil {
 		return
 	}
@@ -294,7 +294,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.In
 		Str("CongestionMetric", fmt.Sprintf("%.4f", congestionMetric)).
 		Str("CongestionClassificaion", congestionClassificaion).
 		Float64("AdjustmentFactor", adjustmentFactor).
-		Str("Priority", m.Cfg.Network.GasEstimationTxPriority).
+		Str("Priority", priority).
 		Msg("Adjustment factors")
 
 	L.Info().
@@ -305,7 +305,8 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context) (maxFeeCap *big.In
 	return
 }
 
-func (m *Client) GetSuggestedLegacyFees(ctx context.Context) (adjustedGasPrice *big.Int, err error) {
+// GetSuggestedLegacyFees calculates the suggested gas price based on historical data, current congestion, and priority.
+func (m *Client) GetSuggestedLegacyFees(ctx context.Context, priority string) (adjustedGasPrice *big.Int, err error) {
 	L.Info().
 		Msg("Calculating suggested Legacy fees")
 
@@ -317,7 +318,7 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context) (adjustedGasPrice *
 
 	// Adjust the suggestedTip based on current congestion, keeping within reasonable bounds
 	var adjustmentFactor float64
-	adjustmentFactor, err = getAdjustmentFactor(m.Cfg.Network.GasEstimationTxPriority)
+	adjustmentFactor, err = getAdjustmentFactor(priority)
 	if err != nil {
 		return
 	}
@@ -381,7 +382,7 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context) (adjustedGasPrice *
 		Str("CongestionMetric", fmt.Sprintf("%.4f", congestionMetric)).
 		Str("CongestionClassificaion", congestionClassificaion).
 		Float64("AdjustmentFactor", adjustmentFactor).
-		Str("Priority", m.Cfg.Network.GasEstimationTxPriority).
+		Str("Priority", priority).
 		Msg("Suggested Legacy fees")
 
 	L.Info().
@@ -493,17 +494,20 @@ func calculateGasUsedRatio(headers []*types.Header) float64 {
 }
 
 func calculateMagnitudeDifference(first, second *big.Float) string {
-	// Convert big.Int to float64 (approximation)
 	firstFloat, _ := first.Float64()
-
-	// Convert big.Float to float64 (approximation)
 	secondFloat, _ := second.Float64()
 
-	// Calculate orders of magnitude using base-10 logarithm
+	if firstFloat == 0.0 {
+		return "infinite orders of magnitude smaller"
+	}
+
+	if secondFloat == 0.0 {
+		return "infinite orders of magnitude larger"
+	}
+
 	orderOfMagnitudeBigInt := math.Log10(firstFloat)
 	orderOfMagnitudeBigFloat := math.Log10(secondFloat)
 
-	// Calculate the difference in orders of magnitude
 	diff := orderOfMagnitudeBigInt - orderOfMagnitudeBigFloat
 
 	if diff < 0 {

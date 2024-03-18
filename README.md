@@ -314,3 +314,14 @@ It must be mentioned that `gas_estimation_tx_priority` is also used, when decidi
 We cache block data in an in-memory cache, so we don't have to fetch it every time we estimate gas. The cache has capacity equal to `gas_estimation_blocks` and every time we add a new element, we remove one that is least frequently used and oldest (with block number being a constant and chain always moving forward it makes no sense to keep old blocks).
 
 For both transaction types if any of the steps fails, we fallback to hardcoded values.
+
+### Experimental features
+
+In order to enable an experimental feature you need to pass it's name in config. In case of TOML:
+```toml
+experiments_enabled = ["dynamic_deployment_gas", "slow_funds_return"]
+```
+
+Here's what they do:
+* `dynamic_deployment_gas` estimates gas required for contract deployment instead of using hardcoded `gas_limit` value. 20% buffer is added to estimation.
+* `slow_funds_return` will work only in `core` and when enabled it changes tx priority to `slow` and increases transaction timeout to 30 minutes.

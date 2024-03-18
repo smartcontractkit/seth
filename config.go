@@ -45,6 +45,8 @@ type Config struct {
 	// internal fields
 	ConfigDir                string `toml:"abs_path"`
 	RevertedTransactionsFile string
+
+	ExperimentsEnabled []string `toml:"experiments_enabled"`
 }
 
 type NonceManagerCfg struct {
@@ -191,4 +193,18 @@ func (c *Config) setEphemeralAddrs() {
 	if c.KeyFilePath == "" && *c.EphemeralAddrs != 0 {
 		c.ephemeral = true
 	}
+}
+
+const (
+	Experiment_SlowFundsReturn      = "slow_funds_return"
+	Experiment_DynamicDeploymentGas = "dynamic_deployment_gas"
+)
+
+func (c *Config) IsExperimentEnabled(experiment string) bool {
+	for _, e := range c.ExperimentsEnabled {
+		if e == experiment {
+			return true
+		}
+	}
+	return false
 }
