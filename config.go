@@ -198,6 +198,7 @@ func (c *Config) setEphemeralAddrs() {
 const (
 	Experiment_SlowFundsReturn      = "slow_funds_return"
 	Experiment_DynamicDeploymentGas = "dynamic_deployment_gas"
+	Experiment_Eip1559FeeEqualier   = "eip_1559_fee_equalizer"
 )
 
 func (c *Config) IsExperimentEnabled(experiment string) bool {

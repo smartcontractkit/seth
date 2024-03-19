@@ -191,8 +191,10 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 		Str("Priority", priority).
 		Msg("Historical fee data")
 
+	_, tipMagnitudeDiffText := calculateMagnitudeDifference(big.NewFloat(historicalSuggestedTip64), new(big.Float).SetInt(currentGasTip))
+
 	L.Debug().
-		Msgf("Historical tip is %s than suggested tip", calculateMagnitudeDifference(big.NewFloat(historicalSuggestedTip64), new(big.Float).SetInt(currentGasTip)))
+		Msgf("Historical tip is %s than suggested tip", tipMagnitudeDiffText)
 
 	suggestedGasTip := currentGasTip
 	if big.NewInt(int64(historicalSuggestedTip64)).Cmp(suggestedGasTip) > 0 {
@@ -200,6 +202,28 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 		suggestedGasTip = big.NewInt(int64(historicalSuggestedTip64))
 	} else {
 		L.Debug().Msg("Suggested tip is higher than historical tip. Will use suggested tip.")
+	}
+
+	if m.Cfg.IsExperimentEnabled(Experiment_Eip1559FeeEqualier) {
+		L.Debug().Msg("FeeEqualier experiment is enabled. Will adjust base fee and tip to be of the same order of magnitude.")
+		baseFeeTipMagnitudeDiff, _ := calculateMagnitudeDifference(big.NewFloat(baseFee64), new(big.Float).SetInt(suggestedGasTip))
+
+		//one of values is 0, inifite order of magnitude smaller or larger
+		if baseFeeTipMagnitudeDiff == -0 {
+			if baseFee64 == 0.0 {
+				L.Debug().Msg("Historical base fee is 0.0. Will use suggested tip as base fee.")
+				baseFee64 = float64(suggestedGasTip.Int64())
+			} else {
+				L.Debug().Msg("Suggested tip is 0.0. Will use historical base fee as tip.")
+				suggestedGasTip = big.NewInt(int64(baseFee64))
+			}
+		} else if baseFeeTipMagnitudeDiff < 3 {
+			L.Debug().Msg("Historical base fee is 3 orders of magnitude lower than suggested tip. Will use suggested tip as base fee.")
+			baseFee64 = float64(suggestedGasTip.Int64())
+		} else if baseFeeTipMagnitudeDiff > 3 {
+			L.Debug().Msg("Suggested tip is 3 orders of magnitude lower than historical base fee. Will use historical base fee as tip.")
+			suggestedGasTip = big.NewInt(int64(baseFee64))
+		}
 	}
 
 	// Adjust the suggestedTip based on current congestion, keeping within reasonable bounds
@@ -252,9 +276,10 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 	totalCostDiffText := "none"
 
 	if maxPossibleTxCost.Cmp(maxAllowedTxCost) > 0 {
+		_, txCostMagnitudeDiffText := calculateMagnitudeDifference(new(big.Float).SetInt(maxPossibleTxCost), new(big.Float).SetInt(maxAllowedTxCost))
 		L.Debug().
 			Str("Overflow", fmt.Sprintf("%s wei / %s ether", big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost).String(), WeiToEther(big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost)).Text('f', -1))).
-			Msgf("Max possible tx cost is %s than allowed tx cost and exceeds it. Will cap it.", calculateMagnitudeDifference(new(big.Float).SetInt(maxPossibleTxCost), (new(big.Float).SetInt(maxAllowedTxCost))))
+			Msgf("Max possible tx cost is %s than allowed tx cost and exceeds it. Will cap it.", txCostMagnitudeDiffText)
 
 		maxFeeCap = big.NewInt(0).Div(maxAllowedTxCost, big.NewInt(int64(m.Cfg.Network.GasLimit)))
 		changeRatio := big.NewFloat(0).Quo(new(big.Float).SetInt(maxFeeCap), new(big.Float).SetInt(rawMaxFeeCap))
@@ -493,30 +518,30 @@ func calculateGasUsedRatio(headers []*types.Header) float64 {
 	return averageRatio
 }
 
-func calculateMagnitudeDifference(first, second *big.Float) string {
+func calculateMagnitudeDifference(first, second *big.Float) (int, string) {
 	firstFloat, _ := first.Float64()
 	secondFloat, _ := second.Float64()
 
 	if firstFloat == 0.0 {
-		return "infinite orders of magnitude smaller"
+		return -0, "infinite orders of magnitude smaller"
 	}
 
 	if secondFloat == 0.0 {
-		return "infinite orders of magnitude larger"
+		return -0, "infinite orders of magnitude larger"
 	}
 
-	orderOfMagnitudeBigInt := math.Log10(firstFloat)
-	orderOfMagnitudeBigFloat := math.Log10(secondFloat)
+	firstOrderOfMagnitude := math.Log10(firstFloat)
+	secondOrderOfMagnitude := math.Log10(secondFloat)
 
-	diff := orderOfMagnitudeBigInt - orderOfMagnitudeBigFloat
+	diff := firstOrderOfMagnitude - secondOrderOfMagnitude
 
 	if diff < 0 {
 		intDiff := math.Floor(diff)
-		return fmt.Sprintf("%d orders of magnitude smaller", int(math.Abs(intDiff)))
+		return int(intDiff), fmt.Sprintf("%d orders of magnitude smaller", int(math.Abs(intDiff)))
 	} else if diff > 0 && diff <= 1 {
-		return "the same order of magnitude"
+		return 0, "the same order of magnitude"
 	}
 
-	intDiff := math.Ceil(diff)
-	return fmt.Sprintf("%d orders of magnitude larger", int(intDiff))
+	intDiff := int(math.Ceil(diff))
+	return intDiff, fmt.Sprintf("%d orders of magnitude larger", intDiff)
 }

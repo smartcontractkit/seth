@@ -319,9 +319,10 @@ For both transaction types if any of the steps fails, we fallback to hardcoded v
 
 In order to enable an experimental feature you need to pass it's name in config. In case of TOML:
 ```toml
-experiments_enabled = ["dynamic_deployment_gas", "slow_funds_return"]
+experiments_enabled = ["dynamic_deployment_gas", "slow_funds_return", "eip_1559_fee_equalizer"]
 ```
 
 Here's what they do:
 * `dynamic_deployment_gas` estimates gas required for contract deployment instead of using hardcoded `gas_limit` value. 20% buffer is added to estimation.
 * `slow_funds_return` will work only in `core` and when enabled it changes tx priority to `slow` and increases transaction timeout to 30 minutes.
+* `eip_1559_fee_equalizer` in case of EIP-1559 transactions if it detects that historical base fee and suggested/historical tip are more than 3 orders of magnitude apart, it will use the higher value for both (this helps in cases where base fee is almost 0 and transaction is never processed).
