@@ -48,6 +48,19 @@ func newClient(t *testing.T) *seth.Client {
 	return c
 }
 
+func newClientWithEphemeralAddresses(t *testing.T) *seth.Client {
+	cfg, err := seth.ReadConfig()
+	require.NoError(t, err, "failed to read config")
+
+	var sixty int64 = 60
+	cfg.EphemeralAddrs = &sixty
+
+	c, err := seth.NewClientWithConfig(cfg)
+	require.NoError(t, err, "failed to initalise seth")
+
+	return c
+}
+
 func TestDeploymentLinkTokenFromGethWrapperExample(t *testing.T) {
 	c, err := seth.NewClient()
 	require.NoError(t, err, "failed to initalise seth")

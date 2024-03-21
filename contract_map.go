@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/naoina/toml"
+	"github.com/pelletier/go-toml/v2"
 )
 
 func SaveDeployedContract(filename, contractName, address string) error {
@@ -38,7 +38,7 @@ func LoadDeployedContracts(filename string) (map[string]string, error) {
 
 	b, _ := io.ReadAll(tomlFile)
 	rawContracts := map[common.Address]string{}
-	err = toml.Unmarshal(b, rawContracts)
+	err = toml.Unmarshal(b, &rawContracts)
 	if err != nil {
 		return map[string]string{}, err
 	}

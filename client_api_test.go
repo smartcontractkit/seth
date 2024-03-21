@@ -17,7 +17,7 @@ import (
 )
 
 func TestAPI(t *testing.T) {
-	c := newClient(t)
+	c := newClientWithEphemeralAddresses(t)
 
 	type test struct {
 		name            string
@@ -95,7 +95,7 @@ func TestAPI(t *testing.T) {
 }
 
 func TestAPINonces(t *testing.T) {
-	c := newClient(t)
+	c := newClientWithEphemeralAddresses(t)
 
 	type test struct {
 		name            string
@@ -131,7 +131,7 @@ func TestAPINonces(t *testing.T) {
 }
 
 func TestAPISeqErrors(t *testing.T) {
-	c := newClient(t)
+	c := newClientWithEphemeralAddresses(t)
 
 	type test struct {
 		name string
@@ -199,7 +199,7 @@ func TestAPIKeys(t *testing.T) {
 		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "return"})
 		require.NoError(t, err)
 	})
-	c := newClient(t)
+	c := newClientWithEphemeralAddresses(t)
 
 	tests := []test{
 		{
@@ -283,7 +283,7 @@ func TestAPISyncKeysPool(t *testing.T) {
 			if tc.ephemeral {
 				t.Setenv("SETH_KEYFILE_PATH", "")
 			}
-			c := newClient(t)
+			c := newClientWithEphemeralAddresses(t)
 			if tc.shouldFail {
 				c.NonceManager.SyncedKeys = make(chan *seth.KeyNonce)
 			}
@@ -315,7 +315,7 @@ func TestAPISyncKeysPool(t *testing.T) {
 }
 
 func TestManualAPIReconnect(t *testing.T) {
-	c := newClient(t)
+	c := newClientWithEphemeralAddresses(t)
 
 	type test struct {
 		name            string

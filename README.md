@@ -150,6 +150,14 @@ eip_1559_dynamic_fees = true
 gas_fee_cap = 25_000_000_000
 gas_tip_cap = 1_800_000_000
 urls_secret = ["..."]
+# if set to true we will estimate gas for every transaction
+gas_estimation_enabled = true
+# how many last blocks to use, when estimating gas for a transaction
+gas_estimation_blocks = 1000
+# maximum price we are willing to pay for a transaction (will be used to calculate gas price or tip/fee cap according to gas limit)
+gas_estimation_max_tx_cost_wei = 10_000_000_000
+# priority of the transaction, can be "fast", "standard" or "slow" (the higher the priority, the higher adjustment factor will be used for gas estimation) [default: "standard"]
+gas_estimation_tx_priority = "slow"
 ```
 
 If you want to save addresses of deployed contracts, you can enable it with:
@@ -217,7 +225,6 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 
 (Note that currently Seth automatically creates `reverted_transactions_<network>_<date>.json` with all reverted transactions, so you can use this file as input for the `trace` command.)
 
-
 ## Features
 - [x] Decode named inputs
 - [x] Decode named outputs
@@ -241,5 +248,81 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 - [ ] More tests for corner cases of decoding/tracing
 - [x] Saving of deployed contracts mapping (`address -> ABI_name`) for live networks
 - [x] Reading of deployed contracts mappings for live networks
+- [x] Automatic gas estimator (experimental)
+- [x] Check if address has a pending nonce (transaction) and panic if it does
 
 You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
+
+### Autmoatic gas estimator
+
+Regardless whether you are using automatic gas estimator or not, you still need to set all expected default gas-related values for your network. If it doesn't support EIP-1559, you need to set `gas_price` and if it does, you need to set `eip_1559_dynamic_fees`, `gas_fee_cap`, `gas_tip_cap`. They will be used as fallback in case gas estimation fails.
+
+Now, how does gas estimation work?
+
+If network is simulated, we never estimate gas, but use hardcoded values.
+
+#### Legacy transactions
+1. We ask the node for suggested gas price.
+2. We fetch last `gas_estimation_blocks` block headers and calculate congestion rate for each block using a logarithmic function that gives higher weight to the most recent block headers.
+3. Based on congestion rate, we adjust suggested gas price by a factor that is calculated based on `gas_estimation_tx_priority`. The higher the priority, the higher the adjustment factor.
+5. Based on `gas_estimation_tx_priority` we add a buffer to gas price to make sure the transaction is included in the block (see below).
+6. Using `gas_limit` we calculate maximum possible cost of the transaction and if it's higher than `gas_estimation_max_tx_cost_wei` we divide the max cost by `gas_limit` and set the gas price to that value.
+
+#### EIP-1559 transactions
+1. We ask the node for suggested tip fee.
+2. We get base fee and tip fee history for last `gas_estimation_blocks` block headers.
+3. We fetch last `gas_estimation_blocks` block headers and calculate congestion rate for each block using a logarithmic function that gives higher weight to the most recent block headers.
+4. Based on congestion rate, we adjust suggested tip fee and base fee by a factor that is calculated based on `gas_estimation_tx_priority`. The higher the priority, the higher the adjustment factor.
+5. We sum base fee and the tip to get the gas fee cap, which we then multiply by `gas_limit` to get the maximum possible cost of the transaction.
+6. If the maximum possible cost is higher than `gas_estimation_max_tx_cost_wei` we divide the max cost by `gas_limit` and set the gas fee cap to that value. Then we calculate the ratio by which we have lowered the maximum possible cost and we lower the tip cap by the same ratio. E.g. if highest possible cost is 20% higher than `gas_estimation_max_tx_cost_wei`, we lower the tip cap by 20%.
+
+It must be mentioned that `gas_estimation_tx_priority` is also used, when deciding, which percentile to use for base fee and tip fee for historical fee data. Here's how that looks:
+```go
+		case Priority_Fast:
+			baseFee = stats.GasPrice.Perc99
+			historicalGasTipCap = stats.TipCap.Perc99
+		case Priority_Standard:
+			baseFee = stats.GasPrice.Perc50
+			historicalGasTipCap = stats.TipCap.Perc50
+		case Priority_Slow:
+			baseFee = stats.GasPrice.Perc25
+			historicalGasTipCap = stats.TipCap.Perc25
+```
+
+##### Adjustment factor
+```go
+	case Priority_Fast:
+		return 1.2
+	case Priority_Standard:
+		return 1.0
+	case Priority_Slow:
+		return 0.8
+```
+
+##### Buffer precents
+```go
+	case Congestion_Low:
+		return 0.05, nil
+	case Congestion_Medium:
+		return 0.10, nil
+	case Congestion_High:
+		return 0.15, nil
+	case Congestion_Ultra:
+		return 0.20, nil
+```
+
+We cache block data in an in-memory cache, so we don't have to fetch it every time we estimate gas. The cache has capacity equal to `gas_estimation_blocks` and every time we add a new element, we remove one that is least frequently used and oldest (with block number being a constant and chain always moving forward it makes no sense to keep old blocks).
+
+For both transaction types if any of the steps fails, we fallback to hardcoded values.
+
+### Experimental features
+
+In order to enable an experimental feature you need to pass it's name in config. In case of TOML:
+```toml
+experiments_enabled = ["dynamic_deployment_gas", "slow_funds_return", "eip_1559_fee_equalizer"]
+```
+
+Here's what they do:
+* `dynamic_deployment_gas` estimates gas required for contract deployment instead of using hardcoded `gas_limit` value. 20% buffer is added to estimation.
+* `slow_funds_return` will work only in `core` and when enabled it changes tx priority to `slow` and increases transaction timeout to 30 minutes.
+* `eip_1559_fee_equalizer` in case of EIP-1559 transactions if it detects that historical base fee and suggested/historical tip are more than 3 orders of magnitude apart, it will use the higher value for both (this helps in cases where base fee is almost 0 and transaction is never processed).
