@@ -31,6 +31,9 @@ func (m *GasEstimator) Stats(fromNumber uint64, priorityPerc float64) (GasSugges
 	}
 	baseFees := make([]float64, 0)
 	for _, bf := range hist.BaseFee {
+		if bf == nil {
+			bf = big.NewInt(0)
+		}
 		f := new(big.Float).SetInt(bf)
 		ff, _ := f.Float64()
 		baseFees = append(baseFees, ff)
@@ -41,6 +44,12 @@ func (m *GasEstimator) Stats(fromNumber uint64, priorityPerc float64) (GasSugges
 	}
 	tips := make([]float64, 0)
 	for _, bf := range hist.Reward {
+		if len(bf) == 0 {
+			continue
+		}
+		if bf[0] == nil {
+			bf[0] = big.NewInt(0)
+		}
 		f := new(big.Float).SetInt(bf[0])
 		ff, _ := f.Float64()
 		tips = append(tips, ff)
