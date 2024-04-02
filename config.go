@@ -57,21 +57,20 @@ type NonceManagerCfg struct {
 }
 
 type Network struct {
-	Name                      string    `toml:"name"`
-	ChainID                   string    `toml:"chain_id"`
-	URLs                      []string  `toml:"urls_secret"`
-	EIP1559DynamicFees        bool      `toml:"eip_1559_dynamic_fees"`
-	GasPrice                  int64     `toml:"gas_price"`
-	GasFeeCap                 int64     `toml:"gas_fee_cap"`
-	GasTipCap                 int64     `toml:"gas_tip_cap"`
-	GasLimit                  uint64    `toml:"gas_limit"`
-	TxnTimeout                *Duration `toml:"transaction_timeout"`
-	TransferGasFee            int64     `toml:"transfer_gas_fee"`
-	PrivateKeys               []string  `toml:"private_keys_secret"`
-	GasEstimationEnabled      bool      `toml:"gas_estimation_enabled"`
-	GasEstimationBlocks       uint64    `toml:"gas_estimation_blocks"`
-	GasEstimationTxPriority   string    `toml:"gas_estimation_tx_priority"`
-	GasEstimationMaxTxCostWei int64     `toml:"gas_estimation_max_tx_cost_wei"`
+	Name                    string    `toml:"name"`
+	ChainID                 string    `toml:"chain_id"`
+	URLs                    []string  `toml:"urls_secret"`
+	EIP1559DynamicFees      bool      `toml:"eip_1559_dynamic_fees"`
+	GasPrice                int64     `toml:"gas_price"`
+	GasFeeCap               int64     `toml:"gas_fee_cap"`
+	GasTipCap               int64     `toml:"gas_tip_cap"`
+	GasLimit                uint64    `toml:"gas_limit"`
+	TxnTimeout              *Duration `toml:"transaction_timeout"`
+	TransferGasFee          int64     `toml:"transfer_gas_fee"`
+	PrivateKeys             []string  `toml:"private_keys_secret"`
+	GasEstimationEnabled    bool      `toml:"gas_estimation_enabled"`
+	GasEstimationBlocks     uint64    `toml:"gas_estimation_blocks"`
+	GasEstimationTxPriority string    `toml:"gas_estimation_tx_priority"`
 }
 
 // ReadConfig reads the TOML config file from location specified by env var "SETH_CONFIG_PATH" and returns a Config struct
@@ -196,9 +195,8 @@ func (c *Config) setEphemeralAddrs() {
 }
 
 const (
-	Experiment_SlowFundsReturn      = "slow_funds_return"
-	Experiment_DynamicDeploymentGas = "dynamic_deployment_gas"
-	Experiment_Eip1559FeeEqualier   = "eip_1559_fee_equalizer"
+	Experiment_SlowFundsReturn    = "slow_funds_return"
+	Experiment_Eip1559FeeEqualier = "eip_1559_fee_equalizer"
 )
 
 func (c *Config) IsExperimentEnabled(experiment string) bool {

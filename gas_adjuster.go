@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	Priority_Ultra    = "ultra"
+	Priority_Degen    = "degen" //this is undocumented option, which we left for cases, when we need to set the highest gas price
 	Priority_Fast     = "fast"
 	Priority_Standard = "standard"
 	Priority_Slow     = "slow"
@@ -21,18 +21,23 @@ const (
 	Congestion_Low    = "low"
 	Congestion_Medium = "medium"
 	Congestion_High   = "high"
-	Congestion_Ultra  = "ultra"
+	Congestion_Degen  = "degen"
 )
 
 const (
-	CongestionStrategy_Simple      = "simple"
+	// each block has the same weight in the computation
+	CongestionStrategy_Simple = "simple"
+	// newer blocks have more weight in the computation
 	CongestionStrategy_NewestFirst = "newest_first"
 )
 
 // CalculateNetworkCongestionMetric calculates a simple congestion metric based on the last N blocks
-// by averaging the trend in base fee and the gas used ratio.
+// according to selected strategy.
 func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy string) (float64, error) {
 	var getHeaderData = func(bn *big.Int) (*types.Header, error) {
+		if bn == nil {
+			return nil, fmt.Errorf("Block number is nil")
+		}
 		cachedHeader, ok := m.HeaderCache.Get(bn.Int64())
 		if ok {
 			return cachedHeader, nil
@@ -89,7 +94,8 @@ func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy 
 
 	startTime := time.Now()
 	for i := lastBlockNumber; i > lastBlockNumber-blocksNumber; i-- {
-		if i == 1 {
+		// better safe than sorry (might happen for brand new chains)
+		if i <= 1 {
 			break
 		}
 
@@ -126,14 +132,9 @@ func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy 
 	}
 }
 
-// average the trend and gas used ratio for a basic congestion metric
+// average gas used ratio for a basic congestion metric
 func calculateSimpleNetworkCongestionMetric(headers []*types.Header) float64 {
-	trend := calculateTrend(headers)
-	gasUsedRatio := calculateGasUsedRatio(headers)
-
-	congestionMetric := (trend + gasUsedRatio) / 2
-
-	return congestionMetric
+	return calculateGasUsedRatio(headers)
 }
 
 // calculates a congestion metric using a logarithmic function that gives more weight to most recent block headers
@@ -151,7 +152,6 @@ func calculateNewestFirstNetworkCongestionMetric(headers []*types.Header) float6
 	for i, header := range headers {
 		congestion := float64(header.GasUsed) / float64(header.GasLimit)
 
-		// Applying a logarithmic scale for weights.
 		distance := float64(len(headers) - 1 - i)
 		weight := 1.0 / math.Log10(distance+scaleFactor)
 
@@ -165,17 +165,17 @@ func calculateNewestFirstNetworkCongestionMetric(headers []*types.Header) float6
 	return weightedSum / totalWeight
 }
 
-// AdjustPriorityFee adjusts the priority fee within a calculated range based on historical data, current congestion, and priority.
+// GetSuggestedEIP1559Fees returns suggested tip/fee cap calculated based on historical data, current congestion, and priority.
 func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (maxFeeCap *big.Int, adjustedTipCap *big.Int, err error) {
 	L.Info().Msg("Calculating suggested EIP-1559 fees")
-	var currentGasTip *big.Int
-	currentGasTip, err = m.Client.SuggestGasTipCap(ctx)
+	var suggestedGasTip *big.Int
+	suggestedGasTip, err = m.Client.SuggestGasTipCap(ctx)
 	if err != nil {
 		return
 	}
 
 	L.Debug().
-		Str("CurrentGasTip", fmt.Sprintf("%s wei / %s ether", currentGasTip.String(), WeiToEther(currentGasTip).Text('f', -1))).
+		Str("CurrentGasTip", fmt.Sprintf("%s wei / %s ether", suggestedGasTip.String(), WeiToEther(suggestedGasTip).Text('f', -1))).
 		Msg("Current suggested gas tip")
 
 	// Fetch the baseline historical base fee and tip for the selected priority
@@ -191,48 +191,70 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 		Str("Priority", priority).
 		Msg("Historical fee data")
 
-	_, tipMagnitudeDiffText := calculateMagnitudeDifference(big.NewFloat(historicalSuggestedTip64), new(big.Float).SetInt(currentGasTip))
+	_, tipMagnitudeDiffText := calculateMagnitudeDifference(big.NewFloat(historicalSuggestedTip64), new(big.Float).SetInt(suggestedGasTip))
 
 	L.Debug().
 		Msgf("Historical tip is %s than suggested tip", tipMagnitudeDiffText)
 
-	suggestedGasTip := currentGasTip
-	if big.NewInt(int64(historicalSuggestedTip64)).Cmp(suggestedGasTip) > 0 {
+	currentGasTip := suggestedGasTip
+	if big.NewInt(int64(historicalSuggestedTip64)).Cmp(currentGasTip) > 0 {
 		L.Debug().Msg("Historical suggested tip is higher than current suggested tip. Will use it instead.")
-		suggestedGasTip = big.NewInt(int64(historicalSuggestedTip64))
+		currentGasTip = big.NewInt(int64(historicalSuggestedTip64))
 	} else {
 		L.Debug().Msg("Suggested tip is higher than historical tip. Will use suggested tip.")
 	}
 
 	if m.Cfg.IsExperimentEnabled(Experiment_Eip1559FeeEqualier) {
 		L.Debug().Msg("FeeEqualier experiment is enabled. Will adjust base fee and tip to be of the same order of magnitude.")
-		baseFeeTipMagnitudeDiff, _ := calculateMagnitudeDifference(big.NewFloat(baseFee64), new(big.Float).SetInt(suggestedGasTip))
+		baseFeeTipMagnitudeDiff, _ := calculateMagnitudeDifference(big.NewFloat(baseFee64), new(big.Float).SetInt(currentGasTip))
 
 		//one of values is 0, inifite order of magnitude smaller or larger
 		if baseFeeTipMagnitudeDiff == -0 {
 			if baseFee64 == 0.0 {
 				L.Debug().Msg("Historical base fee is 0.0. Will use suggested tip as base fee.")
-				baseFee64 = float64(suggestedGasTip.Int64())
+				baseFee64 = float64(currentGasTip.Int64())
 			} else {
 				L.Debug().Msg("Suggested tip is 0.0. Will use historical base fee as tip.")
-				suggestedGasTip = big.NewInt(int64(baseFee64))
+				currentGasTip = big.NewInt(int64(baseFee64))
 			}
 		} else if baseFeeTipMagnitudeDiff < 3 {
 			L.Debug().Msg("Historical base fee is 3 orders of magnitude lower than suggested tip. Will use suggested tip as base fee.")
-			baseFee64 = float64(suggestedGasTip.Int64())
+			baseFee64 = float64(currentGasTip.Int64())
 		} else if baseFeeTipMagnitudeDiff > 3 {
 			L.Debug().Msg("Suggested tip is 3 orders of magnitude lower than historical base fee. Will use historical base fee as tip.")
-			suggestedGasTip = big.NewInt(int64(baseFee64))
+			currentGasTip = big.NewInt(int64(baseFee64))
 		}
 	}
 
-	// Adjust the suggestedTip based on current congestion, keeping within reasonable bounds
+	if baseFee64 == 0.0 || currentGasTip.Int64() == 0 {
+		err = fmt.Errorf("Either base fee or suggested tip is 0")
+
+		L.Error().
+			Err(err).
+			Float64("BaseFee", baseFee64).
+			Int64("SuggestedTip", currentGasTip.Int64()).
+			Msg("Incorrect gas data received from node. Skipping automation gas estimation")
+		return
+	}
+
+	// between 0.8 and 1.5
 	var adjustmentFactor float64
 	adjustmentFactor, err = getAdjustmentFactor(priority)
 	if err != nil {
 		return
 	}
 
+	// Calculate adjusted tip based on priority
+	adjustedTipCapFloat := new(big.Float).Mul(big.NewFloat(adjustmentFactor), new(big.Float).SetFloat64(float64(currentGasTip.Int64())))
+	adjustedTipCap, _ = adjustedTipCapFloat.Int(nil)
+
+	adjustedBaseFeeFloat := new(big.Float).Mul(big.NewFloat(adjustmentFactor), new(big.Float).SetFloat64(baseFee64))
+	adjustedBaseFee, _ := adjustedBaseFeeFloat.Int(nil)
+
+	// Calculate the base max fee (without buffer) as initialBaseFee + finalTip.
+	rawMaxFeeCap := new(big.Int).Add(adjustedBaseFee, adjustedTipCap)
+
+	// between 0 and 1 (empty blocks - full blocks)
 	var congestionMetric float64
 	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasEstimationBlocks, CongestionStrategy_NewestFirst)
 	if err != nil {
@@ -246,60 +268,30 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 		Str("CongestionClassificaion", congestionClassificaion).
 		Msg("Calculated congestion metric")
 
-	// Calculate adjusted tip based on congestion and priority
-	congestionAdjustment := new(big.Float).Mul(big.NewFloat(congestionMetric*adjustmentFactor), new(big.Float).SetFloat64(float64(suggestedGasTip.Int64())))
-	congestionAdjustmentInt, _ := congestionAdjustment.Int(nil)
-
-	adjustedTipCap = new(big.Int).Add(suggestedGasTip, congestionAdjustmentInt)
-	adjustedBaseFee := new(big.Int).Add(big.NewInt(int64(baseFee64)), congestionAdjustmentInt)
-
-	// Calculate the base max fee (without buffer) as initialBaseFee + finalTip.
-	rawMaxFeeCap := new(big.Int).Add(adjustedBaseFee, adjustedTipCap)
-
-	// Adjust the max fee based on the base fee, tip, and congestion-based buffer.
+	// between 0 and 0.2
 	var bufferPercent float64
 	bufferPercent, err = getBufferPercent(congestionClassificaion)
 	if err != nil {
 		return
 	}
 
-	// Calculate and apply the buffer.
-	buffer := new(big.Float).Mul(new(big.Float).SetInt(rawMaxFeeCap), big.NewFloat(bufferPercent))
-	bufferInt, _ := buffer.Int(nil)
-	maxProposedFeeCap := new(big.Int).Add(rawMaxFeeCap, bufferInt)
+	// Calculate and apply the feeCapBuffer.
+	feeCapBuffer := new(big.Float).Mul(new(big.Float).SetInt(rawMaxFeeCap), big.NewFloat(bufferPercent))
+	feeCapBufferInt, _ := feeCapBuffer.Int(nil)
+	maxProposedFeeCap := new(big.Int).Add(rawMaxFeeCap, feeCapBufferInt)
 	maxFeeCap = maxProposedFeeCap
 
-	maxAllowedTxCost := big.NewInt(m.Cfg.Network.GasEstimationMaxTxCostWei)
-	maxPossibleTxCost := big.NewInt(0).Mul(maxProposedFeeCap, big.NewInt(int64(m.Cfg.Network.GasLimit)))
+	// Apply buffer also to the tip
+	tipBuffer := new(big.Float).Mul(new(big.Float).SetInt(adjustedTipCap), big.NewFloat(bufferPercent))
+	tipBufferInt, _ := tipBuffer.Int(nil)
+	adjustedTipCap = new(big.Int).Add(adjustedTipCap, tipBufferInt)
+
 	gasTipDiffText := "none"
 	gasCapDiffText := "none"
-	totalCostDiffText := "none"
-
-	if maxPossibleTxCost.Cmp(maxAllowedTxCost) > 0 {
-		_, txCostMagnitudeDiffText := calculateMagnitudeDifference(new(big.Float).SetInt(maxPossibleTxCost), new(big.Float).SetInt(maxAllowedTxCost))
-		L.Debug().
-			Str("Overflow", fmt.Sprintf("%s wei / %s ether", big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost).String(), WeiToEther(big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost)).Text('f', -1))).
-			Msgf("Max possible tx cost is %s than allowed tx cost and exceeds it. Will cap it.", txCostMagnitudeDiffText)
-
-		maxFeeCap = big.NewInt(0).Div(maxAllowedTxCost, big.NewInt(int64(m.Cfg.Network.GasLimit)))
-		changeRatio := big.NewFloat(0).Quo(new(big.Float).SetInt(maxFeeCap), new(big.Float).SetInt(rawMaxFeeCap))
-
-		newAdjustedTipCap, _ := new(big.Float).Mul(new(big.Float).SetInt(adjustedTipCap), changeRatio).Int64()
-		newAdjustedTipCapBigInt := big.NewInt(newAdjustedTipCap)
-
-		L.Debug().
-			Str("Change", fmt.Sprintf("%s wei / %s ether", big.NewInt(0).Sub(adjustedTipCap, newAdjustedTipCapBigInt).String(), WeiToEther(big.NewInt(0).Sub(adjustedTipCap, newAdjustedTipCapBigInt)).Text('f', -1))).
-			Msg("Proportionally decreasing tip to fit within max allowed tx cost.")
-
-		adjustedTipCap = newAdjustedTipCapBigInt
-		gasTipDiffText = fmt.Sprintf("%s wei / %s ether", big.NewInt(0).Sub(adjustedTipCap, suggestedGasTip).String(), WeiToEther(big.NewInt(0).Sub(adjustedTipCap, suggestedGasTip)).Text('f', -1))
-		totalCostDiffText = fmt.Sprintf("%s wei / %s ether", big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost).String(), WeiToEther(big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost)).Text('f', -1))
-		gasCapDiffText = fmt.Sprintf("%s wei / %s ether", big.NewInt(0).Sub(maxProposedFeeCap, maxFeeCap).String(), WeiToEther(big.NewInt(0).Sub(maxProposedFeeCap, maxFeeCap)).Text('f', -1))
-	}
 
 	L.Debug().
 		Str("Diff", gasTipDiffText).
-		Str("Initial GasTipCap", fmt.Sprintf("%s wei / %s ether", suggestedGasTip.String(), WeiToEther(suggestedGasTip).Text('f', -1))).
+		Str("Initial GasTipCap", fmt.Sprintf("%s wei / %s ether", currentGasTip.String(), WeiToEther(currentGasTip).Text('f', -1))).
 		Str("Final GasTipCap", fmt.Sprintf("%s wei / %s ether", adjustedTipCap.String(), WeiToEther(adjustedTipCap).Text('f', -1))).
 		Msg("Tip Cap adjustment")
 
@@ -308,12 +300,6 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 		Str("Initial Fee Cap", fmt.Sprintf("%s wei / %s ether", maxProposedFeeCap.String(), WeiToEther(maxProposedFeeCap).Text('f', -1))).
 		Str("Final Fee Cap", fmt.Sprintf("%s wei / %s ether", maxFeeCap.String(), WeiToEther(maxFeeCap).Text('f', -1))).
 		Msg("Fee Cap adjustment")
-
-	L.Debug().
-		Str("Diff", totalCostDiffText).
-		Str("MaxAllowedTxCost", fmt.Sprintf("%s wei / %s ether", maxAllowedTxCost.String(), WeiToEther(maxAllowedTxCost).Text('f', -1))).
-		Str("MaxPossibleTxCost", fmt.Sprintf("%s wei / %s ether", maxPossibleTxCost.String(), WeiToEther(maxPossibleTxCost).Text('f', -1))).
-		Msg("Tx cost adjustment")
 
 	L.Debug().
 		Str("CongestionMetric", fmt.Sprintf("%.4f", congestionMetric)).
@@ -341,13 +327,24 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context, priority string) (a
 		return
 	}
 
-	// Adjust the suggestedTip based on current congestion, keeping within reasonable bounds
+	if suggestedGasPrice.Int64() == 0 {
+		err = fmt.Errorf("Suggested gas price is 0")
+		L.Error().
+			Err(err).
+			Msg("Incorrect gas data received from node. Skipping automation gas estimation")
+	}
+
 	var adjustmentFactor float64
 	adjustmentFactor, err = getAdjustmentFactor(priority)
 	if err != nil {
 		return
 	}
 
+	// Calculate adjusted tip based on congestion and priority
+	adjustedGasPriceFloat := new(big.Float).Mul(big.NewFloat(adjustmentFactor), new(big.Float).SetFloat64(float64(suggestedGasPrice.Int64())))
+	adjustedGasPrice, _ = adjustedGasPriceFloat.Int(nil)
+
+	// between 0 and 1 (empty blocks - full blocks)
 	var congestionMetric float64
 	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasEstimationBlocks, CongestionStrategy_NewestFirst)
 	if err != nil {
@@ -361,13 +358,7 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context, priority string) (a
 		Str("CongestionClassificaion", congestionClassificaion).
 		Msg("Calculated congestion metric")
 
-	// Calculate adjusted tip based on congestion and priority
-	congestionAdjustment := new(big.Float).Mul(big.NewFloat(congestionMetric*adjustmentFactor), new(big.Float).SetFloat64(float64(suggestedGasPrice.Int64())))
-	congestionAdjustmentInt, _ := congestionAdjustment.Int(nil)
-
-	adjustedGasPrice = new(big.Int).Add(suggestedGasPrice, congestionAdjustmentInt)
-
-	// Adjust the max fee based on the base fee, tip, and congestion-based buffer.
+	// between 0 and 0.2
 	var bufferPercent float64
 	bufferPercent, err = getBufferPercent(congestionClassificaion)
 	if err != nil {
@@ -378,24 +369,6 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context, priority string) (a
 	buffer := new(big.Float).Mul(new(big.Float).SetInt(adjustedGasPrice), big.NewFloat(bufferPercent))
 	bufferInt, _ := buffer.Int(nil)
 	adjustedGasPrice = new(big.Int).Add(adjustedGasPrice, bufferInt)
-
-	maxAllowedTxCost := big.NewInt(m.Cfg.Network.GasEstimationMaxTxCostWei)
-	maxPossibleTxCost := big.NewInt(0).Mul(adjustedGasPrice, big.NewInt(int64(m.Cfg.Network.GasLimit)))
-
-	// Ensure the adjusted gas price does not exceed the max gas price
-	if maxPossibleTxCost.Cmp(maxAllowedTxCost) > 0 {
-		L.Debug().
-			Str("Overflow (Wei/Ether)", fmt.Sprintf("%s/%s", big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost).String(), WeiToEther(big.NewInt(0).Sub(maxPossibleTxCost, maxAllowedTxCost)))).
-			Msg("Max possible tx cost exceeds max allowed tx cost. Capping it.")
-
-		newAdjustedGasPrice := big.NewInt(0).Div(maxAllowedTxCost, big.NewInt(int64(m.Cfg.Network.GasLimit)))
-
-		L.Debug().
-			Str("Change (Wei/Ether)", fmt.Sprintf("%s/%s", big.NewInt(0).Sub(adjustedGasPrice, newAdjustedGasPrice).String(), WeiToEther(big.NewInt(0).Sub(adjustedGasPrice, newAdjustedGasPrice)))).
-			Msg("Decreasing gas price to fit within max allowed tx cost.")
-
-		adjustedGasPrice = newAdjustedGasPrice
-	}
 
 	L.Debug().
 		Str("Diff (Wei/Ether)", fmt.Sprintf("%s/%s", big.NewInt(0).Sub(adjustedGasPrice, suggestedGasPrice).String(), WeiToEther(big.NewInt(0).Sub(adjustedGasPrice, suggestedGasPrice)))).
@@ -419,7 +392,7 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context, priority string) (a
 
 func getAdjustmentFactor(priority string) (float64, error) {
 	switch priority {
-	case Priority_Ultra:
+	case Priority_Degen:
 		return 1.5, nil
 	case Priority_Fast:
 		return 1.2, nil
@@ -435,12 +408,12 @@ func getAdjustmentFactor(priority string) (float64, error) {
 func getBufferPercent(congestionClassification string) (float64, error) {
 	switch congestionClassification {
 	case Congestion_Low:
-		return 0.05, nil
+		return 0, nil
 	case Congestion_Medium:
 		return 0.10, nil
 	case Congestion_High:
 		return 0.15, nil
-	case Congestion_Ultra:
+	case Congestion_Degen:
 		return 0.20, nil
 	default:
 		return 0, fmt.Errorf("Unknown congestion classification: %s", congestionClassification)
@@ -456,7 +429,7 @@ func classifyCongestion(congestionMetric float64) string {
 	case congestionMetric <= 0.75:
 		return Congestion_High
 	default:
-		return Congestion_Ultra
+		return Congestion_Degen
 	}
 }
 
@@ -471,7 +444,7 @@ func (m *Client) HistoricalFeeData(priority string) (baseFee float64, historical
 		return
 	} else {
 		switch priority {
-		case Priority_Ultra:
+		case Priority_Degen:
 			baseFee = stats.GasPrice.Max
 			historicalGasTipCap = stats.TipCap.Max
 		case Priority_Fast:
@@ -494,20 +467,7 @@ func (m *Client) HistoricalFeeData(priority string) (baseFee float64, historical
 	return baseFee, historicalGasTipCap, err
 }
 
-// CalculateTrend analyzes the change in base fee to determine congestion trend
-func calculateTrend(headers []*types.Header) float64 {
-	var totalIncrease float64
-	for i := 1; i < len(headers); i++ {
-		if headers[i].BaseFee.Cmp(headers[i-1].BaseFee) > 0 {
-			totalIncrease += 1
-		}
-	}
-	// Normalize the increase by the number of transitions to get an average trend
-	trend := totalIncrease / float64(len(headers)-1)
-	return trend
-}
-
-// CalculateGasUsedRatio averages the gas used ratio for a sense of how full blocks are
+// calculateGasUsedRatio averages the gas used ratio for a sense of how full blocks are
 func calculateGasUsedRatio(headers []*types.Header) float64 {
 	var totalRatio float64
 	for _, header := range headers {
