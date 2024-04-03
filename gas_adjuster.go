@@ -286,17 +286,17 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 	tipBufferInt, _ := tipBuffer.Int(nil)
 	adjustedTipCap = new(big.Int).Add(adjustedTipCap, tipBufferInt)
 
-	gasTipDiffText := "none"
-	gasCapDiffText := "none"
+	gasTipDiff := big.NewInt(0).Sub(adjustedTipCap, currentGasTip)
+	gasCapDiff := big.NewInt(0).Sub(maxFeeCap, maxProposedFeeCap)
 
 	L.Debug().
-		Str("Diff", gasTipDiffText).
+		Str("Diff (Wei/Ether)", fmt.Sprintf("%s wei / %s ether", gasTipDiff.String(), WeiToEther(gasTipDiff).Text('f', -1))).
 		Str("Initial GasTipCap", fmt.Sprintf("%s wei / %s ether", currentGasTip.String(), WeiToEther(currentGasTip).Text('f', -1))).
 		Str("Final GasTipCap", fmt.Sprintf("%s wei / %s ether", adjustedTipCap.String(), WeiToEther(adjustedTipCap).Text('f', -1))).
 		Msg("Tip Cap adjustment")
 
 	L.Debug().
-		Str("Diff", gasCapDiffText).
+		Str("Diff (Wei/Ether)", fmt.Sprintf("%s wei / %s ether", gasCapDiff.String(), WeiToEther(gasCapDiff).Text('f', -1))).
 		Str("Initial Fee Cap", fmt.Sprintf("%s wei / %s ether", maxProposedFeeCap.String(), WeiToEther(maxProposedFeeCap).Text('f', -1))).
 		Str("Final Fee Cap", fmt.Sprintf("%s wei / %s ether", maxFeeCap.String(), WeiToEther(maxFeeCap).Text('f', -1))).
 		Msg("Fee Cap adjustment")
