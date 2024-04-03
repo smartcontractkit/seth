@@ -251,9 +251,6 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 	adjustedBaseFeeFloat := new(big.Float).Mul(big.NewFloat(adjustmentFactor), new(big.Float).SetFloat64(baseFee64))
 	adjustedBaseFee, _ := adjustedBaseFeeFloat.Int(nil)
 
-	// Calculate the base max fee (without buffer) as initialBaseFee + finalTip.
-	rawMaxFeeCap := new(big.Int).Add(adjustedBaseFee, adjustedTipCap)
-
 	// between 0 and 1 (empty blocks - full blocks)
 	var congestionMetric float64
 	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasEstimationBlocks, CongestionStrategy_NewestFirst)
@@ -275,18 +272,23 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 		return
 	}
 
-	// Calculate and apply the feeCapBuffer.
-	feeCapBuffer := new(big.Float).Mul(new(big.Float).SetInt(rawMaxFeeCap), big.NewFloat(bufferPercent))
-	feeCapBufferInt, _ := feeCapBuffer.Int(nil)
-	maxFeeCap = new(big.Int).Add(rawMaxFeeCap, feeCapBufferInt)
+	initialFeeCap := new(big.Int).Add(big.NewInt(int64(baseFee64)), currentGasTip)
+
+	// Calculate base fee buffer
+	baseFeeBuffer := new(big.Float).Mul(new(big.Float).SetInt(adjustedBaseFee), big.NewFloat(bufferPercent))
+	baseFeeBufferInt, _ := baseFeeBuffer.Int(nil)
+	adjustedBaseFee = new(big.Int).Add(adjustedBaseFee, baseFeeBufferInt)
 
 	// Apply buffer also to the tip
 	tipBuffer := new(big.Float).Mul(new(big.Float).SetInt(adjustedTipCap), big.NewFloat(bufferPercent))
 	tipBufferInt, _ := tipBuffer.Int(nil)
 	adjustedTipCap = new(big.Int).Add(adjustedTipCap, tipBufferInt)
 
+	maxFeeCap = new(big.Int).Add(adjustedBaseFee, adjustedTipCap)
+
+	baseFeeDiff := big.NewInt(0).Sub(adjustedBaseFee, big.NewInt(int64(baseFee64)))
 	gasTipDiff := big.NewInt(0).Sub(adjustedTipCap, currentGasTip)
-	gasCapDiff := big.NewInt(0).Sub(maxFeeCap, rawMaxFeeCap)
+	gasCapDiff := big.NewInt(0).Sub(maxFeeCap, initialFeeCap)
 
 	L.Debug().
 		Str("Diff (Wei/Ether)", fmt.Sprintf("%s wei / %s ether", gasTipDiff.String(), WeiToEther(gasTipDiff).Text('f', -1))).
@@ -295,8 +297,14 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 		Msg("Tip adjustment")
 
 	L.Debug().
+		Str("Diff (Wei/Ether)", fmt.Sprintf("%s wei / %s ether", baseFeeDiff.String(), WeiToEther(baseFeeDiff).Text('f', -1))).
+		Str("Initial Base Fee", fmt.Sprintf("%s wei / %s ether", big.NewInt(int64(baseFee64)).String(), WeiToEther(big.NewInt(int64(baseFee64))).Text('f', -1))).
+		Str("Final Base Fee", fmt.Sprintf("%s wei / %s ether", maxFeeCap.String(), WeiToEther(maxFeeCap).Text('f', -1))).
+		Msg("Base Fee adjustment")
+
+	L.Debug().
 		Str("Diff (Wei/Ether)", fmt.Sprintf("%s wei / %s ether", gasCapDiff.String(), WeiToEther(gasCapDiff).Text('f', -1))).
-		Str("Initial Fee Cap", fmt.Sprintf("%s wei / %s ether", rawMaxFeeCap.String(), WeiToEther(rawMaxFeeCap).Text('f', -1))).
+		Str("Initial Fee Cap", fmt.Sprintf("%s wei / %s ether", initialFeeCap.String(), WeiToEther(initialFeeCap).Text('f', -1))).
 		Str("Final Fee Cap", fmt.Sprintf("%s wei / %s ether", maxFeeCap.String(), WeiToEther(maxFeeCap).Text('f', -1))).
 		Msg("Fee Cap adjustment")
 
