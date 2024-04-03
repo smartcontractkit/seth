@@ -299,7 +299,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 	L.Debug().
 		Str("Diff (Wei/Ether)", fmt.Sprintf("%s wei / %s ether", baseFeeDiff.String(), WeiToEther(baseFeeDiff).Text('f', -1))).
 		Str("Initial Base Fee", fmt.Sprintf("%s wei / %s ether", big.NewInt(int64(baseFee64)).String(), WeiToEther(big.NewInt(int64(baseFee64))).Text('f', -1))).
-		Str("Final Base Fee", fmt.Sprintf("%s wei / %s ether", maxFeeCap.String(), WeiToEther(maxFeeCap).Text('f', -1))).
+		Str("Final Base Fee", fmt.Sprintf("%s wei / %s ether", adjustedBaseFee.String(), WeiToEther(adjustedBaseFee).Text('f', -1))).
 		Msg("Base Fee adjustment")
 
 	L.Debug().
