@@ -278,8 +278,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 	// Calculate and apply the feeCapBuffer.
 	feeCapBuffer := new(big.Float).Mul(new(big.Float).SetInt(rawMaxFeeCap), big.NewFloat(bufferPercent))
 	feeCapBufferInt, _ := feeCapBuffer.Int(nil)
-	maxProposedFeeCap := new(big.Int).Add(rawMaxFeeCap, feeCapBufferInt)
-	maxFeeCap = maxProposedFeeCap
+	maxFeeCap = new(big.Int).Add(rawMaxFeeCap, feeCapBufferInt)
 
 	// Apply buffer also to the tip
 	tipBuffer := new(big.Float).Mul(new(big.Float).SetInt(adjustedTipCap), big.NewFloat(bufferPercent))
@@ -287,17 +286,17 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 	adjustedTipCap = new(big.Int).Add(adjustedTipCap, tipBufferInt)
 
 	gasTipDiff := big.NewInt(0).Sub(adjustedTipCap, currentGasTip)
-	gasCapDiff := big.NewInt(0).Sub(maxFeeCap, maxProposedFeeCap)
+	gasCapDiff := big.NewInt(0).Sub(maxFeeCap, rawMaxFeeCap)
 
 	L.Debug().
 		Str("Diff (Wei/Ether)", fmt.Sprintf("%s wei / %s ether", gasTipDiff.String(), WeiToEther(gasTipDiff).Text('f', -1))).
-		Str("Initial GasTipCap", fmt.Sprintf("%s wei / %s ether", currentGasTip.String(), WeiToEther(currentGasTip).Text('f', -1))).
-		Str("Final GasTipCap", fmt.Sprintf("%s wei / %s ether", adjustedTipCap.String(), WeiToEther(adjustedTipCap).Text('f', -1))).
-		Msg("Tip Cap adjustment")
+		Str("Initial Tip", fmt.Sprintf("%s wei / %s ether", currentGasTip.String(), WeiToEther(currentGasTip).Text('f', -1))).
+		Str("Final Tip", fmt.Sprintf("%s wei / %s ether", adjustedTipCap.String(), WeiToEther(adjustedTipCap).Text('f', -1))).
+		Msg("Tip adjustment")
 
 	L.Debug().
 		Str("Diff (Wei/Ether)", fmt.Sprintf("%s wei / %s ether", gasCapDiff.String(), WeiToEther(gasCapDiff).Text('f', -1))).
-		Str("Initial Fee Cap", fmt.Sprintf("%s wei / %s ether", maxProposedFeeCap.String(), WeiToEther(maxProposedFeeCap).Text('f', -1))).
+		Str("Initial Fee Cap", fmt.Sprintf("%s wei / %s ether", rawMaxFeeCap.String(), WeiToEther(rawMaxFeeCap).Text('f', -1))).
 		Str("Final Fee Cap", fmt.Sprintf("%s wei / %s ether", maxFeeCap.String(), WeiToEther(maxFeeCap).Text('f', -1))).
 		Msg("Fee Cap adjustment")
 
