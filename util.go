@@ -8,11 +8,13 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/naoina/toml"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
 	network_debug_contract "github.com/smartcontractkit/seth/contracts/bind/debug"
 	network_sub_debug_contract "github.com/smartcontractkit/seth/contracts/bind/sub"
@@ -344,4 +346,26 @@ func CreateOrAppendToJsonArray(filePath string, newItem any) error {
 		_, err = f.WriteString(fmt.Sprintf(",\n%s]", jsonValue))
 	}
 	return err
+}
+
+// EtherToWei converts an ETH float amount to wei
+func EtherToWei(eth *big.Float) *big.Int {
+	truncInt, _ := eth.Int(nil)
+	truncInt = new(big.Int).Mul(truncInt, big.NewInt(params.Ether))
+	fracStr := strings.Split(fmt.Sprintf("%.18f", eth), ".")[1]
+	fracStr += strings.Repeat("0", 18-len(fracStr))
+	fracInt, _ := new(big.Int).SetString(fracStr, 10)
+	wei := new(big.Int).Add(truncInt, fracInt)
+	return wei
+}
+
+// WeiToEther converts a wei amount to eth float
+func WeiToEther(wei *big.Int) *big.Float {
+	f := new(big.Float)
+	f.SetPrec(236) //  IEEE 754 octuple-precision binary floating-point format: binary256
+	f.SetMode(big.ToNearestEven)
+	fWei := new(big.Float)
+	fWei.SetPrec(236) //  IEEE 754 octuple-precision binary floating-point format: binary256
+	fWei.SetMode(big.ToNearestEven)
+	return f.Quo(fWei.SetInt(wei), big.NewFloat(params.Ether))
 }

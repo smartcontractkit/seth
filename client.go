@@ -59,11 +59,18 @@ type Client struct {
 	TraceReverted            bool
 	ContractAddressToNameMap ContractMap
 	ABIFinder                *ABIFinder
+	HeaderCache              *LFUHeaderCache
 }
 
 // NewClientWithConfig creates a new seth client with all deps setup from config
 func NewClientWithConfig(cfg *Config) (*Client, error) {
 	initDefaultLogging()
+
+	err := validateConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg.setEphemeralAddrs()
 	cs, err := NewContractStore(filepath.Join(cfg.ConfigDir, cfg.ABIDir), filepath.Join(cfg.ConfigDir, cfg.BINDir))
 	if err != nil {
@@ -106,6 +113,7 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, ErrCreateTracer)
 	}
+
 	return NewClientRaw(
 		cfg,
 		addrs,
@@ -116,6 +124,36 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 		WithContractMap(contractAddressToNameMap),
 		WithABIFinder(&abiFinder),
 	)
+}
+
+func validateConfig(cfg *Config) error {
+	if cfg.Network.GasEstimationEnabled {
+		if cfg.Network.GasEstimationBlocks == 0 {
+			return errors.New("when automating gas estimation is enabled blocks must be greater than 0. fix it or disable gas estimation")
+		}
+		cfg.Network.GasEstimationTxPriority = strings.ToLower(cfg.Network.GasEstimationTxPriority)
+
+		if cfg.Network.GasEstimationTxPriority == "" {
+			cfg.Network.GasEstimationTxPriority = Priority_Standard
+		}
+
+		switch cfg.Network.GasEstimationTxPriority {
+		case Priority_Degen:
+		case Priority_Fast:
+		case Priority_Standard:
+		case Priority_Slow:
+		default:
+			return errors.New("when automating gas estimation is enabled priority must be fast, standard or slow. fix it or disable gas estimation")
+		}
+
+	}
+
+	if cfg.Network.GasLimit != 0 {
+		L.Warn().
+			Msg("Gas limit is set, this will override the gas limit set by the network. This option should be used **ONLY** if node is incapable of estimating gas limit itself, which happens only with very old versions")
+	}
+
+	return nil
 }
 
 // NewClient creates a new raw seth client with all deps setup from env vars
@@ -246,6 +284,12 @@ func NewClientRaw(
 
 	now := time.Now().Format("2006-01-02-15-04-05")
 	c.Cfg.RevertedTransactionsFile = fmt.Sprintf(RevertedTransactionsFilePattern, c.Cfg.Network.Name, now)
+
+	if c.Cfg.Network.GasEstimationEnabled {
+		L.Debug().Msg("Gas estimation is enabled")
+		L.Debug().Msg("Initialising LFU block header cache")
+		c.HeaderCache = NewLFUBlockCache(c.Cfg.Network.GasEstimationBlocks)
+	}
 
 	return c, nil
 }
@@ -505,10 +549,10 @@ func WithGasTipCap(gasTipCap *big.Int) TransactOpt {
 }
 
 // NewTXOpts returns a new transaction options wrapper,
-// sets opts.GasPrice and opts.GasLimit from seth.toml or override with options
+// Sets gas price/fee tip/cap and gas limit either based on TOML config or estimations.
 func (m *Client) NewTXOpts(o ...TransactOpt) *bind.TransactOpts {
-	opts, nonce, gasPrice, gasTipCap := m.getProposedTransactionOptions(0)
-	m.configureTransactionOpts(opts, nonce, gasPrice, gasTipCap, o...)
+	opts, nonce, estimations := m.getProposedTransactionOptions(0)
+	m.configureTransactionOpts(opts, nonce.PendingNonce, estimations, o...)
 	L.Debug().
 		Interface("Nonce", opts.Nonce).
 		Interface("Value", opts.Value).
@@ -527,8 +571,9 @@ func (m *Client) NewTXKeyOpts(keyNum int, o ...TransactOpt) *bind.TransactOpts {
 		Interface("KeyNum", keyNum).
 		Interface("Address", m.Addresses[keyNum]).
 		Msg("Estimating transaction")
-	opts, nonce, gasPrice, gasTipCap := m.getProposedTransactionOptions(keyNum)
-	m.configureTransactionOpts(opts, nonce, gasPrice, gasTipCap, o...)
+	opts, nonceStatus, estimations := m.getProposedTransactionOptions(keyNum)
+
+	m.configureTransactionOpts(opts, nonceStatus.PendingNonce, estimations, o...)
 	L.Debug().
 		Interface("KeyNum", keyNum).
 		Interface("Nonce", opts.Nonce).
@@ -546,68 +591,139 @@ func (m *Client) AnySyncedKey() int {
 	return m.NonceManager.anySyncedKey()
 }
 
-// getProposedTransactionOptions gets all the tx info that network proposed
-func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, uint64, *big.Int, *big.Int) {
+type GasEstimations struct {
+	GasPrice  *big.Int
+	GasTipCap *big.Int
+	GasFeeCap *big.Int
+}
+
+type NonceStatus struct {
+	LastNonce    uint64
+	PendingNonce uint64
+}
+
+func (m *Client) getNonceStatus(keyNum int) (NonceStatus, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
 	defer cancel()
-	nonce, err := m.Client.PendingNonceAt(ctx, m.Addresses[keyNum])
+	pendingNonce, err := m.Client.PendingNonceAt(ctx, m.Addresses[keyNum])
+	if err != nil {
+		return NonceStatus{}, err
+	}
+
+	lastNonce, err := m.Client.NonceAt(ctx, m.Addresses[keyNum], nil)
+	if err != nil {
+		return NonceStatus{}, err
+	}
+
+	return NonceStatus{
+		LastNonce:    lastNonce,
+		PendingNonce: pendingNonce,
+	}, nil
+}
+
+// getProposedTransactionOptions gets all the tx info that network proposed
+func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, NonceStatus, GasEstimations) {
+	nonceStatus, err := m.getNonceStatus(keyNum)
 	if err != nil {
 		m.Errors = append(m.Errors, err)
 		// can't return nil, otherwise RPC wrapper will panic
-		return &bind.TransactOpts{}, 0, nil, nil
+		return &bind.TransactOpts{}, NonceStatus{}, GasEstimations{}
 	}
-	gasPrice, err := m.Client.SuggestGasPrice(ctx)
-	if err != nil {
-		m.Errors = append(m.Errors, err)
-		return &bind.TransactOpts{}, 0, nil, nil
-	}
-	var gasTipCap *big.Int
-	if m.Cfg.Network.EIP1559DynamicFees {
-		gasTipCap, err = m.Client.SuggestGasTipCap(ctx)
-		if err != nil {
-			m.Errors = append(m.Errors, err)
-			return &bind.TransactOpts{}, 0, nil, nil
+
+	if m.Cfg.PendingNonceProtectionEnabled {
+		if nonceStatus.PendingNonce > nonceStatus.LastNonce {
+			panic(fmt.Errorf("pending nonce is higher than last nonce, there are %d pending transactions. Speed them up before continuing, otherwise future transactions most probably will get stuck", nonceStatus.PendingNonce-nonceStatus.LastNonce))
 		}
+		L.Debug().
+			Msg("Pending nonce protection is enabled. Nonce status is OK")
 	}
+
+	estimations := m.CalculateGasEstimations(GasEstimationRequest{
+		GasEstimationEnabled: m.Cfg.Network.GasEstimationEnabled,
+		FallbackGasPrice:     m.Cfg.Network.GasPrice,
+		FallbackGasFeeCap:    m.Cfg.Network.GasFeeCap,
+		FallbackGasTipCap:    m.Cfg.Network.GasTipCap,
+		Priority:             m.Cfg.Network.GasEstimationTxPriority,
+	})
+
 	L.Debug().
 		Interface("KeyNum", keyNum).
-		Uint64("Nonce", nonce).
-		Interface("GasPrice", gasPrice).
-		Interface("GasTipCap", gasTipCap).
+		Uint64("Nonce", nonceStatus.PendingNonce).
+		Interface("GasEstimations", estimations).
 		Msg("Proposed transaction options")
 
 	opts, err := bind.NewKeyedTransactorWithChainID(m.PrivateKeys[keyNum], big.NewInt(m.ChainID))
 	if err != nil {
 		m.Errors = append(m.Errors, err)
-		return &bind.TransactOpts{}, 0, nil, nil
+		return &bind.TransactOpts{}, NonceStatus{}, GasEstimations{}
 	}
-	return opts, nonce, gasPrice, gasTipCap
+	return opts, nonceStatus, estimations
+}
+
+type GasEstimationRequest struct {
+	GasEstimationEnabled bool
+	FallbackGasPrice     int64
+	FallbackGasFeeCap    int64
+	FallbackGasTipCap    int64
+	Priority             string
+}
+
+// CalculateGasEstimations calculates gas estimations (price, tip/cap) or uses hardcoded values if estimation is disabled,
+// estimation errors or network is a simulated one.
+func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstimations {
+	estimations := GasEstimations{}
+
+	if m.Cfg.IsSimulatedNetwork() || !request.GasEstimationEnabled {
+		estimations.GasPrice = big.NewInt(request.FallbackGasPrice)
+		estimations.GasFeeCap = big.NewInt(request.FallbackGasFeeCap)
+		estimations.GasTipCap = big.NewInt(request.FallbackGasTipCap)
+
+		return estimations
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
+	defer cancel()
+
+	if m.Cfg.Network.EIP1559DynamicFees {
+		maxFee, priorityFee, err := m.GetSuggestedEIP1559Fees(ctx, request.Priority)
+		if err != nil {
+			L.Err(err).Msg("Failed to get suggested EIP1559 fees. Using hardcoded values")
+			m.Errors = append(m.Errors, err)
+			estimations.GasFeeCap = big.NewInt(request.FallbackGasFeeCap)
+			estimations.GasTipCap = big.NewInt(request.FallbackGasTipCap)
+		} else {
+			estimations.GasFeeCap = maxFee
+			estimations.GasTipCap = priorityFee
+		}
+	} else {
+		gasPrice, err := m.GetSuggestedLegacyFees(ctx, request.Priority)
+		if err != nil {
+			L.Err(err).Msg("Failed to get suggested Legacy fees. Using hardcoded values")
+			m.Errors = append(m.Errors, err)
+			estimations.GasPrice = big.NewInt(request.FallbackGasPrice)
+		} else {
+			estimations.GasPrice = gasPrice
+		}
+	}
+
+	return estimations
 }
 
 // configureTransactionOpts configures transaction for legacy or type-2
 func (m *Client) configureTransactionOpts(
 	opts *bind.TransactOpts,
 	nonce uint64,
-	gasPrice *big.Int,
-	gasTipCap *big.Int,
+	estimations GasEstimations,
 	o ...TransactOpt,
 ) *bind.TransactOpts {
 	opts.Nonce = big.NewInt(int64(nonce))
-	if m.Cfg.Network.GasPrice == 0 {
-		opts.GasPrice = gasPrice
-	} else {
-		opts.GasPrice = big.NewInt(m.Cfg.Network.GasPrice)
-	}
+	opts.GasPrice = estimations.GasPrice
 	opts.GasLimit = m.Cfg.Network.GasLimit
 
 	if m.Cfg.Network.EIP1559DynamicFees {
 		opts.GasPrice = nil
-		opts.GasFeeCap = big.NewInt(m.Cfg.Network.GasFeeCap)
-		if m.Cfg.Network.GasTipCap == 0 {
-			opts.GasTipCap = gasTipCap
-		} else {
-			opts.GasTipCap = big.NewInt(m.Cfg.Network.GasTipCap)
-		}
+		opts.GasTipCap = estimations.GasTipCap
+		opts.GasFeeCap = estimations.GasFeeCap
 	}
 	for _, f := range o {
 		f(opts)

@@ -3,14 +3,15 @@ package seth
 import (
 	"context"
 	"crypto/ecdsa"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/pkg/errors"
 	"math/big"
 	"os"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/pelletier/go-toml/v2"
+	"github.com/pkg/errors"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/naoina/toml"
 	"golang.org/x/sync/errgroup"
 )
 

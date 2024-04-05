@@ -10,7 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/naoina/toml"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
 )
 
@@ -31,19 +31,22 @@ type Config struct {
 	ephemeral      bool
 	EphemeralAddrs *int64 `toml:"ephemeral_addresses_number"`
 
-	ABIDir                   string `toml:"abi_dir"`
-	BINDir                   string `toml:"bin_dir"`
-	ContractMapFile          string `toml:"contract_map_file"`
-	SaveDeployedContractsMap bool   `toml:"save_deployed_contracts_map"`
-	KeyFilePath              string
-	Network                  *Network         `toml:"network"`
-	Networks                 []*Network       `toml:"networks"`
-	NonceManager             *NonceManagerCfg `toml:"nonce_manager"`
-	TracingEnabled           bool             `toml:"tracing_enabled"`
-	TraceToJson              bool             `toml:"trace_to_json"`
+	ABIDir                        string `toml:"abi_dir"`
+	BINDir                        string `toml:"bin_dir"`
+	ContractMapFile               string `toml:"contract_map_file"`
+	SaveDeployedContractsMap      bool   `toml:"save_deployed_contracts_map"`
+	KeyFilePath                   string
+	Network                       *Network         `toml:"network"`
+	Networks                      []*Network       `toml:"networks"`
+	NonceManager                  *NonceManagerCfg `toml:"nonce_manager"`
+	TracingEnabled                bool             `toml:"tracing_enabled"`
+	TraceToJson                   bool             `toml:"trace_to_json"`
+	PendingNonceProtectionEnabled bool             `toml:"pending_nonce_protection_enabled"`
 	// internal fields
 	ConfigDir                string `toml:"abs_path"`
 	RevertedTransactionsFile string
+
+	ExperimentsEnabled []string `toml:"experiments_enabled"`
 }
 
 type NonceManagerCfg struct {
@@ -54,17 +57,20 @@ type NonceManagerCfg struct {
 }
 
 type Network struct {
-	Name               string    `toml:"name"`
-	ChainID            string    `toml:"chain_id"`
-	URLs               []string  `toml:"urls_secret"`
-	EIP1559DynamicFees bool      `toml:"eip_1559_dynamic_fees"`
-	GasPrice           int64     `toml:"gas_price"`
-	GasFeeCap          int64     `toml:"gas_fee_cap"`
-	GasTipCap          int64     `toml:"gas_tip_cap"`
-	GasLimit           uint64    `toml:"gas_limit"`
-	TxnTimeout         *Duration `toml:"transaction_timeout"`
-	TransferGasFee     int64     `toml:"transfer_gas_fee"`
-	PrivateKeys        []string  `toml:"private_keys_secret"`
+	Name                    string    `toml:"name"`
+	ChainID                 string    `toml:"chain_id"`
+	URLs                    []string  `toml:"urls_secret"`
+	EIP1559DynamicFees      bool      `toml:"eip_1559_dynamic_fees"`
+	GasPrice                int64     `toml:"gas_price"`
+	GasFeeCap               int64     `toml:"gas_fee_cap"`
+	GasTipCap               int64     `toml:"gas_tip_cap"`
+	GasLimit                uint64    `toml:"gas_limit"`
+	TxnTimeout              *Duration `toml:"transaction_timeout"`
+	TransferGasFee          int64     `toml:"transfer_gas_fee"`
+	PrivateKeys             []string  `toml:"private_keys_secret"`
+	GasEstimationEnabled    bool      `toml:"gas_estimation_enabled"`
+	GasEstimationBlocks     uint64    `toml:"gas_estimation_blocks"`
+	GasEstimationTxPriority string    `toml:"gas_estimation_tx_priority"`
 }
 
 // ReadConfig reads the TOML config file from location specified by env var "SETH_CONFIG_PATH" and returns a Config struct
@@ -99,6 +105,7 @@ func ReadConfig() (*Config, error) {
 	if cfg.Network == nil {
 		return nil, fmt.Errorf("network %s not found", snet)
 	}
+
 	rootPrivateKey := os.Getenv("ROOT_PRIVATE_KEY")
 	if rootPrivateKey == "" {
 		return nil, errors.New(ErrEmptyRootPrivateKey)
@@ -185,4 +192,18 @@ func (c *Config) setEphemeralAddrs() {
 	if c.KeyFilePath == "" && *c.EphemeralAddrs != 0 {
 		c.ephemeral = true
 	}
+}
+
+const (
+	Experiment_SlowFundsReturn    = "slow_funds_return"
+	Experiment_Eip1559FeeEqualier = "eip_1559_fee_equalizer"
+)
+
+func (c *Config) IsExperimentEnabled(experiment string) bool {
+	for _, e := range c.ExperimentsEnabled {
+		if e == experiment {
+			return true
+		}
+	}
+	return false
 }

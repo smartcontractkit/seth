@@ -15,7 +15,15 @@ trace_to_json = false
 # number of addresses to be generated and runtime, if set to 0, no addresses will be generated
 # each generated address will receive a proportion of native tokens from root private key's balance
 # with the value equal to (root_balance / ephemeral_addresses_number) - transfer_fee * ephemeral_addresses_number
-#ephemeral_addresses_number = 60
+ephemeral_addresses_number = 0
+
+# If enabled we will panic when getting transaction options if current key/address has a pending transaction
+# That's because the one we are about to send would get queued, possibly for a very long time
+pending_nonce_protection_enabled = false
+
+# feature-flagged expriments; first one sets funds return priority to 'slow' (core only!), second one
+# sets the tip/base fee to the higher value in case there's 3+ orders of magnitude difference between them
+experiments_enabled = ["slow_funds_return", "eip_1559_fee_equalizer"]
 
 [[networks]]
 name = "Anvil"
@@ -49,49 +57,98 @@ gas_tip_cap = 3_000_000_000
 name = "Fuji"
 chain_id = "43113"
 transaction_timeout = "30s"
+eip_1559_dynamic_fees = true
+
+# automated gas estimation
+gas_estimation_enabled = true
+gas_estimation_blocks = 100
+gas_estimation_tx_priority = "standard"
+
+# gas limits
 transfer_gas_fee = 21_000
+# gas limit should be explicitly set only if you are connecting to a node that's incapable of estimating gas limit itself (should only happen for very old versions)
+# gas_limit = 8_000_000
+
+# manual settings, used when gas_estimation_enabled is false or when it fails
 # legacy transactions
 gas_price = 30_000_000_000
 # EIP-1559 transactions
-eip_1559_dynamic_fees = true
 gas_fee_cap = 30_000_000_000
 gas_tip_cap = 1_800_000_000
+
 
 [[networks]]
 name = "Sepolia"
 chain_id = "11155111"
 transaction_timeout = "30s"
+eip_1559_dynamic_fees = true
+
+# automated gas estimation
+gas_estimation_enabled = true
+gas_estimation_blocks = 100
+gas_estimation_tx_priority = "standard"
+
+# gas limits
 transfer_gas_fee = 21_000
-gas_limit = 14_000_000
+# gas limit should be explicitly set only if you are connecting to a node that's incapable of estimating gas limit itself (should only happen for very old versions)
+# gas_limit = 14_000_000
+
+# manual settings, used when gas_estimation_enabled is false or when it fails
 # legacy transactions
 gas_price = 1_000_000_000
 # EIP-1559 transactions
-eip_1559_dynamic_fees = true
 gas_fee_cap = 25_000_000_000
 gas_tip_cap = 5_000_000_000
+
 
 [[networks]]
 name = "Mumbai"
 chain_id = "80001"
 transaction_timeout = "30s"
-transfer_gas_fee = 21_000
-# legacy transactions
-#gas_price = 1_800_000_000
-# EIP-1559 transactions
 eip_1559_dynamic_fees = true
+
+# automated gas estimation for live networks
+# if set to true we will dynamically estimate gas for every transaction (based on suggested values, priority and congestion rate for last X blocks)
+gas_estimation_enabled = true
+# number of blocks to use for congestion rate estimation (it will determine buffer added on top of suggested values)
+gas_estimation_blocks = 100
+# transaction priority, which determines adjustment factor multiplier applied to suggested values (fast - 1.2x, standard - 1x, slow - 0.8x)
+gas_estimation_tx_priority = "standard"
+
+# gas limits
+transfer_gas_fee = 21_000
+# gas limit should be explicitly set only if you are connecting to a node that's incapable of estimating gas limit itself (should only happen for very old versions)
+# gas_limit = 7_000_000
+
+# manual settings, used when gas_estimation_enabled is false or when it fails
+# # legacy transactions
+gas_price = 30460480821
+# # EIP-1559 transactions
 gas_fee_cap = 1_800_000_000
-gas_tip_cap = 1_800_000_000
+gas_tip_cap = 30460480806
+
 
 [[networks]]
 name = "zkEVM"
 chain_id = "1442"
 transaction_timeout = "30s"
+eip_1559_dynamic_fees = false
+
+# automated gas estimation
+gas_estimation_enabled = true
+gas_estimation_blocks = 100
+gas_estimation_tx_priority = "standard"
+
+# gas limits
 transfer_gas_fee = 21_000
-gas_limit = 3_000_000
+# gas limit should be explicitly set only if you are connecting to a node that's incapable of estimating gas limit itself (should only happen for very old versions)
+# gas_limit = 3_000_000
+
+# manual settings, used when gas_estimation_enabled is false or when it fails
 # legacy transactions
 gas_price = 50_000_000
 # EIP-1559 transactions
-#eip_1559_dynamic_fees = true
+
 gas_fee_cap = 1_800_000_000
 gas_tip_cap = 1_800_000_000
 
