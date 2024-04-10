@@ -339,6 +339,7 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context, priority string) (a
 		L.Error().
 			Err(err).
 			Msg("Incorrect gas data received from node. Skipping automation gas estimation")
+		return
 	}
 
 	var adjustmentFactor float64
