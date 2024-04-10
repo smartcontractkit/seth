@@ -38,7 +38,7 @@ type TestEnvironment struct {
 	DebugContractAddress    common.Address
 	DebugSubContractAddress common.Address
 	DebugContractRaw        *bind.BoundContract
-	ContractMap             map[string]string
+	ContractMap             seth.ContractMap
 }
 
 func newClient(t *testing.T) *seth.Client {
@@ -78,15 +78,15 @@ func TestDeploymentLinkTokenFromGethWrapperExample(t *testing.T) {
 
 func newClientWithContractMapFromEnv(t *testing.T) *seth.Client {
 	c := newClient(t)
-	if len(TestEnv.ContractMap) == 0 {
+	if TestEnv.ContractMap.Size() == 0 {
 		t.Fatal("contract map is empty")
 	}
 
 	// create a copy of the map, so we don't have problem with side effects of modyfing client's map
 	// impacting the global, underlaying one
-	contractMap := make(map[string]string)
-	for k, v := range TestEnv.ContractMap {
-		contractMap[k] = v
+	contractMap := seth.NewEmptyContractMap()
+	for k, v := range TestEnv.ContractMap.GetContractMap() {
+		contractMap.AddContract(k, v)
 	}
 
 	c.ContractAddressToNameMap = contractMap
@@ -121,7 +121,7 @@ func NewDebugContractSetup() (
 	if err != nil {
 		return nil, nil, common.Address{}, common.Address{}, nil, err
 	}
-	contractMap := make(map[string]string)
+	contractMap := seth.NewEmptyContractMap()
 
 	abiFinder := seth.NewABIFinder(contractMap, cs)
 	tracer, err := seth.NewTracer(cfg.Network.URLs[0], cs, &abiFinder, cfg, contractMap, addrs)
@@ -155,9 +155,9 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	contractMap := make(map[string]string)
-	for k, v := range client.ContractAddressToNameMap {
-		contractMap[k] = v
+	contractMap := seth.NewEmptyContractMap()
+	for k, v := range client.ContractAddressToNameMap.GetContractMap() {
+		contractMap.AddContract(k, v)
 	}
 
 	TestEnv = TestEnvironment{

@@ -93,7 +93,7 @@ func (m *NonceManager) anySyncedKey() int {
 	select {
 	case <-ctx.Done():
 		L.Error().Msg(ErrKeySyncTimeout)
-		return 0
+		return -1
 	case keyData := <-m.SyncedKeys:
 		L.Trace().
 			Interface("KeyNum", keyData.KeyNum).
@@ -123,6 +123,13 @@ func (m *NonceManager) anySyncedKey() int {
 							Nonce:  nonce,
 						}
 						return nil
+					} else {
+						L.Trace().
+							Interface("KeyNum", keyData.KeyNum).
+							Uint64("Nonce", nonce).
+							Int("Expected nonce", int(keyData.Nonce+1)).
+							Interface("Address", m.Addresses[keyData.KeyNum]).
+							Msg("Key NOT synced")
 					}
 					return errors.New(ErrKeySync)
 				},
@@ -133,6 +140,9 @@ func (m *NonceManager) anySyncedKey() int {
 				m.Client.Errors = append(m.Client.Errors, errors.New(ErrKeySync))
 			}
 		}()
+		if keyData != nil && keyData.KeyNum == 0 {
+			return -1
+		}
 		return keyData.KeyNum
 	}
 }

@@ -70,15 +70,15 @@ func TestContractMapNonSimulatedClientSavesAndReadsContractMap(t *testing.T) {
 	cfg := client.Cfg
 	newNonSimulatedClient, err := seth.NewClientRaw(cfg, client.Addresses, client.PrivateKeys)
 	require.NoError(t, err, "failed to create new client")
-	require.Equal(t, 1, len(newNonSimulatedClient.ContractAddressToNameMap), "expected contract map to be saved")
+	require.Equal(t, 1, newNonSimulatedClient.ContractAddressToNameMap.Size(), "expected contract map to be saved")
 
-	expectedMap := seth.ContractMap{data.Address.Hex(): "NetworkDebugSubContract"}
+	expectedMap := seth.NewContractMap(map[string]string{data.Address.Hex(): "NetworkDebugSubContract"})
 	require.Equal(t, expectedMap, newNonSimulatedClient.ContractAddressToNameMap, "expected contract map to be saved")
 
 	cfg.Network.Name = seth.GETH
 	newSimulatedClient, err := seth.NewClientRaw(cfg, client.Addresses, client.PrivateKeys)
 	require.NoError(t, err, "failed to create new client")
-	require.Equal(t, 0, len(newSimulatedClient.ContractAddressToNameMap), "expected contract map to be saved")
+	require.Equal(t, 0, newSimulatedClient.ContractAddressToNameMap.Size(), "expected contract map to be saved")
 }
 
 func TestContractMapSimulatedClientDoesntSaveContractMap(t *testing.T) {
@@ -108,7 +108,7 @@ func TestContractMapNewClientIsCreatedEvenIfNoContractMapFileExists(t *testing.T
 
 	newClient, err := seth.NewClientRaw(cfg, TestEnv.Client.Addresses, TestEnv.Client.PrivateKeys, seth.WithNonceManager(nm), seth.WithContractStore(TestEnv.Client.ContractStore))
 	require.NoError(t, err, "failed to create new client")
-	require.Equal(t, 0, len(newClient.ContractAddressToNameMap), "expected contract map to be saved")
+	require.Equal(t, 0, newClient.ContractAddressToNameMap.Size(), "expected contract map to be saved")
 
 	_, err = newClient.DeployContractFromContractStore(newClient.NewTXOpts(), "NetworkDebugSubContract")
 	require.NoError(t, err, "failed to deploy contract")
@@ -118,12 +118,12 @@ func TestContractMapNewClientIsCreatedEvenIfNoContractMapFileExists(t *testing.T
 	})
 
 	// make sure deployed contract is present in the contract map
-	require.Equal(t, 1, len(newClient.ContractAddressToNameMap), "expected contract map to be saved")
+	require.Equal(t, 1, newClient.ContractAddressToNameMap.Size(), "expected contract map to be saved")
 
 	// make sure that new client instance loads map from existing file instead of creating a new one
 	newClient, err = seth.NewClientRaw(cfg, TestEnv.Client.Addresses, TestEnv.Client.PrivateKeys, seth.WithNonceManager(nm), seth.WithContractStore(TestEnv.Client.ContractStore))
 	require.NoError(t, err, "failed to create new client")
-	require.Equal(t, 1, len(newClient.ContractAddressToNameMap), "expected contract map to be saved")
+	require.Equal(t, 1, newClient.ContractAddressToNameMap.Size(), "expected contract map to be saved")
 }
 
 func TestContractMapNewClientIsNotCreatedWhenCorruptedContractMapFileExists(t *testing.T) {

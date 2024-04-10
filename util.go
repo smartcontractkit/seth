@@ -73,7 +73,8 @@ func (m *Client) CalculateSubKeyFunding(addrs int64) (*FundingDetails, error) {
 	L.Info().Str("Balance", balance.String()).Msg("Root key balance")
 	networkTransferFee := m.Cfg.Network.GasPrice * m.Cfg.Network.TransferGasFee
 	totalFee := new(big.Int).Mul(big.NewInt(networkTransferFee), big.NewInt(addrs))
-	freeBalance := new(big.Int).Sub(balance, totalFee)
+	rootKeyBuffer := new(big.Int).Mul(m.Cfg.RootKeyFundsBuffer, big.NewInt(1_000_000_000_000_000_000))
+	freeBalance := new(big.Int).Sub(balance, big.NewInt(0).Add(totalFee, rootKeyBuffer))
 	addrFunding := new(big.Int).Div(freeBalance, big.NewInt(addrs))
 	bd := &FundingDetails{
 		RootBalance:        balance,
@@ -84,12 +85,13 @@ func (m *Client) CalculateSubKeyFunding(addrs int64) (*FundingDetails, error) {
 	}
 	L.Info().
 		Interface("RootBalance", bd.RootBalance.String()).
+		Interface("RootKeyBuffer", rootKeyBuffer.String()).
 		Interface("TransferFeesTotal", bd.TotalFee.String()).
 		Interface("NetworkTransferFee", bd.NetworkTransferFee).
 		Interface("FreeBalance", bd.FreeBalance.String()).
 		Interface("EachAddrGets", bd.AddrFunding.String()).
 		Msg("Splitting funds from the root account")
-	if freeBalance.Int64() < 0 {
+	if freeBalance.Cmp(big.NewInt(0)) < 0 {
 		return nil, errors.New(fmt.Sprintf(ErrInsufficientRootKeyBalance, freeBalance.String()))
 	}
 	return bd, nil

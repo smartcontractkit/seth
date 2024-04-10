@@ -21,6 +21,10 @@ ephemeral_addresses_number = 0
 # That's because the one we are about to send would get queued, possibly for a very long time
 pending_nonce_protection_enabled = false
 
+# Amount to be left on root key/address, when we are using ephemeral addresses. It's the amount that will not
+# be divided into ephemeral keys.
+root_key_funds_buffer_wei = 10_000_000_000_000_000_000 # 10 eth
+
 # feature-flagged expriments; first one sets funds return priority to 'slow' (core only!), second one
 # sets the tip/base fee to the higher value in case there's 3+ orders of magnitude difference between them
 experiments_enabled = ["slow_funds_return", "eip_1559_fee_equalizer"]

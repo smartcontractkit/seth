@@ -40,6 +40,13 @@ const (
 var (
 	// DefaultEphemeralAddresses is amount of addresses created in ephemeral client mode
 	DefaultEphemeralAddresses int64 = 60
+
+	// DefayltRootKeyFundsWeiBuffer is the amount of funds that will be left on the root key
+	DefayltRootKeyFundsWeiBuffer = big.NewInt(0)
+
+	TracingLevel_None     = "NONE"
+	TracingLevel_Reverted = "REVERTED"
+	TracingLevel_All      = "ALL"
 )
 
 // Client is a vanilla go-ethereum client with enhanced debug logging
@@ -56,7 +63,6 @@ type Client struct {
 	ContractStore            *ContractStore
 	NonceManager             *NonceManager
 	Tracer                   *Tracer
-	TraceReverted            bool
 	ContractAddressToNameMap ContractMap
 	ABIFinder                *ABIFinder
 	HeaderCache              *LFUHeaderCache
@@ -70,6 +76,8 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	L.Debug().Msgf("Using tracing level: %s", cfg.TracingLevel)
 
 	cfg.setEphemeralAddrs()
 	cs, err := NewContractStore(filepath.Join(cfg.ConfigDir, cfg.ABIDir), filepath.Join(cfg.ConfigDir, cfg.BINDir))
@@ -98,9 +106,10 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 
 	// this part is kind of duplicated in NewClientRaw, but we need to create contract map before creating Tracer
 	// so that both the tracer and client have references to the same map
-	contractAddressToNameMap := make(ContractMap)
+	contractAddressToNameMap := NewEmptyContractMap()
+	contractAddressToNameMap.addressMap = make(map[string]string)
 	if !cfg.IsSimulatedNetwork() {
-		contractAddressToNameMap, err = LoadDeployedContracts(cfg.ContractMapFile)
+		contractAddressToNameMap.addressMap, err = LoadDeployedContracts(cfg.ContractMapFile)
 		if err != nil {
 			return nil, errors.Wrap(err, ErrReadContractMap)
 		}
@@ -153,6 +162,20 @@ func validateConfig(cfg *Config) error {
 			Msg("Gas limit is set, this will override the gas limit set by the network. This option should be used **ONLY** if node is incapable of estimating gas limit itself, which happens only with very old versions")
 	}
 
+	if cfg.TracingLevel == "" {
+		cfg.TracingLevel = TracingLevel_Reverted
+	}
+
+	cfg.TracingLevel = strings.ToUpper(cfg.TracingLevel)
+
+	switch cfg.TracingLevel {
+	case TracingLevel_None:
+	case TracingLevel_Reverted:
+	case TracingLevel_All:
+	default:
+		return errors.New("tracing level must be one of: NONE, REVERTED, ALL")
+	}
+
 	return nil
 }
 
@@ -195,15 +218,16 @@ func NewClientRaw(
 		o(c)
 	}
 
-	if c.ContractAddressToNameMap == nil {
+	if c.ContractAddressToNameMap.addressMap == nil {
+		c.ContractAddressToNameMap = NewEmptyContractMap()
 		if !cfg.IsSimulatedNetwork() {
-			c.ContractAddressToNameMap, err = LoadDeployedContracts(cfg.ContractMapFile)
+			c.ContractAddressToNameMap.addressMap, err = LoadDeployedContracts(cfg.ContractMapFile)
 			if err != nil {
 				return nil, errors.Wrap(err, ErrReadContractMap)
 			}
-			if len(c.ContractAddressToNameMap) > 0 {
+			if len(c.ContractAddressToNameMap.addressMap) > 0 {
 				L.Info().
-					Int("Size", len(c.ContractAddressToNameMap)).
+					Int("Size", len(c.ContractAddressToNameMap.addressMap)).
 					Str("File name", cfg.ContractMapFile).
 					Msg("No contract map provided, read it from file")
 			} else {
@@ -212,13 +236,12 @@ func NewClientRaw(
 			}
 		} else {
 			L.Debug().Msg("Simulated network, contract map won't be read from file")
-			c.ContractAddressToNameMap = make(ContractMap)
 			L.Info().
 				Msg("No contract map provided and no file found, created new one")
 		}
 	} else {
 		L.Info().
-			Int("Size", len(c.ContractAddressToNameMap)).
+			Int("Size", len(c.ContractAddressToNameMap.addressMap)).
 			Msg("Contract map was provided")
 	}
 	if c.NonceManager != nil {
@@ -262,7 +285,7 @@ func NewClientRaw(
 		}
 	}
 
-	if c.Cfg.TracingEnabled && c.Tracer == nil {
+	if c.Cfg.TracingLevel != TracingLevel_None && c.Tracer == nil {
 		if c.ContractStore == nil {
 			cs, err := NewContractStore(filepath.Join(cfg.ConfigDir, cfg.ABIDir), filepath.Join(cfg.ConfigDir, cfg.BINDir))
 			if err != nil {
@@ -315,31 +338,77 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 	if err != nil {
 		return &DecodedTransaction{}, err
 	}
+
+	hasFailed := false
+
 	if receipt.Status == 0 {
-		err = CreateOrAppendToJsonArray(m.Cfg.RevertedTransactionsFile, tx.Hash().Hex())
-		if err != nil {
-			l.Warn().
-				Err(err).
-				Str("TXHash", tx.Hash().Hex()).
-				Msg("Failed to save reverted transaction to file")
-		}
+		hasFailed = true
 		if err := m.callAndGetRevertReason(tx, receipt); err != nil {
 			return &DecodedTransaction{}, err
 		}
 	}
 
-	decoded, decodeErr := m.decodeTransaction(l, tx, receipt)
-	if decodeErr != nil {
-		// return error only if tracing is not enabled, as we might still get some useful data from tracing
-		if !m.Cfg.TracingEnabled && strings.Contains(decodeErr.Error(), ErrNoABIMethod) {
-			return nil, decodeErr
-		}
+	decoded := &DecodedTransaction{
+		Transaction: tx,
 	}
 
-	if m.Cfg.TracingEnabled {
+	if m.Cfg.TracingLevel == TracingLevel_None {
+		return decoded, nil
+	}
+
+	if m.Cfg.TracingLevel == TracingLevel_All || (m.Cfg.TracingLevel == TracingLevel_Reverted && hasFailed) {
+		var decodeErr error
+		decoded, decodeErr = m.decodeTransaction(l, tx, receipt)
+		if decodeErr != nil {
+			if m.Cfg.TraceToJson {
+				L.Debug().Msg("Failed to decode transaction. Saving transaction data hash as JSON")
+				err = CreateOrAppendToJsonArray(m.Cfg.RevertedTransactionsFile, tx.Hash().Hex())
+				if err != nil {
+					l.Warn().
+						Err(err).
+						Str("TXHash", tx.Hash().Hex()).
+						Msg("Failed to save reverted transaction hash to file")
+				} else {
+					l.Debug().
+						Str("TXHash", tx.Hash().Hex()).
+						Msg("Saved reverted transaction to file")
+				}
+			}
+			return nil, decodeErr
+		}
+
 		traceErr := m.Tracer.TraceGethTX(decoded.Hash)
 		if traceErr != nil {
+			if m.Cfg.TraceToJson {
+				L.Debug().Msg("Failed to trace call, but decoding was successful. Saving decoded data as JSON")
+				path, saveErr := saveAsJson(decoded, "traces", decoded.Hash)
+				if saveErr != nil {
+					L.Warn().
+						Err(saveErr).
+						Msg("Failed to save decoded call as JSON")
+				} else {
+					L.Debug().
+						Str("Path", path).
+						Str("Tx hash", decoded.Hash).
+						Msg("Saved decoded transaction data to JSON")
+				}
+			}
+
 			return nil, traceErr
+		}
+
+		if m.Cfg.TraceToJson {
+			path, saveErr := saveAsJson(m.Tracer.DecodedCalls[decoded.Hash], "traces", decoded.Hash)
+			if saveErr != nil {
+				L.Warn().
+					Err(saveErr).
+					Msg("Failed to save decoded call as JSON")
+			} else {
+				L.Debug().
+					Str("Path", path).
+					Str("Tx hash", decoded.Hash).
+					Msg("Saved decoded call data to JSON")
+			}
 		}
 	}
 
@@ -426,7 +495,7 @@ func WithContractStore(as *ContractStore) ClientOpt {
 }
 
 // WithContractMap contractAddressToNameMap functional option
-func WithContractMap(contractAddressToNameMap map[string]string) ClientOpt {
+func WithContractMap(contractAddressToNameMap ContractMap) ClientOpt {
 	return func(c *Client) {
 		c.ContractAddressToNameMap = contractAddressToNameMap
 	}
@@ -567,6 +636,9 @@ func (m *Client) NewTXOpts(o ...TransactOpt) *bind.TransactOpts {
 // NewTXKeyOpts returns a new transaction options wrapper,
 // sets opts.GasPrice and opts.GasLimit from seth.toml or override with options
 func (m *Client) NewTXKeyOpts(keyNum int, o ...TransactOpt) *bind.TransactOpts {
+	if keyNum > len(m.Addresses) || keyNum < 0 {
+		panic(fmt.Errorf("keyNum is out of range. Expected %d-%d. Got: %d", 0, len(m.Addresses)-1, keyNum))
+	}
 	L.Debug().
 		Interface("KeyNum", keyNum).
 		Interface("Address", m.Addresses[keyNum]).
@@ -632,7 +704,7 @@ func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, 
 
 	if m.Cfg.PendingNonceProtectionEnabled {
 		if nonceStatus.PendingNonce > nonceStatus.LastNonce {
-			panic(fmt.Errorf("pending nonce is higher than last nonce, there are %d pending transactions. Speed them up before continuing, otherwise future transactions most probably will get stuck", nonceStatus.PendingNonce-nonceStatus.LastNonce))
+			panic(fmt.Errorf("pending nonce for key %d is higher than last nonce, there are %d pending transactions. Speed them up before continuing, otherwise future transactions most probably will get stuck", keyNum, nonceStatus.PendingNonce-nonceStatus.LastNonce))
 		}
 		L.Debug().
 			Msg("Pending nonce protection is enabled. Nonce status is OK")

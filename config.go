@@ -3,6 +3,7 @@ package seth
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,8 +29,9 @@ const (
 
 type Config struct {
 	// ephemeral is internal option used only from code
-	ephemeral      bool
-	EphemeralAddrs *int64 `toml:"ephemeral_addresses_number"`
+	ephemeral          bool
+	EphemeralAddrs     *int64   `toml:"ephemeral_addresses_number"`
+	RootKeyFundsBuffer *big.Int `toml:"root_key_funds_buffer"`
 
 	ABIDir                        string `toml:"abi_dir"`
 	BINDir                        string `toml:"bin_dir"`
@@ -39,7 +41,7 @@ type Config struct {
 	Network                       *Network         `toml:"network"`
 	Networks                      []*Network       `toml:"networks"`
 	NonceManager                  *NonceManagerCfg `toml:"nonce_manager"`
-	TracingEnabled                bool             `toml:"tracing_enabled"`
+	TracingLevel                  string           `toml:"tracing_level"`
 	TraceToJson                   bool             `toml:"trace_to_json"`
 	PendingNonceProtectionEnabled bool             `toml:"pending_nonce_protection_enabled"`
 	// internal fields
@@ -191,6 +193,10 @@ func (c *Config) setEphemeralAddrs() {
 
 	if c.KeyFilePath == "" && *c.EphemeralAddrs != 0 {
 		c.ephemeral = true
+	}
+
+	if c.RootKeyFundsBuffer == nil {
+		c.RootKeyFundsBuffer = DefayltRootKeyFundsWeiBuffer
 	}
 }
 

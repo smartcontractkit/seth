@@ -235,6 +235,8 @@ func (m *Client) DecodeCustomABIErr(txErr error) (string, error) {
 				}
 			}
 		}
+	} else {
+		L.Warn().Msg("No error data in tx")
 	}
 	return "", nil
 }
@@ -272,8 +274,8 @@ func (m *Client) callAndGetRevertReason(tx *types.Transaction, rc *types.Receipt
 	// if there is no match we print the error from CallMsg call
 	_, plainStringErr := m.Client.CallContract(context.Background(), m.CallMsgFromTx(tx), rc.BlockNumber)
 
-	if m.TraceReverted {
-		L.Debug().Msg("Decoding revert error")
+	if m.Cfg.TracingLevel == TracingLevel_Reverted {
+		L.Debug().Str("Tx hash", tx.Hash().Hex()).Msg("Decoding revert error")
 		traceErr := m.Tracer.TraceGethTX(tx.Hash().Hex())
 		if traceErr != nil {
 			L.Warn().Err(traceErr).Msg("Failed to trace transaction")
@@ -288,6 +290,7 @@ func (m *Client) callAndGetRevertReason(tx *types.Transaction, rc *types.Receipt
 		return errors.New(decodedABIErrString)
 	}
 	if plainStringErr != nil {
+		L.Warn().Msg("Failed to decode revert reason")
 		return plainStringErr
 	}
 	return nil

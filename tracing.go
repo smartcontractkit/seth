@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -40,14 +41,35 @@ type Tracer struct {
 	ABIFinder                *ABIFinder
 }
 
-type ContractMap map[string]string
+type ContractMap struct {
+	mu         *sync.RWMutex
+	addressMap map[string]string
+}
+
+func NewEmptyContractMap() ContractMap {
+	return ContractMap{
+		mu:         &sync.RWMutex{},
+		addressMap: map[string]string{},
+	}
+}
+
+func NewContractMap(contracts map[string]string) ContractMap {
+	return ContractMap{
+		mu:         &sync.RWMutex{},
+		addressMap: contracts,
+	}
+}
+
+func (c ContractMap) GetContractMap() map[string]string {
+	return c.addressMap
+}
 
 func (c ContractMap) IsKnownAddress(addr string) bool {
-	return c[strings.ToLower(addr)] != ""
+	return c.addressMap[strings.ToLower(addr)] != ""
 }
 
 func (c ContractMap) GetContractName(addr string) string {
-	return c[strings.ToLower(addr)]
+	return c.addressMap[strings.ToLower(addr)]
 }
 
 func (c ContractMap) GetContractAddress(addr string) string {
@@ -55,7 +77,7 @@ func (c ContractMap) GetContractAddress(addr string) string {
 		return UNKNOWN
 	}
 
-	for k, v := range c {
+	for k, v := range c.addressMap {
 		if v == addr {
 			return k
 		}
@@ -69,7 +91,13 @@ func (c ContractMap) AddContract(addr, name string) {
 	}
 
 	name = strings.TrimSuffix(name, ".abi")
-	c[strings.ToLower(addr)] = name
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.addressMap[strings.ToLower(addr)] = name
+}
+
+func (c ContractMap) Size() int {
+	return len(c.addressMap)
 }
 
 type Trace struct {
@@ -123,7 +151,7 @@ type Call struct {
 	Value   string     `json:"value"`
 }
 
-func NewTracer(url string, cs *ContractStore, abiFinder *ABIFinder, cfg *Config, contractAddressToNameMap map[string]string, addresses []common.Address) (*Tracer, error) {
+func NewTracer(url string, cs *ContractStore, abiFinder *ABIFinder, cfg *Config, contractAddressToNameMap ContractMap, addresses []common.Address) (*Tracer, error) {
 	c, err := rpc.Dial(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to '%s' due to: %w", url, err)
@@ -314,14 +342,14 @@ func (t *Tracer) DecodeTrace(l zerolog.Logger, trace Trace) ([]*DecodedCall, err
 
 	t.DecodedCalls[trace.TxHash] = decodedCalls
 
-	if t.Cfg.TraceToJson {
-		saveErr := t.SaveDecodedCallsAsJson("traces")
-		if saveErr != nil {
-			L.Warn().
-				Err(saveErr).
-				Msg("Failed to save decoded calls as JSON")
-		}
-	}
+	// if t.Cfg.TraceToJson {
+	// 	saveErr := t.SaveDecodedCallsAsJson("traces")
+	// 	if saveErr != nil {
+	// 		L.Warn().
+	// 			Err(saveErr).
+	// 			Msg("Failed to save decoded calls as JSON")
+	// 	}
+	// }
 
 	return decodedCalls, nil
 }
