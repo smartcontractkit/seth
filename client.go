@@ -136,17 +136,17 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 }
 
 func validateConfig(cfg *Config) error {
-	if cfg.Network.GasEstimationEnabled {
-		if cfg.Network.GasEstimationBlocks == 0 {
+	if cfg.Network.GasPriceEstimationEnabled {
+		if cfg.Network.GasPriceEstimationBlocks == 0 {
 			return errors.New("when automating gas estimation is enabled blocks must be greater than 0. fix it or disable gas estimation")
 		}
-		cfg.Network.GasEstimationTxPriority = strings.ToLower(cfg.Network.GasEstimationTxPriority)
+		cfg.Network.GasPriceEstimationTxPriority = strings.ToLower(cfg.Network.GasPriceEstimationTxPriority)
 
-		if cfg.Network.GasEstimationTxPriority == "" {
-			cfg.Network.GasEstimationTxPriority = Priority_Standard
+		if cfg.Network.GasPriceEstimationTxPriority == "" {
+			cfg.Network.GasPriceEstimationTxPriority = Priority_Standard
 		}
 
-		switch cfg.Network.GasEstimationTxPriority {
+		switch cfg.Network.GasPriceEstimationTxPriority {
 		case Priority_Degen:
 		case Priority_Fast:
 		case Priority_Standard:
@@ -308,10 +308,21 @@ func NewClientRaw(
 	now := time.Now().Format("2006-01-02-15-04-05")
 	c.Cfg.RevertedTransactionsFile = fmt.Sprintf(RevertedTransactionsFilePattern, c.Cfg.Network.Name, now)
 
-	if c.Cfg.Network.GasEstimationEnabled {
+	if c.Cfg.Network.GasPriceEstimationEnabled {
 		L.Debug().Msg("Gas estimation is enabled")
 		L.Debug().Msg("Initialising LFU block header cache")
-		c.HeaderCache = NewLFUBlockCache(c.Cfg.Network.GasEstimationBlocks)
+		c.HeaderCache = NewLFUBlockCache(c.Cfg.Network.GasPriceEstimationBlocks)
+
+		if c.Cfg.Network.EIP1559DynamicFees {
+			L.Debug().Msg("Checking if EIP-1559 is supported by the network")
+			c.CalculateGasEstimations(GasEstimationRequest{
+				GasEstimationEnabled: true,
+				FallbackGasPrice:     c.Cfg.Network.GasPrice,
+				FallbackGasFeeCap:    c.Cfg.Network.GasFeeCap,
+				FallbackGasTipCap:    c.Cfg.Network.GasTipCap,
+				Priority:             Priority_Standard,
+			})
+		}
 	}
 
 	return c, nil
@@ -714,11 +725,11 @@ func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, 
 	}
 
 	estimations := m.CalculateGasEstimations(GasEstimationRequest{
-		GasEstimationEnabled: m.Cfg.Network.GasEstimationEnabled,
+		GasEstimationEnabled: m.Cfg.Network.GasPriceEstimationEnabled,
 		FallbackGasPrice:     m.Cfg.Network.GasPrice,
 		FallbackGasFeeCap:    m.Cfg.Network.GasFeeCap,
 		FallbackGasTipCap:    m.Cfg.Network.GasTipCap,
-		Priority:             m.Cfg.Network.GasEstimationTxPriority,
+		Priority:             m.Cfg.Network.GasPriceEstimationTxPriority,
 	})
 
 	L.Debug().
@@ -759,18 +770,7 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 	ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
 	defer cancel()
 
-	if m.Cfg.Network.EIP1559DynamicFees {
-		maxFee, priorityFee, err := m.GetSuggestedEIP1559Fees(ctx, request.Priority)
-		if err != nil {
-			L.Err(err).Msg("Failed to get suggested EIP1559 fees. Using hardcoded values")
-			m.Errors = append(m.Errors, err)
-			estimations.GasFeeCap = big.NewInt(request.FallbackGasFeeCap)
-			estimations.GasTipCap = big.NewInt(request.FallbackGasTipCap)
-		} else {
-			estimations.GasFeeCap = maxFee
-			estimations.GasTipCap = priorityFee
-		}
-	} else {
+	var calulcateLegacyFees = func() {
 		gasPrice, err := m.GetSuggestedLegacyFees(ctx, request.Priority)
 		if err != nil {
 			L.Err(err).Msg("Failed to get suggested Legacy fees. Using hardcoded values")
@@ -779,6 +779,30 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 		} else {
 			estimations.GasPrice = gasPrice
 		}
+	}
+
+	if m.Cfg.Network.EIP1559DynamicFees {
+		maxFee, priorityFee, err := m.GetSuggestedEIP1559Fees(ctx, request.Priority)
+		if err != nil {
+			L.Err(err).Msg("Failed to get suggested EIP1559 fees. Using hardcoded values")
+			m.Errors = append(m.Errors, err)
+			estimations.GasFeeCap = big.NewInt(request.FallbackGasFeeCap)
+			estimations.GasTipCap = big.NewInt(request.FallbackGasTipCap)
+
+			if strings.Contains(err.Error(), "method eth_maxPriorityFeePerGas") || strings.Contains(err.Error(), "method eth_maxFeePerGas") || strings.Contains(err.Error(), "method eth_feeHistory") || strings.Contains(err.Error(), "expected input list for types.txdata") {
+				L.Warn().Msg("EIP1559 fees are not supported by the network. Switching to Legacy fees. Remember to update your config!")
+				if m.Cfg.Network.GasPrice == 0 {
+					L.Warn().Msg("Gas price is 0. If Legacy estimations fail, there will no fallback price and transactions will start fail. Set gas price in config and disable EIP1559DynamicFees")
+				}
+				m.Cfg.Network.EIP1559DynamicFees = false
+				calulcateLegacyFees()
+			}
+		} else {
+			estimations.GasFeeCap = maxFee
+			estimations.GasTipCap = priorityFee
+		}
+	} else {
+		calulcateLegacyFees()
 	}
 
 	return estimations
@@ -810,8 +834,10 @@ func (m *Client) configureTransactionOpts(
 // available at the address, so that when the method returns it's safe to interact with it. It also saves the contract address and ABI name
 // to the contract map, so that we can use that, when tracing transactions. It is suggested to use name identical to the name of the contract Solidity file.
 func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.ABI, bytecode []byte, params ...interface{}) (DeploymentData, error) {
-	address, tx, contract, err := bind.DeployContract(auth, abi, bytecode, m.Client, params...)
+	L.Info().
+		Msgf("Started deploying %s contract", name)
 
+	address, tx, contract, err := bind.DeployContract(auth, abi, bytecode, m.Client, params...)
 	if err != nil {
 		return DeploymentData{}, err
 	}
@@ -819,7 +845,7 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 	L.Info().
 		Str("Address", address.Hex()).
 		Str("TXHash", tx.Hash().Hex()).
-		Msgf("Deploying %s contract", name)
+		Msgf("Waiting for %s contract deployment to finish", name)
 
 	// I had this one failing sometimes, when transaction has been minted, but contract cannot be found yet at address
 	if err := retry.Do(

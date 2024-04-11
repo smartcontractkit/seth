@@ -253,7 +253,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 
 	// between 0 and 1 (empty blocks - full blocks)
 	var congestionMetric float64
-	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasEstimationBlocks, CongestionStrategy_NewestFirst)
+	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasPriceEstimationBlocks, CongestionStrategy_NewestFirst)
 	if err != nil {
 		return
 	}
@@ -339,6 +339,7 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context, priority string) (a
 		L.Error().
 			Err(err).
 			Msg("Incorrect gas data received from node. Skipping automation gas estimation")
+		return
 	}
 
 	var adjustmentFactor float64
@@ -353,7 +354,7 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context, priority string) (a
 
 	// between 0 and 1 (empty blocks - full blocks)
 	var congestionMetric float64
-	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasEstimationBlocks, CongestionStrategy_NewestFirst)
+	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasPriceEstimationBlocks, CongestionStrategy_NewestFirst)
 	if err != nil {
 		return
 	}
@@ -378,9 +379,9 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context, priority string) (a
 	adjustedGasPrice = new(big.Int).Add(adjustedGasPrice, bufferInt)
 
 	L.Debug().
-		Str("Diff (Wei/Ether)", fmt.Sprintf("%s/%s", big.NewInt(0).Sub(adjustedGasPrice, suggestedGasPrice).String(), WeiToEther(big.NewInt(0).Sub(adjustedGasPrice, suggestedGasPrice)))).
-		Str("Initial GasPrice (Wei/Ether)", fmt.Sprintf("%s/%s", suggestedGasPrice.String(), WeiToEther(suggestedGasPrice))).
-		Str("Final GasPrice (Wei/Ether)", fmt.Sprintf("%s/%s", adjustedGasPrice.String(), WeiToEther(adjustedGasPrice))).
+		Str("Diff (Wei/Ether)", fmt.Sprintf("%s/%s", big.NewInt(0).Sub(adjustedGasPrice, suggestedGasPrice).String(), WeiToEther(big.NewInt(0).Sub(adjustedGasPrice, suggestedGasPrice)).Text('f', -1))).
+		Str("Initial GasPrice (Wei/Ether)", fmt.Sprintf("%s/%s", suggestedGasPrice.String(), WeiToEther(suggestedGasPrice).Text('f', -1))).
+		Str("Final GasPrice (Wei/Ether)", fmt.Sprintf("%s/%s", adjustedGasPrice.String(), WeiToEther(adjustedGasPrice).Text('f', -1))).
 		Msg("Suggested Legacy fees")
 
 	L.Debug().
@@ -415,13 +416,13 @@ func getAdjustmentFactor(priority string) (float64, error) {
 func getBufferPercent(congestionClassification string) (float64, error) {
 	switch congestionClassification {
 	case Congestion_Low:
-		return 0, nil
-	case Congestion_Medium:
 		return 0.10, nil
-	case Congestion_High:
-		return 0.15, nil
-	case Congestion_Degen:
+	case Congestion_Medium:
 		return 0.20, nil
+	case Congestion_High:
+		return 0.30, nil
+	case Congestion_Degen:
+		return 0.40, nil
 	default:
 		return 0, fmt.Errorf("Unknown congestion classification: %s", congestionClassification)
 	}
@@ -442,7 +443,7 @@ func classifyCongestion(congestionMetric float64) string {
 
 func (m *Client) HistoricalFeeData(priority string) (baseFee float64, historicalGasTipCap float64, err error) {
 	estimator := NewGasEstimator(m)
-	stats, err := estimator.Stats(m.Cfg.Network.GasEstimationBlocks, 99)
+	stats, err := estimator.Stats(m.Cfg.Network.GasPriceEstimationBlocks, 99)
 	if err != nil {
 		L.Error().
 			Err(err).
@@ -464,10 +465,12 @@ func (m *Client) HistoricalFeeData(priority string) (baseFee float64, historical
 			baseFee = stats.GasPrice.Perc25
 			historicalGasTipCap = stats.TipCap.Perc25
 		default:
+			err = fmt.Errorf("Unknown priority: %s", priority)
 			L.Error().
 				Str("Priority", priority).
 				Msg("Unknown priority. Skipping automation gas estimation")
-			m.Errors = append(m.Errors, err)
+
+			return
 		}
 	}
 
@@ -476,8 +479,15 @@ func (m *Client) HistoricalFeeData(priority string) (baseFee float64, historical
 
 // calculateGasUsedRatio averages the gas used ratio for a sense of how full blocks are
 func calculateGasUsedRatio(headers []*types.Header) float64 {
+	if len(headers) == 0 {
+		return 0
+	}
+
 	var totalRatio float64
 	for _, header := range headers {
+		if header.GasLimit == 0 {
+			continue
+		}
 		ratio := float64(header.GasUsed) / float64(header.GasLimit)
 		totalRatio += ratio
 	}

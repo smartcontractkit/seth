@@ -160,11 +160,11 @@ gas_fee_cap = 25_000_000_000
 gas_tip_cap = 1_800_000_000
 urls_secret = ["..."]
 # if set to true we will dynamically estimate gas for every transaction (explained in more detail below)
-gas_estimation_enabled = true
+gas_price_estimation_enabled = true
 # how many last blocks to use, when estimating gas for a transaction
-gas_estimation_blocks = 1000
+gas_price_estimation_blocks = 1000
 # priority of the transaction, can be "fast", "standard" or "slow" (the higher the priority, the higher adjustment factor and buffer will be used for gas estimation) [default: "standard"]
-gas_estimation_tx_priority = "slow"
+gas_price_estimation_tx_priority = "slow"
 ```
 
 If you want to save addresses of deployed contracts, you can enable it with:
@@ -262,28 +262,47 @@ You can read more about how ABI finding and contract map works [here](./docs/abi
 
 ### Autmoatic gas estimator
 
-Regardless whether you are using automatic gas estimator or not, you still need to set all expected default gas-related values for your network. If it doesn't support EIP-1559, you need to set `gas_price` and if it does, you need to set `eip_1559_dynamic_fees`, `gas_fee_cap`, `gas_tip_cap`. They will be used as fallback in case gas estimation fails. `gas_limit` and `transfer_gas_fee` are also required.
+This section explains how to configure and understand the automatic gas estimator, which is crucial for executing transactions on Ethereum-based networks. Here’s what you need to know:
 
-Now, how does gas estimation work?
+#### Configuration Requirements
 
-First of all, if network is simulated, we never estimate gas, but use hardcoded values. Otherwise...
+Before using the automatic gas estimator, it's essential to set the default gas-related parameters for your network:
 
-#### Legacy transactions
-1. We ask the node for suggested gas price.
-2. We modify it based on `gas_estimation_tx_priority`. The higher the priority, the higher the adjustment factor (details below).
-3. We fetch last `gas_estimation_blocks` (number) of block headers and calculate congestion rate for each block using a logarithmic function that gives higher weight to the most recent block headers. Congestion rate is gas used/gas limit.
-4. Based on congestion rate, we add a buffer to gas price to make sure the transaction is included in the block (details below).
+- **Non-EIP-1559 Networks**: Set the `gas_price` to define the cost per unit of gas if your network doesn't support EIP-1559.
+- **EIP-1559 Networks**: If your network supports EIP-1559, set the following:
+  - `eip_1559_dynamic_fees`: Enables dynamic fee structure.
+  - `gas_fee_cap`: The maximum fee you're willing to pay per gas.
+  - `gas_tip_cap`: An optional tip to prioritize your transaction within a block (although if it's set to `0` there's a high chance your transaction will take longer to execute as it will be less attractive to miners, so do set it).
 
-#### EIP-1559 transactions
-1. We ask the node for suggested tip fee.
-2. We get base fee and tip history for last `gas_estimation_blocks` (number) of block headers.
-3. We then take the higher of suggested tip fee and historical tip fee and use the for further calculations.
-4. Based on `gas_estimation_tx_priority` we adjust the tip and base fee. The higher the priority, the higher the adjustment factor (details below).
-5. We sum base fee and the tip to get the gas fee cap.
-6. We fetch last `gas_estimation_blocks` (number) of block headers and calculate congestion rate for each block using a logarithmic function that gives higher weight to the most recent block headers. Congestion rate is gas used/gas limit.
-7. Based on congestion rate, we add a buffer to both fee cao and tip to make sure the transaction is included in the block (details below).
+These settings act as a fallback if the gas estimation fails. Additionally, always specify `transfer_gas_fee` for the fee associated with token transfers.
 
-Finally, `gas_estimation_tx_priority` is also used, when deciding, which percentile to use for base fee and tip for historical fee data. Here's how that looks:
+If you do not know if your network supports EIP-1559, but you want to give it a try it's recommended that you also set `gas_price` as a fallback. When we try to use EIP-1559 during gas price estimation, but it fails, we will fallback to using non-EIP-1559 logic. If that one fails as well, we will use hardcoded `gas_price` value.
+
+#### How Gas Estimation Works
+
+Gas estimation varies based on whether the network is a private Ethereum Network or a live network.
+
+- **Private Ethereum Networks**: no estimation is needed. We always use hardcoded values.
+
+For real networks, the estimation process differs for legacy transactions and those compliant with EIP-1559:
+
+##### Legacy Transactions
+1. **Initial Price**: Query the network node for the current suggested gas price.
+2. **Priority Adjustment**: Modify the initial price based on `gas_price_estimation_tx_priority`. Higher priority increases the price to ensure faster inclusion in a block.
+3. **Congestion Analysis**: Examine the last X blocks (as specified by `gas_price_estimation_blocks`) to determine network congestion, calculating the usage rate of gas in each block and giving recent blocks more weight.
+4. **Buffering**: Add a buffer to the adjusted gas price to increase transaction reliability during high congestion.
+
+##### EIP-1559 Transactions
+1. **Tip Fee Query**: Ask the node for the current recommended tip fee.
+2. **Fee History Analysis**: Gather the base fee and tip history from recent blocks to establish a fee baseline.
+3. **Fee Selection**: Use the greater of the node's suggested tip or the historical average tip for upcoming calculations.
+4. **Priority and Adjustment**: Increase the base and tip fees based on transaction priority (`gas_price_estimation_tx_priority`), which influences how much you are willing to spend to expedite your transaction.
+5. **Final Fee Calculation**: Sum the base fee and adjusted tip to set the `gas_fee_cap`.
+6. **Congestion Buffer**: Similar to legacy transactions, analyze congestion and apply a buffer to both the fee cap and the tip to secure transaction inclusion.
+
+Understanding and setting these parameters correctly ensures that your transactions are processed efficiently and cost-effectively on the network.
+
+Finally, `gas_price_estimation_tx_priority` is also used, when deciding, which percentile to use for base fee and tip for historical fee data. Here's how that looks:
 ```go
 		case Priority_Fast:
 			baseFee = stats.GasPrice.Perc99
@@ -297,7 +316,7 @@ Finally, `gas_estimation_tx_priority` is also used, when deciding, which percent
 ```
 
 ##### Adjustment factor
-All values are multiplied by the adjustment factor, which is calculated based on `gas_estimation_tx_priority`:
+All values are multiplied by the adjustment factor, which is calculated based on `gas_price_estimation_tx_priority`:
 ```go
 	case Priority_Fast:
 		return 1.2
@@ -311,16 +330,16 @@ All values are multiplied by the adjustment factor, which is calculated based on
 We further adjust the gas price by adding a buffer to it, based on congestion rate:
 ```go
 	case Congestion_Low:
-		return 0, nil
-	case Congestion_Medium:
 		return 0.10, nil
-	case Congestion_High:
-		return 0.15, nil
-	case Congestion_Ultra:
+	case Congestion_Medium:
 		return 0.20, nil
+	case Congestion_High:
+		return 0.30, nil
+	case Congestion_Degen:
+		return 0.40, nil
 ```
 
-We cache block header data in an in-memory cache, so we don't have to fetch it every time we estimate gas. The cache has capacity equal to `gas_estimation_blocks` and every time we add a new element, we remove one that is least frequently used and oldest (with block number being a constant and chain always moving forward it makes no sense to keep old blocks).
+We cache block header data in an in-memory cache, so we don't have to fetch it every time we estimate gas. The cache has capacity equal to `gas_price_estimation_blocks` and every time we add a new element, we remove one that is least frequently used and oldest (with block number being a constant and chain always moving forward it makes no sense to keep old blocks).
 
 For both transaction types if any of the steps fails, we fallback to hardcoded values.
 
