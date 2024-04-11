@@ -289,6 +289,17 @@ func NewClientRaw(
 		L.Debug().Msg("Gas estimation is enabled")
 		L.Debug().Msg("Initialising LFU block header cache")
 		c.HeaderCache = NewLFUBlockCache(c.Cfg.Network.GasPriceEstimationBlocks)
+
+		if c.Cfg.Network.EIP1559DynamicFees {
+			L.Debug().Msg("Checking if EIP-1559 is supported by the network")
+			c.CalculateGasEstimations(GasEstimationRequest{
+				GasEstimationEnabled: true,
+				FallbackGasPrice:     c.Cfg.Network.GasPrice,
+				FallbackGasFeeCap:    c.Cfg.Network.GasFeeCap,
+				FallbackGasTipCap:    c.Cfg.Network.GasTipCap,
+				Priority:             Priority_Standard,
+			})
+		}
 	}
 
 	return c, nil
@@ -684,6 +695,17 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 	ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
 	defer cancel()
 
+	var calulcateLegacyFees = func() {
+		gasPrice, err := m.GetSuggestedLegacyFees(ctx, request.Priority)
+		if err != nil {
+			L.Err(err).Msg("Failed to get suggested Legacy fees. Using hardcoded values")
+			m.Errors = append(m.Errors, err)
+			estimations.GasPrice = big.NewInt(request.FallbackGasPrice)
+		} else {
+			estimations.GasPrice = gasPrice
+		}
+	}
+
 	if m.Cfg.Network.EIP1559DynamicFees {
 		maxFee, priorityFee, err := m.GetSuggestedEIP1559Fees(ctx, request.Priority)
 		if err != nil {
@@ -693,26 +715,19 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 			estimations.GasTipCap = big.NewInt(request.FallbackGasTipCap)
 
 			if strings.Contains(err.Error(), "method eth_maxPriorityFeePerGas") || strings.Contains(err.Error(), "method eth_maxFeePerGas") || strings.Contains(err.Error(), "method eth_feeHistory") || strings.Contains(err.Error(), "expected input list for types.txdata") {
-				L.Warn().Msg("EIP1559 fees are not supported by the network. Disabling in config and switching to Legacy fees")
+				L.Warn().Msg("EIP1559 fees are not supported by the network. Switching to Legacy fees. Remember to update your config!")
 				if m.Cfg.Network.GasPrice == 0 {
 					L.Warn().Msg("Gas price is 0. If Legacy estimations fail, there will no fallback price and transactions will start fail. Set gas price in config and disable EIP1559DynamicFees")
 				}
 				m.Cfg.Network.EIP1559DynamicFees = false
+				calulcateLegacyFees()
 			}
-
 		} else {
 			estimations.GasFeeCap = maxFee
 			estimations.GasTipCap = priorityFee
 		}
 	} else {
-		gasPrice, err := m.GetSuggestedLegacyFees(ctx, request.Priority)
-		if err != nil {
-			L.Err(err).Msg("Failed to get suggested Legacy fees. Using hardcoded values")
-			m.Errors = append(m.Errors, err)
-			estimations.GasPrice = big.NewInt(request.FallbackGasPrice)
-		} else {
-			estimations.GasPrice = gasPrice
-		}
+		calulcateLegacyFees()
 	}
 
 	return estimations
@@ -748,14 +763,14 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 		Msgf("Started deploying %s contract", name)
 
 	address, tx, contract, err := bind.DeployContract(auth, abi, bytecode, m.Client, params...)
+	if err != nil {
+		return DeploymentData{}, err
+	}
+
 	L.Info().
 		Str("Address", address.Hex()).
 		Str("TXHash", tx.Hash().Hex()).
 		Msgf("Waiting for %s contract deployment to finish", name)
-
-	if err != nil {
-		return DeploymentData{}, err
-	}
 
 	// I had this one failing sometimes, when transaction has been minted, but contract cannot be found yet at address
 	if err := retry.Do(
