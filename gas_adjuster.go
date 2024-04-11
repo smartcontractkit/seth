@@ -253,7 +253,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 
 	// between 0 and 1 (empty blocks - full blocks)
 	var congestionMetric float64
-	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasEstimationBlocks, CongestionStrategy_NewestFirst)
+	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasPriceEstimationBlocks, CongestionStrategy_NewestFirst)
 	if err != nil {
 		return
 	}
@@ -354,7 +354,7 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context, priority string) (a
 
 	// between 0 and 1 (empty blocks - full blocks)
 	var congestionMetric float64
-	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasEstimationBlocks, CongestionStrategy_NewestFirst)
+	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasPriceEstimationBlocks, CongestionStrategy_NewestFirst)
 	if err != nil {
 		return
 	}
@@ -443,7 +443,7 @@ func classifyCongestion(congestionMetric float64) string {
 
 func (m *Client) HistoricalFeeData(priority string) (baseFee float64, historicalGasTipCap float64, err error) {
 	estimator := NewGasEstimator(m)
-	stats, err := estimator.Stats(m.Cfg.Network.GasEstimationBlocks, 99)
+	stats, err := estimator.Stats(m.Cfg.Network.GasPriceEstimationBlocks, 99)
 	if err != nil {
 		L.Error().
 			Err(err).

@@ -60,16 +60,16 @@ transaction_timeout = "30s"
 eip_1559_dynamic_fees = true
 
 # automated gas estimation
-gas_estimation_enabled = true
-gas_estimation_blocks = 100
-gas_estimation_tx_priority = "standard"
+gas_price_estimation_enabled = true
+gas_price_estimation_blocks = 100
+gas_price_estimation_tx_priority = "standard"
 
 # gas limits
 transfer_gas_fee = 21_000
 # gas limit should be explicitly set only if you are connecting to a node that's incapable of estimating gas limit itself (should only happen for very old versions)
 # gas_limit = 8_000_000
 
-# manual settings, used when gas_estimation_enabled is false or when it fails
+# manual settings, used when gas_price_estimation_enabled is false or when it fails
 # legacy transactions
 gas_price = 30_000_000_000
 # EIP-1559 transactions
@@ -84,16 +84,16 @@ transaction_timeout = "30s"
 eip_1559_dynamic_fees = true
 
 # automated gas estimation
-gas_estimation_enabled = true
-gas_estimation_blocks = 100
-gas_estimation_tx_priority = "standard"
+gas_price_estimation_enabled = true
+gas_price_estimation_blocks = 100
+gas_price_estimation_tx_priority = "standard"
 
 # gas limits
 transfer_gas_fee = 21_000
 # gas limit should be explicitly set only if you are connecting to a node that's incapable of estimating gas limit itself (should only happen for very old versions)
 # gas_limit = 14_000_000
 
-# manual settings, used when gas_estimation_enabled is false or when it fails
+# manual settings, used when gas_price_estimation_enabled is false or when it fails
 # legacy transactions
 gas_price = 1_000_000_000
 # EIP-1559 transactions
@@ -109,18 +109,18 @@ eip_1559_dynamic_fees = true
 
 # automated gas estimation for live networks
 # if set to true we will dynamically estimate gas for every transaction (based on suggested values, priority and congestion rate for last X blocks)
-gas_estimation_enabled = true
+gas_price_estimation_enabled = true
 # number of blocks to use for congestion rate estimation (it will determine buffer added on top of suggested values)
-gas_estimation_blocks = 100
+gas_price_estimation_blocks = 100
 # transaction priority, which determines adjustment factor multiplier applied to suggested values (fast - 1.2x, standard - 1x, slow - 0.8x)
-gas_estimation_tx_priority = "standard"
+gas_price_estimation_tx_priority = "standard"
 
 # gas limits
 transfer_gas_fee = 21_000
 # gas limit should be explicitly set only if you are connecting to a node that's incapable of estimating gas limit itself (should only happen for very old versions)
 # gas_limit = 7_000_000
 
-# manual settings, used when gas_estimation_enabled is false or when it fails
+# manual settings, used when gas_price_estimation_enabled is false or when it fails
 # # legacy transactions
 gas_price = 30460480821
 # # EIP-1559 transactions
@@ -135,16 +135,16 @@ transaction_timeout = "30s"
 eip_1559_dynamic_fees = false
 
 # automated gas estimation
-gas_estimation_enabled = true
-gas_estimation_blocks = 100
-gas_estimation_tx_priority = "standard"
+gas_price_estimation_enabled = true
+gas_price_estimation_blocks = 100
+gas_price_estimation_tx_priority = "standard"
 
 # gas limits
 transfer_gas_fee = 21_000
 # gas limit should be explicitly set only if you are connecting to a node that's incapable of estimating gas limit itself (should only happen for very old versions)
 # gas_limit = 3_000_000
 
-# manual settings, used when gas_estimation_enabled is false or when it fails
+# manual settings, used when gas_price_estimation_enabled is false or when it fails
 # legacy transactions
 gas_price = 50_000_000
 # EIP-1559 transactions

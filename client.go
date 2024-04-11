@@ -127,17 +127,17 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 }
 
 func validateConfig(cfg *Config) error {
-	if cfg.Network.GasEstimationEnabled {
-		if cfg.Network.GasEstimationBlocks == 0 {
+	if cfg.Network.GasPriceEstimationEnabled {
+		if cfg.Network.GasPriceEstimationBlocks == 0 {
 			return errors.New("when automating gas estimation is enabled blocks must be greater than 0. fix it or disable gas estimation")
 		}
-		cfg.Network.GasEstimationTxPriority = strings.ToLower(cfg.Network.GasEstimationTxPriority)
+		cfg.Network.GasPriceEstimationTxPriority = strings.ToLower(cfg.Network.GasPriceEstimationTxPriority)
 
-		if cfg.Network.GasEstimationTxPriority == "" {
-			cfg.Network.GasEstimationTxPriority = Priority_Standard
+		if cfg.Network.GasPriceEstimationTxPriority == "" {
+			cfg.Network.GasPriceEstimationTxPriority = Priority_Standard
 		}
 
-		switch cfg.Network.GasEstimationTxPriority {
+		switch cfg.Network.GasPriceEstimationTxPriority {
 		case Priority_Degen:
 		case Priority_Fast:
 		case Priority_Standard:
@@ -285,10 +285,10 @@ func NewClientRaw(
 	now := time.Now().Format("2006-01-02-15-04-05")
 	c.Cfg.RevertedTransactionsFile = fmt.Sprintf(RevertedTransactionsFilePattern, c.Cfg.Network.Name, now)
 
-	if c.Cfg.Network.GasEstimationEnabled {
+	if c.Cfg.Network.GasPriceEstimationEnabled {
 		L.Debug().Msg("Gas estimation is enabled")
 		L.Debug().Msg("Initialising LFU block header cache")
-		c.HeaderCache = NewLFUBlockCache(c.Cfg.Network.GasEstimationBlocks)
+		c.HeaderCache = NewLFUBlockCache(c.Cfg.Network.GasPriceEstimationBlocks)
 	}
 
 	return c, nil
@@ -639,11 +639,11 @@ func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, 
 	}
 
 	estimations := m.CalculateGasEstimations(GasEstimationRequest{
-		GasEstimationEnabled: m.Cfg.Network.GasEstimationEnabled,
+		GasEstimationEnabled: m.Cfg.Network.GasPriceEstimationEnabled,
 		FallbackGasPrice:     m.Cfg.Network.GasPrice,
 		FallbackGasFeeCap:    m.Cfg.Network.GasFeeCap,
 		FallbackGasTipCap:    m.Cfg.Network.GasTipCap,
-		Priority:             m.Cfg.Network.GasEstimationTxPriority,
+		Priority:             m.Cfg.Network.GasPriceEstimationTxPriority,
 	})
 
 	L.Debug().
@@ -691,6 +691,15 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 			m.Errors = append(m.Errors, err)
 			estimations.GasFeeCap = big.NewInt(request.FallbackGasFeeCap)
 			estimations.GasTipCap = big.NewInt(request.FallbackGasTipCap)
+
+			if strings.Contains(err.Error(), "method eth_maxPriorityFeePerGas") || strings.Contains(err.Error(), "method eth_maxFeePerGas") || strings.Contains(err.Error(), "method eth_feeHistory") || strings.Contains(err.Error(), "expected input list for types.txdata") {
+				L.Warn().Msg("EIP1559 fees are not supported by the network. Disabling in config and switching to Legacy fees")
+				if m.Cfg.Network.GasPrice == 0 {
+					L.Warn().Msg("Gas price is 0. If Legacy estimations fail, there will no fallback price and transactions will start fail. Set gas price in config and disable EIP1559DynamicFees")
+				}
+				m.Cfg.Network.EIP1559DynamicFees = false
+			}
+
 		} else {
 			estimations.GasFeeCap = maxFee
 			estimations.GasTipCap = priorityFee
