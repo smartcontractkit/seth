@@ -1185,6 +1185,58 @@ func TestTraceTraceContractTracingEventFourMixedParameters(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
+func TestTraceTraceContractTraceAll(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this level is set we don't need to call TraceGethTX, because it's automatically executed for all transactions
+	c.Cfg.TracingLevel = seth.TracingLevel_All
+
+	revertedTx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomError(c.NewTXOpts())
+	require.NoError(t, txErr, "transaction sending should not fail")
+	_, decodeErr := c.Decode(revertedTx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErr, error values: [12 21]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+
+	okTx, txErr := TestEnv.DebugContract.AddCounter(c.NewTXOpts(), big.NewInt(1), big.NewInt(2))
+	require.NoError(t, txErr, "transaction should not have reverted")
+	_, decodeErr = c.Decode(okTx, txErr)
+	require.NoError(t, decodeErr, "transaction decoding should not err")
+	require.Equal(t, 2, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+
+	expectedCall := &seth.DecodedCall{
+		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
+		ToAddress:   strings.ToLower(TestEnv.DebugContractAddress.Hex()),
+		From:        "you",
+		To:          "NetworkDebugContract",
+		CommonData: seth.CommonData{
+			Signature: "5e9c80d6",
+			Method:    "alwaysRevertsCustomError()",
+			Output:    map[string]interface{}{},
+		},
+		Comment: "",
+	}
+
+	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[revertedTx.Hash().Hex()][0], "reverted decoded call does not match")
+
+	expectedCall = &seth.DecodedCall{
+		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
+		ToAddress:   strings.ToLower(TestEnv.DebugContractAddress.Hex()),
+		From:        "you",
+		To:          "NetworkDebugContract",
+		CommonData: seth.CommonData{
+			Signature: "23515760",
+			Method:    "addCounter(int256,int256)",
+			Output:    map[string]interface{}{"value": big.NewInt(2)},
+			Input:     map[string]interface{}{"idx": big.NewInt(1), "x": big.NewInt(2)},
+		},
+		Comment: "",
+	}
+
+	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[okTx.Hash().Hex()][0], "successful decoded call does not match")
+}
+
 func TestTraceTraceContractTraceOnlyReverted(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
@@ -1220,6 +1272,27 @@ func TestTraceTraceContractTraceOnlyReverted(t *testing.T) {
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[revertedTx.Hash().Hex()][0], "decoded call does not match")
+}
+
+func TestTraceTraceContractTraceNone(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this level nothing is ever traced or debugged
+	c.Cfg.TracingLevel = seth.TracingLevel_None
+
+	revertedTx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomError(c.NewTXOpts())
+	require.NoError(t, txErr, "transaction sending should not fail")
+	_, decodeErr := c.Decode(revertedTx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErr, error values: [12 21]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+
+	okTx, txErr := TestEnv.DebugContract.AddCounter(c.NewTXOpts(), big.NewInt(1), big.NewInt(2))
+	require.NoError(t, txErr, "transaction should not have reverted")
+	_, decodeErr = c.Decode(okTx, txErr)
+	require.NoError(t, decodeErr, "transaction decoding should not err")
+
+	require.Empty(t, c.Tracer.DecodedCalls, "expected 1 decoded transacton")
 }
 
 func TestTraceTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing.T) {

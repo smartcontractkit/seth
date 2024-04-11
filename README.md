@@ -127,15 +127,20 @@ Setup your BIN directory (relative to `seth.toml`)
 bin_dir = "contracts/bin"
 ```
 
-You can enable auto-tracing for all transactions, which means that every time you use `Decode()` we will not only decode the transaction but also trace all calls made within the transaction, together with all inputs, outputs, logs and events
+You can enable auto-tracing for all transactions meeting configured level, which means that every time you use `Decode()` we will decode the transaction and also trace all calls made within the transaction, together with all inputs, outputs, logs and events. Three tracing levels are available:
+* `all` - trace all transactions
+* `reverted` - trace only reverted transactions (that's default setting used if you don't set `tracing_level`)
+* `none` - don't trace any transactions
+Example:
 ```
-tracing_enabled = true
+tracing_level = "reverted"
 ```
 
-Additionally you can also enable saving all tracing information to JSON files with:
+Additionally you can also enable saving all decoding/tracing information to JSON files with:
 ```
 trace_to_json = true
 ```
+That option should be used with care, when `tracing_level` is set to `all` as it will generate a lot of data.
 
 You can add more networks like this:
 ```
@@ -154,14 +159,10 @@ eip_1559_dynamic_fees = true
 gas_fee_cap = 25_000_000_000
 gas_tip_cap = 1_800_000_000
 urls_secret = ["..."]
-# if set to true we will check if address has a pending nonce (transaction) and panic if it does
-pending_nonce_protection_enabled = false
 # if set to true we will dynamically estimate gas for every transaction (explained in more detail below)
 gas_estimation_enabled = true
 # how many last blocks to use, when estimating gas for a transaction
 gas_estimation_blocks = 1000
-# maximum price we are willing to pay for a transaction (will be used to calculate gas price or tip/fee cap according to gas limit)
-gas_estimation_max_tx_cost_wei = 10_000_000_000
 # priority of the transaction, can be "fast", "standard" or "slow" (the higher the priority, the higher adjustment factor and buffer will be used for gas estimation) [default: "standard"]
 gas_estimation_tx_priority = "slow"
 ```
@@ -328,7 +329,7 @@ For both transaction types if any of the steps fails, we fallback to hardcoded v
 In order to enable an experimental feature you need to pass it's name in config. It's a global config, you cannot enable it per-network. Example:
 ```toml
 # other settings before...
-tracing_enabled = false
+tracing_level = "reverted"
 trace_to_json = false
 experiments_enabled = ["slow_funds_return", "eip_1559_fee_equalizer"]
 ```

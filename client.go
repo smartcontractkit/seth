@@ -317,12 +317,9 @@ func NewClientRaw(
 	return c, nil
 }
 
-// Decode waits for transaction to be minted and decodes basic info of the first method that was
-// called by the transaction (such as: method name, inputs and any logs/events emitted by the transaction.
-// Additionally if `tracing_enabled` flag is set in Client config it will trace all other calls that were
-// made during the transaction execution and print them to console using logger.
-// If transaction was reverted, then tracing won't take place, but the error return will contain
-// revert reason (if we were able to get it from the receipt).
+// Decode always waits for transaction to be minted, then depending on 'tracing_level' it either
+// returns immediatelly or if the level matches transaction type we first decode the transaction
+// and then trace all calls. If 'tracing_to_json' is saved we also save to JSON all that information.
 func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction, error) {
 	if len(m.Errors) > 0 {
 		return nil, verr.Join(m.Errors...)
@@ -333,35 +330,37 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 	if tx == nil {
 		return nil, nil
 	}
-	l := L.With().Str("Transaction", tx.Hash().Hex()).Logger()
-	receipt, err := m.WaitMined(context.Background(), l, m.Client, tx)
-	if err != nil {
-		return &DecodedTransaction{}, err
-	}
-
-	hasFailed := false
-
-	if receipt.Status == 0 {
-		hasFailed = true
-		if err := m.callAndGetRevertReason(tx, receipt); err != nil {
-			return &DecodedTransaction{}, err
-		}
-	}
 
 	decoded := &DecodedTransaction{
 		Transaction: tx,
+		Hash:        tx.Hash().Hex(),
+	}
+
+	l := L.With().Str("Transaction", tx.Hash().Hex()).Logger()
+	receipt, err := m.WaitMined(context.Background(), l, m.Client, tx)
+	if err != nil {
+		return decoded, err
+	}
+
+	var revertErr error
+	if receipt.Status == 0 {
+		// hasFailed = tru
+		revertErr = m.callAndGetRevertReason(tx, receipt)
 	}
 
 	if m.Cfg.TracingLevel == TracingLevel_None {
-		return decoded, nil
+		return decoded, revertErr
 	}
 
-	if m.Cfg.TracingLevel == TracingLevel_All || (m.Cfg.TracingLevel == TracingLevel_Reverted && hasFailed) {
+	if m.Cfg.TracingLevel == TracingLevel_All || (m.Cfg.TracingLevel == TracingLevel_Reverted && revertErr != nil) {
 		var decodeErr error
 		decoded, decodeErr = m.decodeTransaction(l, tx, receipt)
 		if decodeErr != nil {
 			if m.Cfg.TraceToJson {
-				L.Debug().Msg("Failed to decode transaction. Saving transaction data hash as JSON")
+				L.Debug().
+					Err(decodeErr).
+					Msg("Failed to decode transaction. Saving transaction data hash as JSON")
+
 				err = CreateOrAppendToJsonArray(m.Cfg.RevertedTransactionsFile, tx.Hash().Hex())
 				if err != nil {
 					l.Warn().
@@ -374,13 +373,16 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 						Msg("Saved reverted transaction to file")
 				}
 			}
-			return nil, decodeErr
+			return decoded, revertErr
 		}
 
 		traceErr := m.Tracer.TraceGethTX(decoded.Hash)
 		if traceErr != nil {
 			if m.Cfg.TraceToJson {
-				L.Debug().Msg("Failed to trace call, but decoding was successful. Saving decoded data as JSON")
+				L.Debug().
+					Err(traceErr).
+					Msg("Failed to trace call, but decoding was successful. Saving decoded data as JSON")
+
 				path, saveErr := saveAsJson(decoded, "traces", decoded.Hash)
 				if saveErr != nil {
 					L.Warn().
@@ -394,7 +396,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 				}
 			}
 
-			return nil, traceErr
+			return decoded, revertErr
 		}
 
 		if m.Cfg.TraceToJson {
@@ -412,7 +414,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 		}
 	}
 
-	return decoded, nil
+	return decoded, revertErr
 }
 
 func (m *Client) TransferETHFromKey(ctx context.Context, fromKeyNum int, to string, value *big.Int) error {
