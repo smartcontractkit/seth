@@ -293,9 +293,16 @@ func TestAPISyncKeysPool(t *testing.T) {
 					wg.Add(1)
 					go func() {
 						defer wg.Done()
-						_, err := c.Decode(
-							TestEnv.DebugContract.AddCounter(c.NewTXKeyOpts(c.AnySyncedKey()), big.NewInt(tc.counterIdx), big.NewInt(1)),
-						)
+						keyNum := c.AnySyncedKey()
+						var err error
+						if keyNum == -1 {
+							err = errors.New("-1 keyNum was returned, which means there was a syncing timeout")
+						} else {
+							_, err = c.Decode(
+								TestEnv.DebugContract.AddCounter(c.NewTXKeyOpts(keyNum), big.NewInt(tc.counterIdx), big.NewInt(1)),
+							)
+						}
+
 						if tc.shouldFail {
 							require.Error(t, err)
 							return
