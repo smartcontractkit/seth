@@ -38,11 +38,11 @@ const (
 )
 
 var (
-	// DefaultEphemeralAddresses is amount of addresses created in ephemeral client mode
-	DefaultEphemeralAddresses int64 = 60
+	// Number of ephemeral addresses to create
+	SixtyEphemeralAddresses int64 = 60
 
-	// DefayltRootKeyFundsWeiBuffer is the amount of funds that will be left on the root key
-	DefayltRootKeyFundsWeiBuffer = big.NewInt(0)
+	// Amount of funds that will be left on the root key, when splitting funds between ephemeral addresses
+	ZeroRootKeyFundsBuffer = big.NewInt(0)
 
 	TracingLevel_None     = "NONE"
 	TracingLevel_Reverted = "REVERTED"
@@ -320,6 +320,8 @@ func NewClientRaw(
 // Decode always waits for transaction to be minted, then depending on 'tracing_level' it either
 // returns immediatelly or if the level matches transaction type we first decode the transaction
 // and then trace all calls. If 'tracing_to_json' is saved we also save to JSON all that information.
+// If transaction was reverted the error return will be revert error, not decoding error (that one if any will be logged).
+// It means you can geth both error and decoded transaction!
 func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction, error) {
 	if len(m.Errors) > 0 {
 		return nil, verr.Join(m.Errors...)
@@ -331,21 +333,20 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 		return nil, nil
 	}
 
-	decoded := &DecodedTransaction{
-		Transaction: tx,
-		Hash:        tx.Hash().Hex(),
-	}
-
 	l := L.With().Str("Transaction", tx.Hash().Hex()).Logger()
 	receipt, err := m.WaitMined(context.Background(), l, m.Client, tx)
 	if err != nil {
-		return decoded, err
+		return nil, err
 	}
 
 	var revertErr error
 	if receipt.Status == 0 {
-		// hasFailed = tru
 		revertErr = m.callAndGetRevertReason(tx, receipt)
+	}
+
+	decoded := &DecodedTransaction{
+		Transaction: tx,
+		Hash:        tx.Hash().Hex(),
 	}
 
 	if m.Cfg.TracingLevel == TracingLevel_None {

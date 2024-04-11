@@ -140,9 +140,6 @@ func (m *NonceManager) anySyncedKey() int {
 				m.Client.Errors = append(m.Client.Errors, errors.New(ErrKeySync))
 			}
 		}()
-		if keyData != nil && keyData.KeyNum == 0 {
-			return -1
-		}
 		return keyData.KeyNum
 	}
 }

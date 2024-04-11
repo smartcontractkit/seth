@@ -341,16 +341,6 @@ func (t *Tracer) DecodeTrace(l zerolog.Logger, trace Trace) ([]*DecodedCall, err
 	}
 
 	t.DecodedCalls[trace.TxHash] = decodedCalls
-
-	// if t.Cfg.TraceToJson {
-	// 	saveErr := t.SaveDecodedCallsAsJson("traces")
-	// 	if saveErr != nil {
-	// 		L.Warn().
-	// 			Err(saveErr).
-	// 			Msg("Failed to save decoded calls as JSON")
-	// 	}
-	// }
-
 	return decodedCalls, nil
 }
 

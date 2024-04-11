@@ -184,7 +184,7 @@ func readKeyFileConfig(cfg *Config) error {
 
 func (c *Config) setEphemeralAddrs() {
 	if c.EphemeralAddrs == nil {
-		c.EphemeralAddrs = &DefaultEphemeralAddresses
+		c.EphemeralAddrs = &SixtyEphemeralAddresses
 	}
 
 	if *c.EphemeralAddrs == 0 {
@@ -196,7 +196,7 @@ func (c *Config) setEphemeralAddrs() {
 	}
 
 	if c.RootKeyFundsBuffer == nil {
-		c.RootKeyFundsBuffer = DefayltRootKeyFundsWeiBuffer
+		c.RootKeyFundsBuffer = ZeroRootKeyFundsBuffer
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 
 func TestAPI(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	type test struct {
 		name            string
