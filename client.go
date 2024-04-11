@@ -839,7 +839,7 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 
 	address, tx, contract, err := bind.DeployContract(auth, abi, bytecode, m.Client, params...)
 	if err != nil {
-		return DeploymentData{}, err
+		return DeploymentData{}, wrapErrInMessageWithASuggestion(err)
 	}
 
 	L.Info().
@@ -865,7 +865,7 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 				strings.Contains(strings.ToLower(err.Error()), "no contract code after deployment")
 		}),
 	); err != nil {
-		return DeploymentData{}, err
+		return DeploymentData{}, wrapErrInMessageWithASuggestion(err)
 	}
 
 	L.Info().

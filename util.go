@@ -371,3 +371,17 @@ func WeiToEther(wei *big.Int) *big.Float {
 	fWei.SetMode(big.ToNearestEven)
 	return f.Quo(fWei.SetInt(wei), big.NewFloat(params.Ether))
 }
+
+func wrapErrInMessageWithASuggestion(err error) error {
+	message := `
+
+This error could be caused by several issues. Please try these steps to resolve it:
+
+1. Use a different RPC node. The current one might be out of sync or malfunctioning.
+2. Review the logs to see if automatic gas estimations were unsuccessful. If they were, check that the fallback gas prices are set correctly.
+3. If a gas limit was manually set, try commenting it out to let the node estimate it instead and see if that resolves the issue.
+4. Conversely, if a gas limit was set manually, try increasing it to a higher value. This adjustment is especially crucial for some Layer 2 solutions that have variable gas limits.
+
+Original error:`
+	return fmt.Errorf("%s\n%s", message, err.Error())
+}
