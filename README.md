@@ -310,13 +310,13 @@ All values are multiplied by the adjustment factor, which is calculated based on
 We further adjust the gas price by adding a buffer to it, based on congestion rate:
 ```go
 	case Congestion_Low:
-		return 0, nil
-	case Congestion_Medium:
 		return 0.10, nil
-	case Congestion_High:
-		return 0.15, nil
-	case Congestion_Ultra:
+	case Congestion_Medium:
 		return 0.20, nil
+	case Congestion_High:
+		return 0.30, nil
+	case Congestion_Degen:
+		return 0.40, nil
 ```
 
 We cache block header data in an in-memory cache, so we don't have to fetch it every time we estimate gas. The cache has capacity equal to `gas_estimation_blocks` and every time we add a new element, we remove one that is least frequently used and oldest (with block number being a constant and chain always moving forward it makes no sense to keep old blocks).

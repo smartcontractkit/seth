@@ -416,13 +416,13 @@ func getAdjustmentFactor(priority string) (float64, error) {
 func getBufferPercent(congestionClassification string) (float64, error) {
 	switch congestionClassification {
 	case Congestion_Low:
-		return 0, nil
-	case Congestion_Medium:
 		return 0.10, nil
-	case Congestion_High:
-		return 0.15, nil
-	case Congestion_Degen:
+	case Congestion_Medium:
 		return 0.20, nil
+	case Congestion_High:
+		return 0.30, nil
+	case Congestion_Degen:
+		return 0.40, nil
 	default:
 		return 0, fmt.Errorf("Unknown congestion classification: %s", congestionClassification)
 	}
@@ -465,10 +465,12 @@ func (m *Client) HistoricalFeeData(priority string) (baseFee float64, historical
 			baseFee = stats.GasPrice.Perc25
 			historicalGasTipCap = stats.TipCap.Perc25
 		default:
+			err = fmt.Errorf("Unknown priority: %s", priority)
 			L.Error().
 				Str("Priority", priority).
 				Msg("Unknown priority. Skipping automation gas estimation")
-			m.Errors = append(m.Errors, err)
+
+			return
 		}
 	}
 
@@ -477,8 +479,15 @@ func (m *Client) HistoricalFeeData(priority string) (baseFee float64, historical
 
 // calculateGasUsedRatio averages the gas used ratio for a sense of how full blocks are
 func calculateGasUsedRatio(headers []*types.Header) float64 {
+	if len(headers) == 0 {
+		return 0
+	}
+
 	var totalRatio float64
 	for _, header := range headers {
+		if header.GasLimit == 0 {
+			continue
+		}
 		ratio := float64(header.GasUsed) / float64(header.GasLimit)
 		totalRatio += ratio
 	}
