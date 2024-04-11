@@ -355,7 +355,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 	if m.Cfg.TracingLevel == TracingLevel_All || (m.Cfg.TracingLevel == TracingLevel_Reverted && revertErr != nil) {
 		var decodeErr error
 		decoded, decodeErr = m.decodeTransaction(l, tx, receipt)
-		if decodeErr != nil {
+		if decodeErr != nil && errors.Is(decodeErr, errors.New(ErrNoABIMethod)) {
 			if m.Cfg.TraceToJson {
 				L.Debug().
 					Err(decodeErr).

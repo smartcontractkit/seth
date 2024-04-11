@@ -30,11 +30,17 @@ pending_nonce_protection_enabled = false
 
 # Amount to be left on root key/address, when we are using ephemeral addresses. It's the amount that will not
 # be divided into ephemeral keys.
-root_key_funds_buffer_wei = 10_000_000_000_000_000_000 # 10 eth
+root_key_funds_buffer = 10 # 10 eth
 
 # feature-flagged expriments; first one sets funds return priority to 'slow' (core only!), second one
 # sets the tip/base fee to the higher value in case there's 3+ orders of magnitude difference between them
 experiments_enabled = ["slow_funds_return", "eip_1559_fee_equalizer"]
+
+[nonce_manager]
+key_sync_rate_limit_per_sec = 10
+key_sync_timeout = "20s"
+key_sync_retry_delay = "1s"
+key_sync_retries = 10
 
 [[networks]]
 name = "Anvil"
@@ -162,9 +168,3 @@ gas_price = 50_000_000
 
 gas_fee_cap = 1_800_000_000
 gas_tip_cap = 1_800_000_000
-
-[nonce_manager]
-key_sync_rate_limit_per_sec = 10
-key_sync_timeout = "2s"
-key_sync_retry_delay = "1s"
-key_sync_retries = 10
