@@ -253,7 +253,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 
 	// between 0 and 1 (empty blocks - full blocks)
 	var congestionMetric float64
-	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasEstimationBlocks, CongestionStrategy_NewestFirst)
+	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasPriceEstimationBlocks, CongestionStrategy_NewestFirst)
 	if err != nil {
 		return
 	}
@@ -354,7 +354,7 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context, priority string) (a
 
 	// between 0 and 1 (empty blocks - full blocks)
 	var congestionMetric float64
-	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasEstimationBlocks, CongestionStrategy_NewestFirst)
+	congestionMetric, err = m.CalculateNetworkCongestionMetric(m.Cfg.Network.GasPriceEstimationBlocks, CongestionStrategy_NewestFirst)
 	if err != nil {
 		return
 	}
@@ -379,9 +379,9 @@ func (m *Client) GetSuggestedLegacyFees(ctx context.Context, priority string) (a
 	adjustedGasPrice = new(big.Int).Add(adjustedGasPrice, bufferInt)
 
 	L.Debug().
-		Str("Diff (Wei/Ether)", fmt.Sprintf("%s/%s", big.NewInt(0).Sub(adjustedGasPrice, suggestedGasPrice).String(), WeiToEther(big.NewInt(0).Sub(adjustedGasPrice, suggestedGasPrice)))).
-		Str("Initial GasPrice (Wei/Ether)", fmt.Sprintf("%s/%s", suggestedGasPrice.String(), WeiToEther(suggestedGasPrice))).
-		Str("Final GasPrice (Wei/Ether)", fmt.Sprintf("%s/%s", adjustedGasPrice.String(), WeiToEther(adjustedGasPrice))).
+		Str("Diff (Wei/Ether)", fmt.Sprintf("%s/%s", big.NewInt(0).Sub(adjustedGasPrice, suggestedGasPrice).String(), WeiToEther(big.NewInt(0).Sub(adjustedGasPrice, suggestedGasPrice)).Text('f', -1))).
+		Str("Initial GasPrice (Wei/Ether)", fmt.Sprintf("%s/%s", suggestedGasPrice.String(), WeiToEther(suggestedGasPrice).Text('f', -1))).
+		Str("Final GasPrice (Wei/Ether)", fmt.Sprintf("%s/%s", adjustedGasPrice.String(), WeiToEther(adjustedGasPrice).Text('f', -1))).
 		Msg("Suggested Legacy fees")
 
 	L.Debug().
@@ -443,7 +443,7 @@ func classifyCongestion(congestionMetric float64) string {
 
 func (m *Client) HistoricalFeeData(priority string) (baseFee float64, historicalGasTipCap float64, err error) {
 	estimator := NewGasEstimator(m)
-	stats, err := estimator.Stats(m.Cfg.Network.GasEstimationBlocks, 99)
+	stats, err := estimator.Stats(m.Cfg.Network.GasPriceEstimationBlocks, 99)
 	if err != nil {
 		L.Error().
 			Err(err).
