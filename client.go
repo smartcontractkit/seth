@@ -810,16 +810,18 @@ func (m *Client) configureTransactionOpts(
 // available at the address, so that when the method returns it's safe to interact with it. It also saves the contract address and ABI name
 // to the contract map, so that we can use that, when tracing transactions. It is suggested to use name identical to the name of the contract Solidity file.
 func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.ABI, bytecode []byte, params ...interface{}) (DeploymentData, error) {
+	L.Info().
+		Msgf("Started deploying %s contract", name)
+
 	address, tx, contract, err := bind.DeployContract(auth, abi, bytecode, m.Client, params...)
+	L.Info().
+		Str("Address", address.Hex()).
+		Str("TXHash", tx.Hash().Hex()).
+		Msgf("Waiting for %s contract deployment to finish", name)
 
 	if err != nil {
 		return DeploymentData{}, err
 	}
-
-	L.Info().
-		Str("Address", address.Hex()).
-		Str("TXHash", tx.Hash().Hex()).
-		Msgf("Deploying %s contract", name)
 
 	// I had this one failing sometimes, when transaction has been minted, but contract cannot be found yet at address
 	if err := retry.Do(
