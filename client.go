@@ -747,13 +747,7 @@ func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, 
 			Msg("Pending nonce protection is enabled. Nonce status is OK")
 	}
 
-	estimations := m.CalculateGasEstimations(GasEstimationRequest{
-		GasEstimationEnabled: m.Cfg.Network.GasPriceEstimationEnabled,
-		FallbackGasPrice:     m.Cfg.Network.GasPrice,
-		FallbackGasFeeCap:    m.Cfg.Network.GasFeeCap,
-		FallbackGasTipCap:    m.Cfg.Network.GasTipCap,
-		Priority:             m.Cfg.Network.GasPriceEstimationTxPriority,
-	})
+	estimations := m.CalculateGasEstimations(m.NewDefaultGasEstimationRequest())
 
 	L.Debug().
 		Interface("KeyNum", keyNum).
@@ -775,6 +769,17 @@ type GasEstimationRequest struct {
 	FallbackGasFeeCap    int64
 	FallbackGasTipCap    int64
 	Priority             string
+}
+
+// NewDefaultGasEstimationRequest creates a new default gas estimation request based on current network configuration
+func (m *Client) NewDefaultGasEstimationRequest() GasEstimationRequest {
+	return GasEstimationRequest{
+		GasEstimationEnabled: m.Cfg.Network.GasPriceEstimationEnabled,
+		FallbackGasPrice:     m.Cfg.Network.GasPrice,
+		FallbackGasFeeCap:    m.Cfg.Network.GasFeeCap,
+		FallbackGasTipCap:    m.Cfg.Network.GasTipCap,
+		Priority:             m.Cfg.Network.GasPriceEstimationTxPriority,
+	}
 }
 
 // CalculateGasEstimations calculates gas estimations (price, tip/cap) or uses hardcoded values if estimation is disabled,
