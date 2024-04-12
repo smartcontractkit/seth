@@ -377,10 +377,11 @@ func wrapErrInMessageWithASuggestion(err error) error {
 
 This error could be caused by several issues. Please try these steps to resolve it:
 
-1. Use a different RPC node. The current one might be out of sync or malfunctioning.
-2. Review the logs to see if automatic gas estimations were unsuccessful. If they were, check that the fallback gas prices are set correctly.
-3. If a gas limit was manually set, try commenting it out to let the node estimate it instead and see if that resolves the issue.
-4. Conversely, if a gas limit was set manually, try increasing it to a higher value. This adjustment is especially crucial for some Layer 2 solutions that have variable gas limits.
+1. Make sure the address you are using has sufficient funds.
+2. Use a different RPC node. The current one might be out of sync or malfunctioning.
+3. Review the logs to see if automatic gas estimations were unsuccessful. If they were, check that the fallback gas prices are set correctly.
+4. If a gas limit was manually set, try commenting it out to let the node estimate it instead and see if that resolves the issue.
+5. Conversely, if a gas limit was set manually, try increasing it to a higher value. This adjustment is especially crucial for some Layer 2 solutions that have variable gas limits.
 
 Original error:`
 	return fmt.Errorf("%s\n%s", message, err.Error())
