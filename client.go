@@ -338,15 +338,29 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 		return nil, verr.Join(m.Errors...)
 	}
 	if txErr != nil {
+		msg := "Skipping decoding, transaction submission failed. Nothing to decode"
+
+		if m.Cfg.Network.GasLimit == 0 {
+			msg = "Skipping decoding, most probably gas estimation failed. √. You could try to set gas limit manually in config and try again to get decoded transaction"
+		}
+
+		L.Trace().
+			Msg(msg)
 		return nil, txErr
 	}
+
 	if tx == nil {
+		L.Trace().
+			Msg("Skipping decoding, because transaction is nil. Nothing to decode")
 		return nil, nil
 	}
 
 	l := L.With().Str("Transaction", tx.Hash().Hex()).Logger()
 	receipt, err := m.WaitMined(context.Background(), l, m.Client, tx)
 	if err != nil {
+		L.Trace().
+			Err(err).
+			Msg("Skipping decoding, because transaction was not minted. Nothing to decode")
 		return nil, err
 	}
 
@@ -361,6 +375,9 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 	}
 
 	if m.Cfg.TracingLevel == TracingLevel_None {
+		L.Trace().
+			Str("Transaction Hash", tx.Hash().Hex()).
+			Msg("Tracing level is NONE, skipping decoding")
 		return decoded, revertErr
 	}
 
@@ -369,7 +386,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 		decoded, decodeErr = m.decodeTransaction(l, tx, receipt)
 		if decodeErr != nil && errors.Is(decodeErr, errors.New(ErrNoABIMethod)) {
 			if m.Cfg.TraceToJson {
-				L.Debug().
+				L.Trace().
 					Err(decodeErr).
 					Msg("Failed to decode transaction. Saving transaction data hash as JSON")
 
@@ -380,7 +397,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 						Str("TXHash", tx.Hash().Hex()).
 						Msg("Failed to save reverted transaction hash to file")
 				} else {
-					l.Debug().
+					l.Trace().
 						Str("TXHash", tx.Hash().Hex()).
 						Msg("Saved reverted transaction to file")
 				}
@@ -391,7 +408,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 		traceErr := m.Tracer.TraceGethTX(decoded.Hash)
 		if traceErr != nil {
 			if m.Cfg.TraceToJson {
-				L.Debug().
+				L.Trace().
 					Err(traceErr).
 					Msg("Failed to trace call, but decoding was successful. Saving decoded data as JSON")
 
@@ -401,7 +418,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 						Err(saveErr).
 						Msg("Failed to save decoded call as JSON")
 				} else {
-					L.Debug().
+					L.Trace().
 						Str("Path", path).
 						Str("Tx hash", decoded.Hash).
 						Msg("Saved decoded transaction data to JSON")
@@ -418,12 +435,18 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 					Err(saveErr).
 					Msg("Failed to save decoded call as JSON")
 			} else {
-				L.Debug().
+				L.Trace().
 					Str("Path", path).
 					Str("Tx hash", decoded.Hash).
 					Msg("Saved decoded call data to JSON")
 			}
 		}
+	} else {
+		L.Trace().
+			Str("Transaction Hash", tx.Hash().Hex()).
+			Str("Tracing level", m.Cfg.TracingLevel).
+			Bool("Was reverted?", revertErr != nil).
+			Msg("Transaction doesn't match tracing level, skipping decoding")
 	}
 
 	return decoded, revertErr
