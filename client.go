@@ -401,14 +401,14 @@ func (m *Client) decodeInternal(tx *types.Transaction, txErr error, ignoreTraceL
 		Hash:        tx.Hash().Hex(),
 	}
 
-	if m.Cfg.TracingLevel == TracingLevel_None && !ignoreTraceLevel {
+	if !ignoreTraceLevel && (m.Cfg.TracingLevel == TracingLevel_None) {
 		L.Trace().
 			Str("Transaction Hash", tx.Hash().Hex()).
 			Msg("Tracing level is NONE, skipping decoding")
 		return decoded, revertErr
 	}
 
-	if !ignoreTraceLevel && m.Cfg.TracingLevel == TracingLevel_All || (m.Cfg.TracingLevel == TracingLevel_Reverted && revertErr != nil) {
+	if ignoreTraceLevel || (m.Cfg.TracingLevel == TracingLevel_All || (m.Cfg.TracingLevel == TracingLevel_Reverted && revertErr != nil)) {
 		var decodeErr error
 		decoded, decodeErr = m.decodeTransaction(l, tx, receipt)
 		if decodeErr != nil && errors.Is(decodeErr, errors.New(ErrNoABIMethod)) {
