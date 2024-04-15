@@ -29,9 +29,10 @@ const (
 
 type Config struct {
 	// ephemeral is internal option used only from code
-	ephemeral          bool
-	EphemeralAddrs     *int64   `toml:"ephemeral_addresses_number"`
-	RootKeyFundsBuffer *big.Int `toml:"root_key_funds_buffer"`
+	ephemeral             bool
+	EphemeralAddrs        *int64   `toml:"ephemeral_addresses_number"`
+	EphemeralAddrsFunding *big.Int `toml:"ephemeral_addresses_funding"`
+	RootKeyFundsBuffer    *big.Int `toml:"root_key_funds_buffer"`
 
 	ABIDir                        string `toml:"abi_dir"`
 	BINDir                        string `toml:"bin_dir"`

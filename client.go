@@ -182,6 +182,10 @@ func validateConfig(cfg *Config) error {
 		return errors.New("tracing level must be one of: NONE, REVERTED, ALL")
 	}
 
+	if big.NewInt(0).Cmp(cfg.EphemeralAddrsFunding) > 0 {
+		return errors.New("funding for ephemeral addresses must be greater than 0")
+	}
+
 	return nil
 }
 
@@ -338,12 +342,25 @@ func NewClientRaw(
 	return c, nil
 }
 
-// Decode always waits for transaction to be minted, then depending on 'tracing_level' it either
+// DecodeAlways waits for transaction to be minted, then it tries to decode the transaction
+// and trace all calls. If 'tracing_to_json' is saved we also save to JSON all that information.
+// It ignores 'tracing_level' setting and should be used, when want to access events or logs.
+// If transaction was reverted the error return will be revert error, not decoding error (that one if any will be logged).
+// It means it can return both error and decoded transaction!
+func (m *Client) DecodeAlways(tx *types.Transaction, txErr error) (*DecodedTransaction, error) {
+	return m.decodeInternal(tx, txErr, true)
+}
+
+// Decode waits for transaction to be minted, then depending on 'tracing_level' it either
 // returns immediatelly or if the level matches transaction type we first decode the transaction
 // and then trace all calls. If 'tracing_to_json' is saved we also save to JSON all that information.
 // If transaction was reverted the error return will be revert error, not decoding error (that one if any will be logged).
-// It means you can geth both error and decoded transaction!
+// It means it can return both error and decoded transaction!
 func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction, error) {
+	return m.decodeInternal(tx, txErr, false)
+}
+
+func (m *Client) decodeInternal(tx *types.Transaction, txErr error, ignoreTraceLevel bool) (*DecodedTransaction, error) {
 	if len(m.Errors) > 0 {
 		return nil, verr.Join(m.Errors...)
 	}
@@ -384,14 +401,14 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 		Hash:        tx.Hash().Hex(),
 	}
 
-	if m.Cfg.TracingLevel == TracingLevel_None {
+	if m.Cfg.TracingLevel == TracingLevel_None && !ignoreTraceLevel {
 		L.Trace().
 			Str("Transaction Hash", tx.Hash().Hex()).
 			Msg("Tracing level is NONE, skipping decoding")
 		return decoded, revertErr
 	}
 
-	if m.Cfg.TracingLevel == TracingLevel_All || (m.Cfg.TracingLevel == TracingLevel_Reverted && revertErr != nil) {
+	if !ignoreTraceLevel && m.Cfg.TracingLevel == TracingLevel_All || (m.Cfg.TracingLevel == TracingLevel_Reverted && revertErr != nil) {
 		var decodeErr error
 		decoded, decodeErr = m.decodeTransaction(l, tx, receipt)
 		if decodeErr != nil && errors.Is(decodeErr, errors.New(ErrNoABIMethod)) {

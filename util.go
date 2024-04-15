@@ -75,7 +75,24 @@ func (m *Client) CalculateSubKeyFunding(addrs int64) (*FundingDetails, error) {
 	totalFee := new(big.Int).Mul(big.NewInt(networkTransferFee), big.NewInt(addrs))
 	rootKeyBuffer := new(big.Int).Mul(m.Cfg.RootKeyFundsBuffer, big.NewInt(1_000_000_000_000_000_000))
 	freeBalance := new(big.Int).Sub(balance, big.NewInt(0).Add(totalFee, rootKeyBuffer))
+
+	if freeBalance.Cmp(big.NewInt(0)) < 0 {
+		return nil, errors.New(fmt.Sprintf(ErrInsufficientRootKeyBalance, freeBalance.String()))
+	}
+
 	addrFunding := new(big.Int).Div(freeBalance, big.NewInt(addrs))
+
+	if m.Cfg.EphemeralAddrsFunding != nil && m.Cfg.EphemeralAddrsFunding.Cmp(big.NewInt(0)) > 0 {
+		L.Debug().
+			Interface("Funding per ephemeral key", m.Cfg.EphemeralAddrsFunding).
+			Msg("Using hardcoded ephemeral funding")
+		addrFunding = m.Cfg.EphemeralAddrsFunding
+	}
+
+	if freeBalance.Cmp(big.NewInt(0).Mul(addrFunding, big.NewInt(addrs))) < 0 {
+		return nil, errors.New(fmt.Sprintf(ErrInsufficientRootKeyBalance, freeBalance.String()))
+	}
+
 	bd := &FundingDetails{
 		RootBalance:        balance,
 		TotalFee:           totalFee,
@@ -91,9 +108,7 @@ func (m *Client) CalculateSubKeyFunding(addrs int64) (*FundingDetails, error) {
 		Interface("FreeBalance", bd.FreeBalance.String()).
 		Interface("EachAddrGets", bd.AddrFunding.String()).
 		Msg("Splitting funds from the root account")
-	if freeBalance.Cmp(big.NewInt(0)) < 0 {
-		return nil, errors.New(fmt.Sprintf(ErrInsufficientRootKeyBalance, freeBalance.String()))
-	}
+
 	return bd, nil
 }
 
