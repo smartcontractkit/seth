@@ -200,13 +200,13 @@ func NewKeyFile() *KeyFile {
 }
 
 // Duration is a non-negative time duration.
-type Duration struct{ d time.Duration }
+type Duration struct{ D time.Duration }
 
 func MakeDuration(d time.Duration) (Duration, error) {
 	if d < time.Duration(0) {
 		return Duration{}, fmt.Errorf("cannot make negative time duration: %s", d)
 	}
-	return Duration{d: d}, nil
+	return Duration{D: d}, nil
 }
 
 func ParseDuration(s string) (Duration, error) {
@@ -228,7 +228,7 @@ func MustMakeDuration(d time.Duration) *Duration {
 
 // Duration returns the value as the standard time.Duration value.
 func (d Duration) Duration() time.Duration {
-	return d.d
+	return d.D
 }
 
 // Before returns the time d units before time t
@@ -237,10 +237,10 @@ func (d Duration) Before(t time.Time) time.Time {
 }
 
 // Shorter returns true if and only if d is shorter than od.
-func (d Duration) Shorter(od Duration) bool { return d.d < od.d }
+func (d Duration) Shorter(od Duration) bool { return d.D < od.D }
 
 // IsInstant is true if and only if d is of duration 0
-func (d Duration) IsInstant() bool { return d.d == 0 }
+func (d Duration) IsInstant() bool { return d.D == 0 }
 
 // String returns a string representing the duration in the form "72h3m0.5s".
 // Leading zero units are omitted. As a special case, durations less than one
@@ -285,12 +285,12 @@ func (d *Duration) Scan(v interface{}) (err error) {
 }
 
 func (d Duration) Value() (driver.Value, error) {
-	return int64(d.d), nil
+	return int64(d.D), nil
 }
 
 // MarshalText implements the text.Marshaler interface.
 func (d Duration) MarshalText() ([]byte, error) {
-	return []byte(d.d.String()), nil
+	return []byte(d.D.String()), nil
 }
 
 // UnmarshalText implements the text.Unmarshaler interface.
