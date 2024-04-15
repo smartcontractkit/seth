@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/chainlink-testing-framework/utils/conversions"
 	network_debug_contract "github.com/smartcontractkit/seth/contracts/bind/debug"
 	network_sub_debug_contract "github.com/smartcontractkit/seth/contracts/bind/sub"
 )
@@ -77,10 +76,10 @@ func (m *Client) CalculateSubKeyFunding(addrs int64) (*FundingDetails, error) {
 	freeBalance := new(big.Int).Sub(balance, big.NewInt(0).Add(totalFee, rootKeyBuffer))
 
 	L.Info().
-		Str("Balance (wei/ether)", fmt.Sprintf("%s/%s", balance.String(), conversions.WeiToEther(balance).Text('f', -1))).
-		Str("Total fee (wei/ether)", fmt.Sprintf("%s/%s", totalFee.String(), conversions.WeiToEther(totalFee).Text('f', -1))).
-		Str("Free Balance (wei/ether)", fmt.Sprintf("%s/%s", freeBalance.String(), conversions.WeiToEther(freeBalance).Text('f', -1))).
-		Str("Buffer (wei/ether)", fmt.Sprintf("%s/%s", rootKeyBuffer.String(), conversions.WeiToEther(rootKeyBuffer).Text('f', -1))).
+		Str("Balance (wei/ether)", fmt.Sprintf("%s/%s", balance.String(), WeiToEther(balance).Text('f', -1))).
+		Str("Total fee (wei/ether)", fmt.Sprintf("%s/%s", totalFee.String(), WeiToEther(totalFee).Text('f', -1))).
+		Str("Free Balance (wei/ether)", fmt.Sprintf("%s/%s", freeBalance.String(), WeiToEther(freeBalance).Text('f', -1))).
+		Str("Buffer (wei/ether)", fmt.Sprintf("%s/%s", rootKeyBuffer.String(), WeiToEther(rootKeyBuffer).Text('f', -1))).
 		Msg("Root key balance")
 
 	if freeBalance.Cmp(big.NewInt(0)) < 0 {
@@ -91,9 +90,9 @@ func (m *Client) CalculateSubKeyFunding(addrs int64) (*FundingDetails, error) {
 	requiredBalance := big.NewInt(0).Mul(addrFunding, big.NewInt(addrs))
 
 	L.Debug().
-		Str("Funding per ephemeral key (wei/ether)", fmt.Sprintf("%s/%s", addrFunding.String(), conversions.WeiToEther(addrFunding).Text('f', -1))).
-		Str("Available balance (wei/ether)", fmt.Sprintf("%s/%s", freeBalance.String(), conversions.WeiToEther(freeBalance).Text('f', -1))).
-		Interface("Required balance (wei/ether)", fmt.Sprintf("%s/%s", requiredBalance.String(), conversions.WeiToEther(requiredBalance).Text('f', -1))).
+		Str("Funding per ephemeral key (wei/ether)", fmt.Sprintf("%s/%s", addrFunding.String(), WeiToEther(addrFunding).Text('f', -1))).
+		Str("Available balance (wei/ether)", fmt.Sprintf("%s/%s", freeBalance.String(), WeiToEther(freeBalance).Text('f', -1))).
+		Interface("Required balance (wei/ether)", fmt.Sprintf("%s/%s", requiredBalance.String(), WeiToEther(requiredBalance).Text('f', -1))).
 		Msg("Using hardcoded ephemeral funding")
 
 	if freeBalance.Cmp(requiredBalance) < 0 {

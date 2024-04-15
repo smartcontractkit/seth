@@ -30,17 +30,22 @@ func (c *ContractStore) GetABI(name string) (*abi.ABI, bool) {
 	if !strings.HasSuffix(name, ".abi") {
 		name = name + ".abi"
 	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	abi, ok := c.ABIs[name]
 	return &abi, ok
 }
 
 func (c *ContractStore) AddABI(name string, abi abi.ABI) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if !strings.HasSuffix(name, ".abi") {
 		name = name + ".abi"
 	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	c.ABIs[name] = abi
 }
 
@@ -48,17 +53,22 @@ func (c *ContractStore) GetBIN(name string) ([]byte, bool) {
 	if !strings.HasSuffix(name, ".bin") {
 		name = name + ".bin"
 	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	bin, ok := c.BINs[name]
 	return bin, ok
 }
 
 func (c *ContractStore) AddBIN(name string, bin []byte) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if !strings.HasSuffix(name, ".bin") {
 		name = name + ".bin"
 	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	c.BINs[name] = bin
 }
 

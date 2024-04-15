@@ -34,10 +34,14 @@ func (c ContractMap) GetContractMap() map[string]string {
 }
 
 func (c ContractMap) IsKnownAddress(addr string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.addressMap[strings.ToLower(addr)] != ""
 }
 
 func (c ContractMap) GetContractName(addr string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.addressMap[strings.ToLower(addr)]
 }
 
@@ -46,6 +50,8 @@ func (c ContractMap) GetContractAddress(addr string) string {
 		return UNKNOWN
 	}
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for k, v := range c.addressMap {
 		if v == addr {
 			return k
