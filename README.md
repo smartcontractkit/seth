@@ -113,9 +113,10 @@ export ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7b
 alias seth="go run cmd/seth/seth.go" # useful alias for keyfile CLI
 ```
 
-If `SETH_KEYFILE_PATH` is not set then client will create 60 ephemeral keys and won't return any funds
+If `SETH_KEYFILE_PATH` is not set then client will create X ephemeral keys (60 by default, configurable) and won't return any funds.
 
-Use `SETH_KEYFILE_PATH` for testnets/mainnets and `ephemeral` mode only when testing against simulated network
+Use `SETH_KEYFILE_PATH` for testnets/mainnets and `ephemeral` mode only when testing against simulated network.
+
 ### seth.toml
 Set up your ABI directory (relative to `seth.toml`)
 ```
@@ -125,6 +126,11 @@ abi_dir = "contracts/abi"
 Setup your BIN directory (relative to `seth.toml`)
 ```
 bin_dir = "contracts/bin"
+```
+
+Set number of ephemeral keys to be generated (0 for no ephemeral keys). Each key will receive a proportion of native tokens from root private key's balance with the value equal to `(root_balance / ephemeral_keys_number) - transfer_fee * ephemeral_keys_number`. Using ephemeral keys together with keyfile will result in an error.
+```
+ephemeral_addresses_number = 0
 ```
 
 You can enable auto-tracing for all transactions meeting configured level, which means that every time you use `Decode()` we will decode the transaction and also trace all calls made within the transaction, together with all inputs, outputs, logs and events. Three tracing levels are available:

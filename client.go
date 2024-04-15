@@ -224,6 +224,10 @@ func NewClientRaw(
 		o(c)
 	}
 
+	if err := readKeyFileConfig(cfg); err != nil {
+		return nil, err
+	}
+
 	if c.ContractAddressToNameMap.addressMap == nil {
 		c.ContractAddressToNameMap = NewEmptyContractMap()
 		if !cfg.IsSimulatedNetwork() {

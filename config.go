@@ -114,9 +114,6 @@ func ReadConfig() (*Config, error) {
 	} else {
 		cfg.Network.PrivateKeys = append(cfg.Network.PrivateKeys, rootPrivateKey)
 	}
-	if err := readKeyFileConfig(cfg); err != nil {
-		return nil, err
-	}
 	L.Trace().Interface("Config", cfg).Msg("Parsed seth config")
 	return cfg, nil
 }
@@ -163,6 +160,9 @@ func (c *Config) ShoulSaveDeployedContractMap() bool {
 func readKeyFileConfig(cfg *Config) error {
 	cfg.KeyFilePath = os.Getenv("SETH_KEYFILE_PATH")
 	if cfg.KeyFilePath != "" {
+		if cfg.EphemeralAddrs != nil && *cfg.EphemeralAddrs != 0 {
+			return errors.New("SETH_KEYFILE_PATH environment variable is set and ephemeral addresses are enabled, please disable ephemeral addresses or remove the keyfile path from the environment variable. You cannot use both modes at the same time")
+		}
 		if _, err := os.Stat(cfg.KeyFilePath); os.IsNotExist(err) {
 			return nil
 		}
