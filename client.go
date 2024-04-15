@@ -85,6 +85,12 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 		return nil, errors.Wrap(err, ErrCreateABIStore)
 	}
 	if cfg.ephemeral {
+		// we don't care about any other keys, only the root key
+		// you should not use ephemeral mode with more than 1 key
+		if len(cfg.Network.PrivateKeys) > 1 {
+			L.Warn().Msg("Ephemeral mode is enabled, but more than 1 key is loaded. Only the first key will be used")
+		}
+		cfg.Network.PrivateKeys = cfg.Network.PrivateKeys[:1]
 		pkeys, err := NewEphemeralKeys(*cfg.EphemeralAddrs)
 		if err != nil {
 			return nil, err
