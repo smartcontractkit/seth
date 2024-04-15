@@ -41,6 +41,8 @@ var (
 	// Number of ephemeral addresses to create
 	SixtyEphemeralAddresses int64 = 60
 
+	ZeroBigInt = big.NewInt(0)
+
 	// Amount of funds that will be left on the root key, when splitting funds between ephemeral addresses
 	ZeroRootKeyFundsBuffer = big.NewInt(0)
 
@@ -180,10 +182,6 @@ func validateConfig(cfg *Config) error {
 	case TracingLevel_All:
 	default:
 		return errors.New("tracing level must be one of: NONE, REVERTED, ALL")
-	}
-
-	if big.NewInt(0).Cmp(cfg.EphemeralAddrsFunding) > 0 {
-		return errors.New("funding for ephemeral addresses must be greater than 0")
 	}
 
 	return nil
