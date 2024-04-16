@@ -340,25 +340,12 @@ func NewClientRaw(
 	return c, nil
 }
 
-// DecodeAlways waits for transaction to be minted, then it tries to decode the transaction
-// and trace all calls. If 'tracing_to_json' is saved we also save to JSON all that information.
-// It ignores 'tracing_level' setting and should be used, when want to access events or logs.
-// If transaction was reverted the error return will be revert error, not decoding error (that one if any will be logged).
-// It means it can return both error and decoded transaction!
-func (m *Client) DecodeAlways(tx *types.Transaction, txErr error) (*DecodedTransaction, error) {
-	return m.decodeInternal(tx, txErr, true)
-}
-
-// Decode waits for transaction to be minted, then depending on 'tracing_level' it either
-// returns immediatelly or if the level matches transaction type we first decode the transaction
-// and then trace all calls. If 'tracing_to_json' is saved we also save to JSON all that information.
+// Decode waits for transaction to be minted, then decodes transaction inputs, outputs, logs and events and
+// depending on 'tracing_level' it either returns immediatelly or if the level matches it traces all calls.
+// If 'tracing_to_json' is saved we also save to JSON all that information.
 // If transaction was reverted the error return will be revert error, not decoding error (that one if any will be logged).
 // It means it can return both error and decoded transaction!
 func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction, error) {
-	return m.decodeInternal(tx, txErr, false)
-}
-
-func (m *Client) decodeInternal(tx *types.Transaction, txErr error, ignoreTraceLevel bool) (*DecodedTransaction, error) {
 	if len(m.Errors) > 0 {
 		return nil, verr.Join(m.Errors...)
 	}
@@ -394,42 +381,37 @@ func (m *Client) decodeInternal(tx *types.Transaction, txErr error, ignoreTraceL
 		revertErr = m.callAndGetRevertReason(tx, receipt)
 	}
 
-	decoded := &DecodedTransaction{
-		Transaction: tx,
-		Hash:        tx.Hash().Hex(),
+	decoded, decodeErr := m.decodeTransaction(l, tx, receipt)
+
+	if decodeErr != nil && errors.Is(decodeErr, errors.New(ErrNoABIMethod)) {
+		if m.Cfg.TraceToJson {
+			L.Trace().
+				Err(decodeErr).
+				Msg("Failed to decode transaction. Saving transaction data hash as JSON")
+
+			err = CreateOrAppendToJsonArray(m.Cfg.RevertedTransactionsFile, tx.Hash().Hex())
+			if err != nil {
+				l.Warn().
+					Err(err).
+					Str("TXHash", tx.Hash().Hex()).
+					Msg("Failed to save reverted transaction hash to file")
+			} else {
+				l.Trace().
+					Str("TXHash", tx.Hash().Hex()).
+					Msg("Saved reverted transaction to file")
+			}
+		}
+		return decoded, revertErr
 	}
 
-	if !ignoreTraceLevel && (m.Cfg.TracingLevel == TracingLevel_None) {
+	if m.Cfg.TracingLevel == TracingLevel_None {
 		L.Trace().
 			Str("Transaction Hash", tx.Hash().Hex()).
 			Msg("Tracing level is NONE, skipping decoding")
 		return decoded, revertErr
 	}
 
-	if ignoreTraceLevel || (m.Cfg.TracingLevel == TracingLevel_All || (m.Cfg.TracingLevel == TracingLevel_Reverted && revertErr != nil)) {
-		var decodeErr error
-		decoded, decodeErr = m.decodeTransaction(l, tx, receipt)
-		if decodeErr != nil && errors.Is(decodeErr, errors.New(ErrNoABIMethod)) {
-			if m.Cfg.TraceToJson {
-				L.Trace().
-					Err(decodeErr).
-					Msg("Failed to decode transaction. Saving transaction data hash as JSON")
-
-				err = CreateOrAppendToJsonArray(m.Cfg.RevertedTransactionsFile, tx.Hash().Hex())
-				if err != nil {
-					l.Warn().
-						Err(err).
-						Str("TXHash", tx.Hash().Hex()).
-						Msg("Failed to save reverted transaction hash to file")
-				} else {
-					l.Trace().
-						Str("TXHash", tx.Hash().Hex()).
-						Msg("Saved reverted transaction to file")
-				}
-			}
-			return decoded, revertErr
-		}
-
+	if m.Cfg.TracingLevel == TracingLevel_All || (m.Cfg.TracingLevel == TracingLevel_Reverted && revertErr != nil) {
 		traceErr := m.Tracer.TraceGethTX(decoded.Hash)
 		if traceErr != nil {
 			if m.Cfg.TraceToJson {
@@ -448,6 +430,14 @@ func (m *Client) decodeInternal(tx *types.Transaction, txErr error, ignoreTraceL
 						Str("Tx hash", decoded.Hash).
 						Msg("Saved decoded transaction data to JSON")
 				}
+			}
+
+			if strings.Contains(traceErr.Error(), "debug_traceTransaction does not exist") {
+				L.Warn().
+					Err(err).
+					Msg("Debug API is either disabled or not available on the node. Disabling tracing")
+
+				m.Cfg.TracingLevel = TracingLevel_None
 			}
 
 			return decoded, revertErr

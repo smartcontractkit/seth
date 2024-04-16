@@ -1355,7 +1355,7 @@ func TestTraceTraceContractTracingSaveToJson(t *testing.T) {
 
 	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	cfg.TracingLevel = seth.TracingLevel_All
-	cfg.TraceToJson = true
+	cfg.SaveToJson = true
 	cfg.Network.TxnTimeout = seth.MustMakeDuration(time.Duration(5 * time.Second))
 
 	c, err := seth.NewClientRaw(
