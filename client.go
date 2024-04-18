@@ -98,6 +98,10 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 			return nil, err
 		}
 		cfg.Network.PrivateKeys = append(cfg.Network.PrivateKeys, pkeys...)
+	} else {
+		if err := readKeyFileConfig(cfg); err != nil {
+			return nil, err
+		}
 	}
 	addrs, pkeys, err := cfg.ParseKeys()
 	if err != nil {
@@ -224,10 +228,6 @@ func NewClientRaw(
 	}
 	for _, o := range opts {
 		o(c)
-	}
-
-	if err := readKeyFileConfig(cfg); err != nil {
-		return nil, err
 	}
 
 	if c.ContractAddressToNameMap.addressMap == nil {

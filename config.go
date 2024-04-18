@@ -161,7 +161,7 @@ func readKeyFileConfig(cfg *Config) error {
 	cfg.KeyFilePath = os.Getenv("SETH_KEYFILE_PATH")
 	if cfg.KeyFilePath != "" {
 		if cfg.EphemeralAddrs != nil && *cfg.EphemeralAddrs != 0 {
-			return errors.New("SETH_KEYFILE_PATH environment variable is set and ephemeral addresses are enabled, please disable ephemeral addresses or remove the keyfile path from the environment variable. You cannot use both modes at the same time")
+			return fmt.Errorf("SETH_KEYFILE_PATH environment variable is set to '%s' and ephemeral addresses are enabled, please disable ephemeral addresses or remove the keyfile path from the environment variable. You cannot use both modes at the same time", cfg.KeyFilePath)
 		}
 		if _, err := os.Stat(cfg.KeyFilePath); os.IsNotExist(err) {
 			return nil
