@@ -21,7 +21,7 @@ func TestAPI(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
-		seth.ReturnFunds(c, c.Addresses[0].Hex())
+		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
 	})
 
 	type test struct {
@@ -104,7 +104,7 @@ func TestAPINonces(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
-		seth.ReturnFunds(c, c.Addresses[0].Hex())
+		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
 	})
 
 	type test struct {
@@ -144,7 +144,7 @@ func TestAPISeqErrors(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
-		seth.ReturnFunds(c, c.Addresses[0].Hex())
+		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
 	})
 
 	type test struct {
@@ -303,7 +303,7 @@ func TestAPISyncKeysPool(t *testing.T) {
 				c = newClientWithEphemeralAddresses(t)
 
 				t.Cleanup(func() {
-					seth.ReturnFunds(c, c.Addresses[0].Hex())
+					_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
 				})
 			} else {
 				c = newClient(t)
@@ -350,7 +350,7 @@ func TestManualAPIReconnect(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
-		seth.ReturnFunds(c, c.Addresses[0].Hex())
+		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
 	})
 
 	type test struct {
