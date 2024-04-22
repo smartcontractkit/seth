@@ -213,3 +213,12 @@ func (c *Config) IsExperimentEnabled(experiment string) bool {
 	}
 	return false
 }
+
+// GetMaxConcurrency returns the maximum number of concurrent transactions. Root key is excluded from the count.
+func (c *Config) GetMaxConcurrency() int {
+	if c.ephemeral {
+		return int(*c.EphemeralAddrs)
+	}
+
+	return len(c.Network.PrivateKeys) - 1
+}
