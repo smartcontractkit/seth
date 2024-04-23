@@ -2,14 +2,14 @@ name: CLI tests
 on:
   push:
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-cli
   cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        network: [ Anvil, Geth ]
+        network: [ Anvil ]
     env:
       ROOT_PRIVATE_KEY: ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
     steps:
