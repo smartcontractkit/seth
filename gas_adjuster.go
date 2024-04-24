@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -29,6 +30,10 @@ const (
 	CongestionStrategy_Simple = "simple"
 	// newer blocks have more weight in the computation
 	CongestionStrategy_NewestFirst = "newest_first"
+)
+
+var (
+	ZeroGasSuggestedErr = "Either base fee or suggested tip is 0"
 )
 
 // CalculateNetworkCongestionMetric calculates a simple congestion metric based on the last N blocks
@@ -227,7 +232,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 	}
 
 	if baseFee64 == 0.0 || currentGasTip.Int64() == 0 {
-		err = fmt.Errorf("Either base fee or suggested tip is 0")
+		err = errors.New(ZeroGasSuggestedErr)
 
 		L.Error().
 			Err(err).

@@ -813,11 +813,18 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 	ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
 	defer cancel()
 
+	var disableEstimationsIfNeeded = func(err error) {
+		if strings.Contains(err.Error(), ZeroGasSuggestedErr) {
+			L.Warn().Msg("Received incorrect gas estimations. Disabling them and reverting to hardcoded values. Remember to update your config!")
+			m.Cfg.Network.GasPriceEstimationEnabled = false
+		}
+	}
+
 	var calulcateLegacyFees = func() {
 		gasPrice, err := m.GetSuggestedLegacyFees(ctx, request.Priority)
 		if err != nil {
-			L.Err(err).Msg("Failed to get suggested Legacy fees. Using hardcoded values")
-			m.Errors = append(m.Errors, err)
+			disableEstimationsIfNeeded(err)
+			L.Warn().Err(err).Msg("Failed to get suggested Legacy fees. Using hardcoded values")
 			estimations.GasPrice = big.NewInt(request.FallbackGasPrice)
 		} else {
 			estimations.GasPrice = gasPrice
@@ -827,10 +834,11 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 	if m.Cfg.Network.EIP1559DynamicFees {
 		maxFee, priorityFee, err := m.GetSuggestedEIP1559Fees(ctx, request.Priority)
 		if err != nil {
-			L.Err(err).Msg("Failed to get suggested EIP1559 fees. Using hardcoded values")
-			m.Errors = append(m.Errors, err)
+			L.Warn().Err(err).Msg("Failed to get suggested EIP1559 fees. Using hardcoded values")
 			estimations.GasFeeCap = big.NewInt(request.FallbackGasFeeCap)
 			estimations.GasTipCap = big.NewInt(request.FallbackGasTipCap)
+
+			disableEstimationsIfNeeded(err)
 
 			if strings.Contains(err.Error(), "method eth_maxPriorityFeePerGas") || strings.Contains(err.Error(), "method eth_maxFeePerGas") || strings.Contains(err.Error(), "method eth_feeHistory") || strings.Contains(err.Error(), "expected input list for types.txdata") {
 				L.Warn().Msg("EIP1559 fees are not supported by the network. Switching to Legacy fees. Remember to update your config!")
