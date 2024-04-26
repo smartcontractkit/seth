@@ -231,7 +231,7 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 		}
 	}
 
-	if baseFee64 == 0.0 || currentGasTip.Int64() == 0 {
+	if baseFee64 == 0.0 {
 		err = errors.New(ZeroGasSuggestedErr)
 
 		L.Error().
@@ -240,6 +240,11 @@ func (m *Client) GetSuggestedEIP1559Fees(ctx context.Context, priority string) (
 			Int64("SuggestedTip", currentGasTip.Int64()).
 			Msg("Incorrect gas data received from node. Skipping automation gas estimation")
 		return
+	}
+
+	if currentGasTip.Int64() == 0 {
+		L.Warn().
+			Msg("Suggested tip is 0.0. Although not strictly incorrect, it is unusual. Transaction might take much longer to confirm.")
 	}
 
 	// between 0.8 and 1.5
