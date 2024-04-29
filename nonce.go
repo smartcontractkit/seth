@@ -93,6 +93,7 @@ func (m *NonceManager) anySyncedKey() int {
 	select {
 	case <-ctx.Done():
 		L.Error().Msg(ErrKeySyncTimeout)
+		m.Client.Errors = append(m.Client.Errors, errors.New(ErrKeySync))
 		return -1
 	case keyData := <-m.SyncedKeys:
 		L.Trace().
