@@ -476,11 +476,20 @@ func (m *Client) TransferETHFromKey(ctx context.Context, fromKeyNum int, to stri
 	if err != nil {
 		return errors.Wrap(err, "failed to get network ID")
 	}
+
+	var gasLimit int64
+	gasLimitRaw, err := m.EstimateGasLimitForFundTransfer(m.Addresses[fromKeyNum], common.HexToAddress(to), value)
+	if err != nil {
+		gasLimit = m.Cfg.Network.TransferGasFee
+	} else {
+		gasLimit = int64(gasLimitRaw)
+	}
+
 	rawTx := &types.LegacyTx{
 		Nonce:    m.NonceManager.NextNonce(m.Addresses[fromKeyNum]).Uint64(),
 		To:       &toAddr,
 		Value:    value,
-		Gas:      uint64(m.Cfg.Network.TransferGasFee),
+		Gas:      uint64(gasLimit),
 		GasPrice: big.NewInt(m.Cfg.Network.GasPrice),
 	}
 	L.Debug().Interface("TransferTx", rawTx).Send()
@@ -860,6 +869,22 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 	}
 
 	return estimations
+}
+
+// EstimateGasLimitForFundTransfer estimates gas limit for fund transfer
+func (m *Client) EstimateGasLimitForFundTransfer(from, to common.Address, amount *big.Int) (uint64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
+	defer cancel()
+	gasLimit, err := m.Client.EstimateGas(ctx, ethereum.CallMsg{
+		From:  from,
+		To:    &to,
+		Value: amount,
+	})
+	if err != nil {
+		L.Warn().Err(err).Msg("Failed to estimate gas for fund transfer.")
+		return 0, errors.Wrapf(err, "failed to estimate gas for fund transfer")
+	}
+	return gasLimit, nil
 }
 
 // configureTransactionOpts configures transaction for legacy or type-2

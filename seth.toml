@@ -30,7 +30,7 @@ pending_nonce_protection_enabled = false
 
 # Amount to be left on root key/address, when we are using ephemeral addresses. It's the amount that will not
 # be divided into ephemeral keys.
-root_key_funds_buffer = 10 # 10 eth
+root_key_funds_buffer = 10 # 10 ether
 
 # feature-flagged expriments; first one sets funds return priority to 'slow' (core only!), second one
 # sets the tip/base fee to the higher value in case there's 3+ orders of magnitude difference between them

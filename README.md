@@ -156,7 +156,7 @@ chain_id = "43113"
 transaction_timeout = "30s"
 # gas limit should be explicitly set only if you are connecting to a node that's incapable of estimating gas limit itself (should only happen for very old versions)
 # gas_limit = 9_000_000
-# gas limit for sending funds
+# hardcoded gas limit for sending funds that will be used if estimation of gas limit fails
 transfer_gas_fee = 21_000
 # legacy transactions
 gas_price = 1_000_000_000

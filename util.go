@@ -70,7 +70,17 @@ func (m *Client) CalculateSubKeyFunding(addrs int64) (*FundingDetails, error) {
 	if err != nil {
 		return nil, err
 	}
-	networkTransferFee := m.Cfg.Network.GasPrice * m.Cfg.Network.TransferGasFee
+
+	gasLimit := m.Cfg.Network.TransferGasFee
+	newAddress, _, err := NewAddress()
+	if err == nil {
+		gasLimitRaw, err := m.EstimateGasLimitForFundTransfer(m.Addresses[0], common.HexToAddress(newAddress), big.NewInt(0).Quo(balance, big.NewInt(addrs)))
+		if err == nil {
+			gasLimit = int64(gasLimitRaw)
+		}
+	}
+
+	networkTransferFee := m.Cfg.Network.GasPrice * gasLimit
 	totalFee := new(big.Int).Mul(big.NewInt(networkTransferFee), big.NewInt(addrs))
 	rootKeyBuffer := new(big.Int).Mul(m.Cfg.RootKeyFundsBuffer, big.NewInt(1_000_000_000_000_000_000))
 	freeBalance := new(big.Int).Sub(balance, big.NewInt(0).Add(totalFee, rootKeyBuffer))
