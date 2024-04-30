@@ -148,6 +148,12 @@ trace_to_json = true
 ```
 That option should be used with care, when `tracing_level` is set to `all` as it will generate a lot of data.
 
+If you want to check if the RPC is healthy on start, you can enable it with:
+```
+check_rpc_health_on_start = false
+```
+It will execute a simple check of transfering 10k wei from root key to root key and check if the transaction was successful.
+
 You can add more networks like this:
 ```
 [[Networks]]

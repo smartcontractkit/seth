@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 	"github.com/smartcontractkit/seth"
 	network_debug_contract "github.com/smartcontractkit/seth/contracts/bind/debug"
 	network_sub_contract "github.com/smartcontractkit/seth/contracts/bind/sub"
@@ -129,7 +130,12 @@ func NewDebugContractSetup() (
 		return nil, nil, common.Address{}, common.Address{}, nil, err
 	}
 
-	c, err := seth.NewClientRaw(cfg, addrs, pkeys, seth.WithContractStore(cs), seth.WithTracer(tracer))
+	nm, err := seth.NewNonceManager(cfg, addrs, pkeys)
+	if err != nil {
+		return nil, nil, common.Address{}, common.Address{}, nil, errors.Wrap(err, seth.ErrCreateNonceManager)
+	}
+
+	c, err := seth.NewClientRaw(cfg, addrs, pkeys, seth.WithContractStore(cs), seth.WithTracer(tracer), seth.WithNonceManager(nm))
 	if err != nil {
 		return nil, nil, common.Address{}, common.Address{}, nil, err
 	}

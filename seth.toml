@@ -36,6 +36,10 @@ root_key_funds_buffer = 10 # 10 ether
 # sets the tip/base fee to the higher value in case there's 3+ orders of magnitude difference between them
 experiments_enabled = ["slow_funds_return", "eip_1559_fee_equalizer"]
 
+# when enabled when creating a new Seth client we will send 10k wei from root address to root address
+# to make sure transaction can be submited and mined
+check_rpc_health_on_start = false
+
 [nonce_manager]
 key_sync_rate_limit_per_sec = 10
 key_sync_timeout = "20s"

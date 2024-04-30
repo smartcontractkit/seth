@@ -49,7 +49,7 @@ test_cli:
 
 .PHONY: test_others
 test_others:
-	NETWORK=$(network) ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run "TestContractMap|TestGasEstimator"
+	NETWORK=$(network) ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run "TestContractMap|TestGasEstimator|TestRPCHealtCheck"
 
 .PHONY: test_race
 test_race:

@@ -25,13 +25,14 @@ import (
 )
 
 const (
-	ErrEmptyConfigPath    = "toml config path is empty, set SETH_CONFIG_PATH"
-	ErrCreateABIStore     = "failed to create ABI store"
-	ErrReadingKeys        = "failed to read keys"
-	ErrCreateNonceManager = "failed to create nonce manager"
-	ErrCreateTracer       = "failed to create tracer"
-	ErrReadContractMap    = "failed to read deployed contract map"
-	ErrNoKeyLoaded        = "failed to load private key"
+	ErrEmptyConfigPath     = "toml config path is empty, set SETH_CONFIG_PATH"
+	ErrCreateABIStore      = "failed to create ABI store"
+	ErrReadingKeys         = "failed to read keys"
+	ErrCreateNonceManager  = "failed to create nonce manager"
+	ErrCreateTracer        = "failed to create tracer"
+	ErrReadContractMap     = "failed to read deployed contract map"
+	ErrNoKeyLoaded         = "failed to load private key"
+	ErrRpcHealtCheckFailed = "RPC health check failed ¯\\_(ツ)_/¯"
 
 	ContractMapFilePattern          = "deployed_contracts_%s_%s.toml"
 	RevertedTransactionsFilePattern = "reverted_transactions_%s_%s.json"
@@ -265,6 +266,16 @@ func NewClientRaw(
 		}
 	}
 
+	if cfg.CheckRpcHealthOnStart {
+		if c.NonceManager == nil {
+			L.Warn().Msg("Nonce manager is not set, RPC health check will be skipped. Client will most probably fail on first transaction")
+		} else {
+			if err := c.checkRPCHealth(); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	cfg.setEphemeralAddrs()
 
 	L.Info().
@@ -338,6 +349,20 @@ func NewClientRaw(
 	}
 
 	return c, nil
+}
+
+func (m *Client) checkRPCHealth() error {
+	L.Info().Str("RPC node", m.URL).Msg("---------------- !!!!! ----------------> Checking RPC health")
+	ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
+	defer cancel()
+
+	err := m.TransferETHFromKey(ctx, 0, m.Addresses[0].Hex(), big.NewInt(10_000))
+	if err != nil {
+		return errors.Wrap(err, ErrRpcHealtCheckFailed)
+	}
+
+	L.Info().Msg("RPC health check passed <---------------- !!!!! ----------------")
+	return nil
 }
 
 // Decode waits for transaction to be minted, then decodes transaction inputs, outputs, logs and events and
