@@ -705,11 +705,6 @@ func WithGasTipCap(gasTipCap *big.Int) TransactOpt {
 
 type ContextErrorKey struct{}
 
-type ContextErrorValue struct {
-	Error           error
-	ContextCancelFn context.CancelFunc
-}
-
 // NewTXOpts returns a new transaction options wrapper,
 // Sets gas price/fee tip/cap and gas limit either based on TOML config or estimations.
 func (m *Client) NewTXOpts(o ...TransactOpt) *bind.TransactOpts {
@@ -737,16 +732,12 @@ func (m *Client) NewTXKeyOpts(keyNum int, o ...TransactOpt) *bind.TransactOpts {
 
 		err := errors.New(errText)
 		m.Errors = append(m.Errors, err)
-		// can't return nil, otherwise RPC wrapper will panic and we might lose funds on testnets/mainnets
 		opts := &bind.TransactOpts{}
 
-		// let's return not only the error, but also cancel function
-		// error is passed here to avoid panic, whoever is using Seth should make sure that there is no error
-		// before using *bind.TransactOpts
-		deadlineCtx, cancelFn := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
-		ctx := context.WithValue(deadlineCtx, ContextErrorKey{}, ContextErrorValue{Error: err, ContextCancelFn: cancelFn})
-
-		opts.Context = ctx
+		// can't return nil, otherwise RPC wrapper will panic and we might lose funds on testnets/mainnets, that's why
+		// error is passed in Context here to avoid panic, whoever is using Seth should make sure that there is no error
+		// present in Context before using *bind.TransactOpts
+		opts.Context = context.WithValue(context.Background(), ContextErrorKey{}, err)
 
 		return opts
 	}
@@ -811,15 +802,28 @@ func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, 
 	if err != nil {
 		m.Errors = append(m.Errors, err)
 		// can't return nil, otherwise RPC wrapper will panic
-		deadlineCtx, cancelFn := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
-		ctx := context.WithValue(deadlineCtx, ContextErrorKey{}, ContextErrorValue{Error: err, ContextCancelFn: cancelFn})
+		ctx := context.WithValue(context.Background(), ContextErrorKey{}, err)
 
 		return &bind.TransactOpts{Context: ctx}, NonceStatus{}, GasEstimations{}
 	}
 
+	var ctx context.Context
+
 	if m.Cfg.PendingNonceProtectionEnabled {
 		if nonceStatus.PendingNonce > nonceStatus.LastNonce {
-			panic(fmt.Errorf("pending nonce for key %d is higher than last nonce, there are %d pending transactions. Speed them up before continuing, otherwise future transactions most probably will get stuck", keyNum, nonceStatus.PendingNonce-nonceStatus.LastNonce))
+			errMsg := `
+pending nonce for key %d is higher than last nonce, there are %d pending transactions.
+
+This issue is caused by one of two things:
+1. You are using the same keyNum in multiple goroutines, which is not supported. Each goroutine should use an unique keyNum.
+2. You have stuck transaction(s). Speed them up by sending replacement transactions with higher gas price before continuing, otherwise future transactions most probably will also get stuck.
+`
+			err := fmt.Errorf(errMsg, keyNum, nonceStatus.PendingNonce-nonceStatus.LastNonce)
+			m.Errors = append(m.Errors, err)
+			// can't return nil, otherwise RPC wrapper will panic and we might lose funds on testnets/mainnets, that's why
+			// error is passed in Context here to avoid panic, whoever is using Seth should make sure that there is no error
+			// present in Context before using *bind.TransactOpts
+			ctx = context.WithValue(context.Background(), ContextErrorKey{}, err)
 		}
 		L.Debug().
 			Msg("Pending nonce protection is enabled. Nonce status is OK")
@@ -835,9 +839,20 @@ func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, 
 
 	opts, err := bind.NewKeyedTransactorWithChainID(m.PrivateKeys[keyNum], big.NewInt(m.ChainID))
 	if err != nil {
+		err = errors.Wrapf(err, "failed to create transactor for key %d", keyNum)
 		m.Errors = append(m.Errors, err)
-		return &bind.TransactOpts{}, NonceStatus{}, GasEstimations{}
+		// can't return nil, otherwise RPC wrapper will panic and we might lose funds on testnets/mainnets, that's why
+		// error is passed in Context here to avoid panic, whoever is using Seth should make sure that there is no error
+		// present in Context before using *bind.TransactOpts
+		ctx := context.WithValue(context.Background(), ContextErrorKey{}, err)
+
+		return &bind.TransactOpts{Context: ctx}, NonceStatus{}, GasEstimations{}
 	}
+
+	if ctx != nil {
+		opts.Context = ctx
+	}
+
 	return opts, nonceStatus, estimations
 }
 
