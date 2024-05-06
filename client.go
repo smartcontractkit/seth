@@ -982,6 +982,12 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 	L.Info().
 		Msgf("Started deploying %s contract", name)
 
+	if auth.Context != nil {
+		if err, ok := auth.Context.Value(ContextErrorKey{}).(error); ok {
+			return DeploymentData{}, errors.Wrapf(err, "aborted contract deployment for %s, because context passed in transaction options had an error set", name)
+		}
+	}
+
 	address, tx, contract, err := bind.DeployContract(auth, abi, bytecode, m.Client, params...)
 	if err != nil {
 		return DeploymentData{}, wrapErrInMessageWithASuggestion(err)

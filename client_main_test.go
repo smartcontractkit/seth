@@ -1,6 +1,7 @@
 package seth_test
 
 import (
+	"context"
 	"math/big"
 	"os"
 	"testing"
@@ -75,6 +76,20 @@ func TestDeploymentLinkTokenFromGethWrapperExample(t *testing.T) {
 
 	_, err = c.Decode(contract.Mint(c.NewTXOpts(), common.Address{}, big.NewInt(1)))
 	require.NoError(t, err, "failed to decode transaction")
+}
+
+func TestDeploymentAbortedWhenContextHasError(t *testing.T) {
+	c, err := seth.NewClient()
+	require.NoError(t, err, "failed to initalise seth")
+	abi, err := link_token.LinkTokenMetaData.GetAbi()
+	require.NoError(t, err, "failed to get ABI")
+
+	opts := c.NewTXOpts()
+	opts.Context = context.WithValue(context.Background(), seth.ContextErrorKey{}, errors.New("context error"))
+
+	_, err = c.DeployContract(opts, "LinkToken", *abi, []byte(link_token.LinkTokenMetaData.Bin))
+	require.Error(t, err, "did not abort deployment of link token contract due to context error")
+	require.Contains(t, err.Error(), "aborted contract deployment for", "incorrect context error")
 }
 
 func newClientWithContractMapFromEnv(t *testing.T) *seth.Client {
