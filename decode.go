@@ -221,7 +221,7 @@ func (m *Client) DecodeCustomABIErr(txErr error) (string, error) {
 				if err != nil {
 					return "", err
 				}
-				if len(data) <= 4 {
+				if len(data) < 4 {
 					return "", err
 				}
 				if bytes.Equal(data[:4], abiError.ID.Bytes()[:4]) {

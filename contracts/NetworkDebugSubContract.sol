@@ -50,5 +50,12 @@ contract NetworkDebugSubContract {
         return x + 3;
     }
 
+    function alwaysRevertsCustomError(uint256 x, uint256 y) public {
+        revert CustomErr({
+            available: x,
+            required: y
+        });
+    }
+
     function pay() public payable {}
 }

@@ -261,9 +261,25 @@ contract NetworkDebugContract {
         return x + y;
     }
 
+    function callRevertFunctionInSubContract(uint256 x, uint256 y) public {
+        subContract.alwaysRevertsCustomError(x, y);
+    }
+    
+
+    function callRevertFunctionInTheContract() public {
+        alwaysRevertsCustomError();
+    }
+
     /* Callback function */
     function callbackMethod(int x) external returns (int) {
         emit CallbackEvent(x);
         return x;
+    }
+
+    function onTokenTransfer(address sender, uint256 amount, bytes calldata data) external {
+        revert CustomErr({
+            available: 100,
+            required: 101
+        });
     }
 }

@@ -1217,6 +1217,56 @@ func TestTraceTraceContractTraceReverted(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
 }
 
+func TestTraceCallRevertFunctionInTheContract(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingEnabled = true
+	c.TraceReverted = true
+
+	tx, txErr := TestEnv.DebugContract.CallRevertFunctionInTheContract(c.NewTXOpts())
+	require.NoError(t, txErr, "transaction should have reverted")
+	_, decodeErr := c.Decode(tx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErr, error values: [12 21]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+}
+
+func TestTraceCallRevertFunctionInSubContract(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingEnabled = true
+	c.TraceReverted = true
+
+	x := big.NewInt(1001)
+	y := big.NewInt(2)
+	tx, txErr := TestEnv.DebugContract.CallRevertFunctionInSubContract(c.NewTXOpts(), x, y)
+	require.NoError(t, txErr, "transaction should have reverted")
+	_, decodeErr := c.Decode(tx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErr, error values: [1001 2]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+}
+
+func TestTraceCallRevertInCallback(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingEnabled = true
+	c.TraceReverted = true
+
+	amount := big.NewInt(0)
+	tx, txErr := TestEnv.LinkTokenContract.TransferAndCall(c.NewTXOpts(), TestEnv.DebugContractAddress, amount, []byte{})
+	require.NoError(t, txErr, "transaction should have reverted")
+	_, decodeErr := c.Decode(tx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErr, error values: [100 101]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+}
+
 func TestTraceTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing.T) {
 	cfg := deepcopy.MustAnything(TestEnv.Client.Cfg).(*seth.Config)
 
