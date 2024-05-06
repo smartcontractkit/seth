@@ -703,6 +703,8 @@ func WithGasTipCap(gasTipCap *big.Int) TransactOpt {
 	}
 }
 
+type ContextErrorKey struct{}
+
 type ContextErrorValue struct {
 	Error           error
 	ContextCancelFn context.CancelFunc
@@ -742,7 +744,7 @@ func (m *Client) NewTXKeyOpts(keyNum int, o ...TransactOpt) *bind.TransactOpts {
 		// error is passed here to avoid panic, whoever is using Seth should make sure that there is no error
 		// before using *bind.TransactOpts
 		deadlineCtx, cancelFn := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
-		ctx := context.WithValue(deadlineCtx, "error", ContextErrorValue{Error: err, ContextCancelFn: cancelFn})
+		ctx := context.WithValue(deadlineCtx, ContextErrorKey{}, ContextErrorValue{Error: err, ContextCancelFn: cancelFn})
 
 		opts.Context = ctx
 
@@ -810,7 +812,7 @@ func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, 
 		m.Errors = append(m.Errors, err)
 		// can't return nil, otherwise RPC wrapper will panic
 		deadlineCtx, cancelFn := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
-		ctx := context.WithValue(deadlineCtx, "error", ContextErrorValue{Error: err, ContextCancelFn: cancelFn})
+		ctx := context.WithValue(deadlineCtx, ContextErrorKey{}, ContextErrorValue{Error: err, ContextCancelFn: cancelFn})
 
 		return &bind.TransactOpts{Context: ctx}, NonceStatus{}, GasEstimations{}
 	}
