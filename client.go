@@ -703,6 +703,11 @@ func WithGasTipCap(gasTipCap *big.Int) TransactOpt {
 	}
 }
 
+type ContextErrorValue struct {
+	Error           error
+	ContextCancelFn context.CancelFunc
+}
+
 // NewTXOpts returns a new transaction options wrapper,
 // Sets gas price/fee tip/cap and gas limit either based on TOML config or estimations.
 func (m *Client) NewTXOpts(o ...TransactOpt) *bind.TransactOpts {
@@ -725,8 +730,18 @@ func (m *Client) NewTXKeyOpts(keyNum int, o ...TransactOpt) *bind.TransactOpts {
 	if keyNum > len(m.Addresses) || keyNum < 0 {
 		err := fmt.Errorf("keyNum is out of range. Expected %d-%d. Got: %d", 0, len(m.Addresses)-1, keyNum)
 		m.Errors = append(m.Errors, err)
-		// can't return nil, otherwise RPC wrapper will panic and we will lose funds on testnets/mainnets
-		return &bind.TransactOpts{}
+		// can't return nil, otherwise RPC wrapper will panic and we might lose funds on testnets/mainnets
+		opts := &bind.TransactOpts{}
+
+		// let's return not only the error, but also cancel function
+		// error is passed here to avoid panic, whoever is using Seth should make sure that there is no error
+		// before using *bind.TransactOpts
+		deadlineCtx, cancelFn := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
+		ctx := context.WithValue(deadlineCtx, "error", ContextErrorValue{Error: err, ContextCancelFn: cancelFn})
+
+		opts.Context = ctx
+
+		return opts
 	}
 	L.Debug().
 		Interface("KeyNum", keyNum).
@@ -788,7 +803,10 @@ func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, 
 	if err != nil {
 		m.Errors = append(m.Errors, err)
 		// can't return nil, otherwise RPC wrapper will panic
-		return &bind.TransactOpts{}, NonceStatus{}, GasEstimations{}
+		deadlineCtx, cancelFn := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
+		ctx := context.WithValue(deadlineCtx, "error", ContextErrorValue{Error: err, ContextCancelFn: cancelFn})
+
+		return &bind.TransactOpts{Context: ctx}, NonceStatus{}, GasEstimations{}
 	}
 
 	if m.Cfg.PendingNonceProtectionEnabled {
