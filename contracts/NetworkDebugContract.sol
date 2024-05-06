@@ -261,6 +261,15 @@ contract NetworkDebugContract {
         return x + y;
     }
 
+    function callRevertFunctionInSubContract(uint256 x, uint256 y) public {
+        subContract.alwaysRevertsCustomError(x, y);
+    }
+    
+
+    function callRevertFunctionInTheContract() public {
+        alwaysRevertsCustomError();
+    }
+
     /* Callback function */
     function callbackMethod(int x) external returns (int) {
         emit CallbackEvent(x);
