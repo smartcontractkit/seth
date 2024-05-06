@@ -728,7 +728,12 @@ func (m *Client) NewTXOpts(o ...TransactOpt) *bind.TransactOpts {
 // sets opts.GasPrice and opts.GasLimit from seth.toml or override with options
 func (m *Client) NewTXKeyOpts(keyNum int, o ...TransactOpt) *bind.TransactOpts {
 	if keyNum > len(m.Addresses) || keyNum < 0 {
-		err := fmt.Errorf("keyNum is out of range. Expected %d-%d. Got: %d", 0, len(m.Addresses)-1, keyNum)
+		errText := fmt.Sprintf("keyNum is out of range. Expected %d-%d. Got: %d", 0, len(m.Addresses)-1, keyNum)
+		if keyNum == TimeoutKeyNum {
+			errText += " (this is a probably because, we didn't manage to find any synced key before timeout)"
+		}
+
+		err := errors.New(errText)
 		m.Errors = append(m.Errors, err)
 		// can't return nil, otherwise RPC wrapper will panic and we might lose funds on testnets/mainnets
 		opts := &bind.TransactOpts{}
@@ -783,6 +788,7 @@ func (m *Client) getNonceStatus(keyNum int) (NonceStatus, error) {
 	defer cancel()
 	pendingNonce, err := m.Client.PendingNonceAt(ctx, m.Addresses[keyNum])
 	if err != nil {
+		L.Error().Err(err).Msg("Failed to get pending nonce")
 		return NonceStatus{}, err
 	}
 
