@@ -275,4 +275,11 @@ contract NetworkDebugContract {
         emit CallbackEvent(x);
         return x;
     }
+
+    function onTokenTransfer(address sender, uint256 amount, bytes calldata data) external {
+        revert CustomErr({
+            available: 100,
+            required: 101
+        });
+    }
 }
