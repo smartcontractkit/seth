@@ -39,8 +39,17 @@ const (
 )
 
 var (
-	// DefaultEphemeralAddresses is amount of addresses created in ephemeral client mode
-	DefaultEphemeralAddresses int64 = 60
+	// Number of ephemeral addresses to create
+	SixtyEphemeralAddresses int64 = 60
+
+	ZeroBigInt = big.NewInt(0)
+
+	// Amount of funds that will be left on the root key, when splitting funds between ephemeral addresses
+	ZeroRootKeyFundsBuffer = big.NewInt(0)
+
+	TracingLevel_None     = "NONE"
+	TracingLevel_Reverted = "REVERTED"
+	TracingLevel_All      = "ALL"
 )
 
 // Client is a vanilla go-ethereum client with enhanced debug logging
@@ -57,7 +66,6 @@ type Client struct {
 	ContractStore            *ContractStore
 	NonceManager             *NonceManager
 	Tracer                   *Tracer
-	TraceReverted            bool
 	ContractAddressToNameMap ContractMap
 	ABIFinder                *ABIFinder
 	HeaderCache              *LFUHeaderCache
@@ -72,17 +80,29 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 		return nil, err
 	}
 
+	L.Debug().Msgf("Using tracing level: %s", cfg.TracingLevel)
+
 	cfg.setEphemeralAddrs()
 	cs, err := NewContractStore(filepath.Join(cfg.ConfigDir, cfg.ABIDir), filepath.Join(cfg.ConfigDir, cfg.BINDir))
 	if err != nil {
 		return nil, errors.Wrap(err, ErrCreateABIStore)
 	}
 	if cfg.ephemeral {
+		// we don't care about any other keys, only the root key
+		// you should not use ephemeral mode with more than 1 key
+		if len(cfg.Network.PrivateKeys) > 1 {
+			L.Warn().Msg("Ephemeral mode is enabled, but more than 1 key is loaded. Only the first key will be used")
+		}
+		cfg.Network.PrivateKeys = cfg.Network.PrivateKeys[:1]
 		pkeys, err := NewEphemeralKeys(*cfg.EphemeralAddrs)
 		if err != nil {
 			return nil, err
 		}
 		cfg.Network.PrivateKeys = append(cfg.Network.PrivateKeys, pkeys...)
+	} else {
+		if err := readKeyFileConfig(cfg); err != nil {
+			return nil, err
+		}
 	}
 	addrs, pkeys, err := cfg.ParseKeys()
 	if err != nil {
@@ -99,9 +119,10 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 
 	// this part is kind of duplicated in NewClientRaw, but we need to create contract map before creating Tracer
 	// so that both the tracer and client have references to the same map
-	contractAddressToNameMap := make(ContractMap)
+	contractAddressToNameMap := NewEmptyContractMap()
+	contractAddressToNameMap.addressMap = make(map[string]string)
 	if !cfg.IsSimulatedNetwork() {
-		contractAddressToNameMap, err = LoadDeployedContracts(cfg.ContractMapFile)
+		contractAddressToNameMap.addressMap, err = LoadDeployedContracts(cfg.ContractMapFile)
 		if err != nil {
 			return nil, errors.Wrap(err, ErrReadContractMap)
 		}
@@ -154,6 +175,20 @@ func validateConfig(cfg *Config) error {
 			Msg("Gas limit is set, this will override the gas limit set by the network. This option should be used **ONLY** if node is incapable of estimating gas limit itself, which happens only with very old versions")
 	}
 
+	if cfg.TracingLevel == "" {
+		cfg.TracingLevel = TracingLevel_Reverted
+	}
+
+	cfg.TracingLevel = strings.ToUpper(cfg.TracingLevel)
+
+	switch cfg.TracingLevel {
+	case TracingLevel_None:
+	case TracingLevel_Reverted:
+	case TracingLevel_All:
+	default:
+		return errors.New("tracing level must be one of: NONE, REVERTED, ALL")
+	}
+
 	return nil
 }
 
@@ -196,15 +231,16 @@ func NewClientRaw(
 		o(c)
 	}
 
-	if c.ContractAddressToNameMap == nil {
+	if c.ContractAddressToNameMap.addressMap == nil {
+		c.ContractAddressToNameMap = NewEmptyContractMap()
 		if !cfg.IsSimulatedNetwork() {
-			c.ContractAddressToNameMap, err = LoadDeployedContracts(cfg.ContractMapFile)
+			c.ContractAddressToNameMap.addressMap, err = LoadDeployedContracts(cfg.ContractMapFile)
 			if err != nil {
 				return nil, errors.Wrap(err, ErrReadContractMap)
 			}
-			if len(c.ContractAddressToNameMap) > 0 {
+			if len(c.ContractAddressToNameMap.addressMap) > 0 {
 				L.Info().
-					Int("Size", len(c.ContractAddressToNameMap)).
+					Int("Size", len(c.ContractAddressToNameMap.addressMap)).
 					Str("File name", cfg.ContractMapFile).
 					Msg("No contract map provided, read it from file")
 			} else {
@@ -213,13 +249,12 @@ func NewClientRaw(
 			}
 		} else {
 			L.Debug().Msg("Simulated network, contract map won't be read from file")
-			c.ContractAddressToNameMap = make(ContractMap)
 			L.Info().
 				Msg("No contract map provided and no file found, created new one")
 		}
 	} else {
 		L.Info().
-			Int("Size", len(c.ContractAddressToNameMap)).
+			Int("Size", len(c.ContractAddressToNameMap.addressMap)).
 			Msg("Contract map was provided")
 	}
 	if c.NonceManager != nil {
@@ -273,7 +308,7 @@ func NewClientRaw(
 		}
 	}
 
-	if c.Cfg.TracingEnabled && c.Tracer == nil {
+	if c.Cfg.TracingLevel != TracingLevel_None && c.Tracer == nil {
 		if c.ContractStore == nil {
 			cs, err := NewContractStore(filepath.Join(cfg.ConfigDir, cfg.ABIDir), filepath.Join(cfg.ConfigDir, cfg.BINDir))
 			if err != nil {
@@ -330,56 +365,131 @@ func (m *Client) checkRPCHealth() error {
 	return nil
 }
 
-// Decode waits for transaction to be minted and decodes basic info of the first method that was
-// called by the transaction (such as: method name, inputs and any logs/events emitted by the transaction.
-// Additionally if `tracing_enabled` flag is set in Client config it will trace all other calls that were
-// made during the transaction execution and print them to console using logger.
-// If transaction was reverted, then tracing won't take place, but the error return will contain
-// revert reason (if we were able to get it from the receipt).
+// Decode waits for transaction to be minted, then decodes transaction inputs, outputs, logs and events and
+// depending on 'tracing_level' it either returns immediatelly or if the level matches it traces all calls.
+// If 'tracing_to_json' is saved we also save to JSON all that information.
+// If transaction was reverted the error return will be revert error, not decoding error (that one if any will be logged).
+// It means it can return both error and decoded transaction!
 func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction, error) {
 	if len(m.Errors) > 0 {
 		return nil, verr.Join(m.Errors...)
 	}
 	if txErr != nil {
+		msg := "Skipping decoding, transaction submission failed. Nothing to decode"
+
+		if m.Cfg.Network.GasLimit == 0 {
+			msg = "Skipping decoding, most probably gas estimation failed. √. You could try to set gas limit manually in config and try again to get decoded transaction"
+		}
+
+		L.Trace().
+			Msg(msg)
 		return nil, txErr
 	}
+
 	if tx == nil {
+		L.Trace().
+			Msg("Skipping decoding, because transaction is nil. Nothing to decode")
 		return nil, nil
 	}
+
 	l := L.With().Str("Transaction", tx.Hash().Hex()).Logger()
 	receipt, err := m.WaitMined(context.Background(), l, m.Client, tx)
 	if err != nil {
-		return &DecodedTransaction{}, err
+		L.Trace().
+			Err(err).
+			Msg("Skipping decoding, because transaction was not minted. Nothing to decode")
+		return nil, err
 	}
+
+	var revertErr error
 	if receipt.Status == 0 {
-		err = CreateOrAppendToJsonArray(m.Cfg.RevertedTransactionsFile, tx.Hash().Hex())
-		if err != nil {
-			l.Warn().
-				Err(err).
-				Str("TXHash", tx.Hash().Hex()).
-				Msg("Failed to save reverted transaction to file")
-		}
-		if err := m.callAndGetRevertReason(tx, receipt); err != nil {
-			return &DecodedTransaction{}, err
-		}
+		revertErr = m.callAndGetRevertReason(tx, receipt)
 	}
 
 	decoded, decodeErr := m.decodeTransaction(l, tx, receipt)
-	if decodeErr != nil {
-		// return error only if tracing is not enabled, as we might still get some useful data from tracing
-		if !m.Cfg.TracingEnabled && strings.Contains(decodeErr.Error(), ErrNoABIMethod) {
-			return nil, decodeErr
+
+	if decodeErr != nil && errors.Is(decodeErr, errors.New(ErrNoABIMethod)) {
+		if m.Cfg.TraceToJson {
+			L.Trace().
+				Err(decodeErr).
+				Msg("Failed to decode transaction. Saving transaction data hash as JSON")
+
+			err = CreateOrAppendToJsonArray(m.Cfg.RevertedTransactionsFile, tx.Hash().Hex())
+			if err != nil {
+				l.Warn().
+					Err(err).
+					Str("TXHash", tx.Hash().Hex()).
+					Msg("Failed to save reverted transaction hash to file")
+			} else {
+				l.Trace().
+					Str("TXHash", tx.Hash().Hex()).
+					Msg("Saved reverted transaction to file")
+			}
 		}
+		return decoded, revertErr
 	}
 
-	if m.Cfg.TracingEnabled {
+	if m.Cfg.TracingLevel == TracingLevel_None {
+		L.Trace().
+			Str("Transaction Hash", tx.Hash().Hex()).
+			Msg("Tracing level is NONE, skipping decoding")
+		return decoded, revertErr
+	}
+
+	if m.Cfg.TracingLevel == TracingLevel_All || (m.Cfg.TracingLevel == TracingLevel_Reverted && revertErr != nil) {
 		traceErr := m.Tracer.TraceGethTX(decoded.Hash)
 		if traceErr != nil {
-			return nil, traceErr
+			if m.Cfg.TraceToJson {
+				L.Trace().
+					Err(traceErr).
+					Msg("Failed to trace call, but decoding was successful. Saving decoded data as JSON")
+
+				path, saveErr := saveAsJson(decoded, "traces", decoded.Hash)
+				if saveErr != nil {
+					L.Warn().
+						Err(saveErr).
+						Msg("Failed to save decoded call as JSON")
+				} else {
+					L.Trace().
+						Str("Path", path).
+						Str("Tx hash", decoded.Hash).
+						Msg("Saved decoded transaction data to JSON")
+				}
+			}
+
+			if strings.Contains(traceErr.Error(), "debug_traceTransaction does not exist") {
+				L.Warn().
+					Err(err).
+					Msg("Debug API is either disabled or not available on the node. Disabling tracing")
+
+				m.Cfg.TracingLevel = TracingLevel_None
+			}
+
+			return decoded, revertErr
 		}
+
+		if m.Cfg.TraceToJson {
+			path, saveErr := saveAsJson(m.Tracer.DecodedCalls[decoded.Hash], "traces", decoded.Hash)
+			if saveErr != nil {
+				L.Warn().
+					Err(saveErr).
+					Msg("Failed to save decoded call as JSON")
+			} else {
+				L.Trace().
+					Str("Path", path).
+					Str("Tx hash", decoded.Hash).
+					Msg("Saved decoded call data to JSON")
+			}
+		}
+	} else {
+		L.Trace().
+			Str("Transaction Hash", tx.Hash().Hex()).
+			Str("Tracing level", m.Cfg.TracingLevel).
+			Bool("Was reverted?", revertErr != nil).
+			Msg("Transaction doesn't match tracing level, skipping decoding")
 	}
 
-	return decoded, nil
+	return decoded, revertErr
 }
 
 func (m *Client) TransferETHFromKey(ctx context.Context, fromKeyNum int, to string, value *big.Int) error {
@@ -391,11 +501,20 @@ func (m *Client) TransferETHFromKey(ctx context.Context, fromKeyNum int, to stri
 	if err != nil {
 		return errors.Wrap(err, "failed to get network ID")
 	}
+
+	var gasLimit int64
+	gasLimitRaw, err := m.EstimateGasLimitForFundTransfer(m.Addresses[fromKeyNum], common.HexToAddress(to), value)
+	if err != nil {
+		gasLimit = m.Cfg.Network.TransferGasFee
+	} else {
+		gasLimit = int64(gasLimitRaw)
+	}
+
 	rawTx := &types.LegacyTx{
 		Nonce:    m.NonceManager.NextNonce(m.Addresses[fromKeyNum]).Uint64(),
 		To:       &toAddr,
 		Value:    value,
-		Gas:      uint64(m.Cfg.Network.TransferGasFee),
+		Gas:      uint64(gasLimit),
 		GasPrice: big.NewInt(m.Cfg.Network.GasPrice),
 	}
 	L.Debug().Interface("TransferTx", rawTx).Send()
@@ -462,7 +581,7 @@ func WithContractStore(as *ContractStore) ClientOpt {
 }
 
 // WithContractMap contractAddressToNameMap functional option
-func WithContractMap(contractAddressToNameMap map[string]string) ClientOpt {
+func WithContractMap(contractAddressToNameMap ContractMap) ClientOpt {
 	return func(c *Client) {
 		c.ContractAddressToNameMap = contractAddressToNameMap
 	}
@@ -584,6 +703,8 @@ func WithGasTipCap(gasTipCap *big.Int) TransactOpt {
 	}
 }
 
+type ContextErrorKey struct{}
+
 // NewTXOpts returns a new transaction options wrapper,
 // Sets gas price/fee tip/cap and gas limit either based on TOML config or estimations.
 func (m *Client) NewTXOpts(o ...TransactOpt) *bind.TransactOpts {
@@ -603,6 +724,23 @@ func (m *Client) NewTXOpts(o ...TransactOpt) *bind.TransactOpts {
 // NewTXKeyOpts returns a new transaction options wrapper,
 // sets opts.GasPrice and opts.GasLimit from seth.toml or override with options
 func (m *Client) NewTXKeyOpts(keyNum int, o ...TransactOpt) *bind.TransactOpts {
+	if keyNum > len(m.Addresses) || keyNum < 0 {
+		errText := fmt.Sprintf("keyNum is out of range. Expected %d-%d. Got: %d", 0, len(m.Addresses)-1, keyNum)
+		if keyNum == TimeoutKeyNum {
+			errText += " (this is a probably because, we didn't manage to find any synced key before timeout)"
+		}
+
+		err := errors.New(errText)
+		m.Errors = append(m.Errors, err)
+		opts := &bind.TransactOpts{}
+
+		// can't return nil, otherwise RPC wrapper will panic and we might lose funds on testnets/mainnets, that's why
+		// error is passed in Context here to avoid panic, whoever is using Seth should make sure that there is no error
+		// present in Context before using *bind.TransactOpts
+		opts.Context = context.WithValue(context.Background(), ContextErrorKey{}, err)
+
+		return opts
+	}
 	L.Debug().
 		Interface("KeyNum", keyNum).
 		Interface("Address", m.Addresses[keyNum]).
@@ -643,6 +781,7 @@ func (m *Client) getNonceStatus(keyNum int) (NonceStatus, error) {
 	defer cancel()
 	pendingNonce, err := m.Client.PendingNonceAt(ctx, m.Addresses[keyNum])
 	if err != nil {
+		L.Error().Err(err).Msg("Failed to get pending nonce")
 		return NonceStatus{}, err
 	}
 
@@ -663,24 +802,34 @@ func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, 
 	if err != nil {
 		m.Errors = append(m.Errors, err)
 		// can't return nil, otherwise RPC wrapper will panic
-		return &bind.TransactOpts{}, NonceStatus{}, GasEstimations{}
+		ctx := context.WithValue(context.Background(), ContextErrorKey{}, err)
+
+		return &bind.TransactOpts{Context: ctx}, NonceStatus{}, GasEstimations{}
 	}
+
+	var ctx context.Context
 
 	if m.Cfg.PendingNonceProtectionEnabled {
 		if nonceStatus.PendingNonce > nonceStatus.LastNonce {
-			panic(fmt.Errorf("pending nonce is higher than last nonce, there are %d pending transactions. Speed them up before continuing, otherwise future transactions most probably will get stuck", nonceStatus.PendingNonce-nonceStatus.LastNonce))
+			errMsg := `
+pending nonce for key %d is higher than last nonce, there are %d pending transactions.
+
+This issue is caused by one of two things:
+1. You are using the same keyNum in multiple goroutines, which is not supported. Each goroutine should use an unique keyNum.
+2. You have stuck transaction(s). Speed them up by sending replacement transactions with higher gas price before continuing, otherwise future transactions most probably will also get stuck.
+`
+			err := fmt.Errorf(errMsg, keyNum, nonceStatus.PendingNonce-nonceStatus.LastNonce)
+			m.Errors = append(m.Errors, err)
+			// can't return nil, otherwise RPC wrapper will panic and we might lose funds on testnets/mainnets, that's why
+			// error is passed in Context here to avoid panic, whoever is using Seth should make sure that there is no error
+			// present in Context before using *bind.TransactOpts
+			ctx = context.WithValue(context.Background(), ContextErrorKey{}, err)
 		}
 		L.Debug().
 			Msg("Pending nonce protection is enabled. Nonce status is OK")
 	}
 
-	estimations := m.CalculateGasEstimations(GasEstimationRequest{
-		GasEstimationEnabled: m.Cfg.Network.GasPriceEstimationEnabled,
-		FallbackGasPrice:     m.Cfg.Network.GasPrice,
-		FallbackGasFeeCap:    m.Cfg.Network.GasFeeCap,
-		FallbackGasTipCap:    m.Cfg.Network.GasTipCap,
-		Priority:             m.Cfg.Network.GasPriceEstimationTxPriority,
-	})
+	estimations := m.CalculateGasEstimations(m.NewDefaultGasEstimationRequest())
 
 	L.Debug().
 		Interface("KeyNum", keyNum).
@@ -690,9 +839,20 @@ func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, 
 
 	opts, err := bind.NewKeyedTransactorWithChainID(m.PrivateKeys[keyNum], big.NewInt(m.ChainID))
 	if err != nil {
+		err = errors.Wrapf(err, "failed to create transactor for key %d", keyNum)
 		m.Errors = append(m.Errors, err)
-		return &bind.TransactOpts{}, NonceStatus{}, GasEstimations{}
+		// can't return nil, otherwise RPC wrapper will panic and we might lose funds on testnets/mainnets, that's why
+		// error is passed in Context here to avoid panic, whoever is using Seth should make sure that there is no error
+		// present in Context before using *bind.TransactOpts
+		ctx := context.WithValue(context.Background(), ContextErrorKey{}, err)
+
+		return &bind.TransactOpts{Context: ctx}, NonceStatus{}, GasEstimations{}
 	}
+
+	if ctx != nil {
+		opts.Context = ctx
+	}
+
 	return opts, nonceStatus, estimations
 }
 
@@ -702,6 +862,17 @@ type GasEstimationRequest struct {
 	FallbackGasFeeCap    int64
 	FallbackGasTipCap    int64
 	Priority             string
+}
+
+// NewDefaultGasEstimationRequest creates a new default gas estimation request based on current network configuration
+func (m *Client) NewDefaultGasEstimationRequest() GasEstimationRequest {
+	return GasEstimationRequest{
+		GasEstimationEnabled: m.Cfg.Network.GasPriceEstimationEnabled,
+		FallbackGasPrice:     m.Cfg.Network.GasPrice,
+		FallbackGasFeeCap:    m.Cfg.Network.GasFeeCap,
+		FallbackGasTipCap:    m.Cfg.Network.GasTipCap,
+		Priority:             m.Cfg.Network.GasPriceEstimationTxPriority,
+	}
 }
 
 // CalculateGasEstimations calculates gas estimations (price, tip/cap) or uses hardcoded values if estimation is disabled,
@@ -720,11 +891,18 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 	ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
 	defer cancel()
 
+	var disableEstimationsIfNeeded = func(err error) {
+		if strings.Contains(err.Error(), ZeroGasSuggestedErr) {
+			L.Warn().Msg("Received incorrect gas estimations. Disabling them and reverting to hardcoded values. Remember to update your config!")
+			m.Cfg.Network.GasPriceEstimationEnabled = false
+		}
+	}
+
 	var calulcateLegacyFees = func() {
 		gasPrice, err := m.GetSuggestedLegacyFees(ctx, request.Priority)
 		if err != nil {
-			L.Err(err).Msg("Failed to get suggested Legacy fees. Using hardcoded values")
-			m.Errors = append(m.Errors, err)
+			disableEstimationsIfNeeded(err)
+			L.Warn().Err(err).Msg("Failed to get suggested Legacy fees. Using hardcoded values")
 			estimations.GasPrice = big.NewInt(request.FallbackGasPrice)
 		} else {
 			estimations.GasPrice = gasPrice
@@ -734,10 +912,11 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 	if m.Cfg.Network.EIP1559DynamicFees {
 		maxFee, priorityFee, err := m.GetSuggestedEIP1559Fees(ctx, request.Priority)
 		if err != nil {
-			L.Err(err).Msg("Failed to get suggested EIP1559 fees. Using hardcoded values")
-			m.Errors = append(m.Errors, err)
+			L.Warn().Err(err).Msg("Failed to get suggested EIP1559 fees. Using hardcoded values")
 			estimations.GasFeeCap = big.NewInt(request.FallbackGasFeeCap)
 			estimations.GasTipCap = big.NewInt(request.FallbackGasTipCap)
+
+			disableEstimationsIfNeeded(err)
 
 			if strings.Contains(err.Error(), "method eth_maxPriorityFeePerGas") || strings.Contains(err.Error(), "method eth_maxFeePerGas") || strings.Contains(err.Error(), "method eth_feeHistory") || strings.Contains(err.Error(), "expected input list for types.txdata") {
 				L.Warn().Msg("EIP1559 fees are not supported by the network. Switching to Legacy fees. Remember to update your config!")
@@ -756,6 +935,22 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 	}
 
 	return estimations
+}
+
+// EstimateGasLimitForFundTransfer estimates gas limit for fund transfer
+func (m *Client) EstimateGasLimitForFundTransfer(from, to common.Address, amount *big.Int) (uint64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
+	defer cancel()
+	gasLimit, err := m.Client.EstimateGas(ctx, ethereum.CallMsg{
+		From:  from,
+		To:    &to,
+		Value: amount,
+	})
+	if err != nil {
+		L.Warn().Err(err).Msg("Failed to estimate gas for fund transfer.")
+		return 0, errors.Wrapf(err, "failed to estimate gas for fund transfer")
+	}
+	return gasLimit, nil
 }
 
 // configureTransactionOpts configures transaction for legacy or type-2
@@ -787,9 +982,15 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 	L.Info().
 		Msgf("Started deploying %s contract", name)
 
+	if auth.Context != nil {
+		if err, ok := auth.Context.Value(ContextErrorKey{}).(error); ok {
+			return DeploymentData{}, errors.Wrapf(err, "aborted contract deployment for %s, because context passed in transaction options had an error set", name)
+		}
+	}
+
 	address, tx, contract, err := bind.DeployContract(auth, abi, bytecode, m.Client, params...)
 	if err != nil {
-		return DeploymentData{}, err
+		return DeploymentData{}, wrapErrInMessageWithASuggestion(err)
 	}
 
 	L.Info().
@@ -815,7 +1016,7 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 				strings.Contains(strings.ToLower(err.Error()), "no contract code after deployment")
 		}),
 	); err != nil {
-		return DeploymentData{}, err
+		return DeploymentData{}, wrapErrInMessageWithASuggestion(err)
 	}
 
 	L.Info().

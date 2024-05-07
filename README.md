@@ -113,9 +113,10 @@ export ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7b
 alias seth="go run cmd/seth/seth.go" # useful alias for keyfile CLI
 ```
 
-If `SETH_KEYFILE_PATH` is not set then client will create 60 ephemeral keys and won't return any funds
+If `SETH_KEYFILE_PATH` is not set then client will create X ephemeral keys (60 by default, configurable) and won't return any funds.
 
-Use `SETH_KEYFILE_PATH` for testnets/mainnets and `ephemeral` mode only when testing against simulated network
+Use `SETH_KEYFILE_PATH` for testnets/mainnets and `ephemeral` mode only when testing against simulated network.
+
 ### seth.toml
 Set up your ABI directory (relative to `seth.toml`)
 ```
@@ -127,15 +128,25 @@ Setup your BIN directory (relative to `seth.toml`)
 bin_dir = "contracts/bin"
 ```
 
-You can enable auto-tracing for all transactions, which means that every time you use `Decode()` we will not only decode the transaction but also trace all calls made within the transaction, together with all inputs, outputs, logs and events
+Set number of ephemeral keys to be generated (0 for no ephemeral keys). Each key will receive a proportion of native tokens from root private key's balance with the value equal to `(root_balance / ephemeral_keys_number) - transfer_fee * ephemeral_keys_number`. Using ephemeral keys together with keyfile will result in an error.
 ```
-tracing_enabled = true
+ephemeral_addresses_number = 0
 ```
 
-Additionally you can also enable saving all tracing information to JSON files with:
+You can enable auto-tracing for all transactions meeting configured level, which means that every time you use `Decode()` we will decode the transaction and also trace all calls made within the transaction, together with all inputs, outputs, logs and events. Three tracing levels are available:
+* `all` - trace all transactions
+* `reverted` - trace only reverted transactions (that's default setting used if you don't set `tracing_level`)
+* `none` - don't trace any transactions
+Example:
+```
+tracing_level = "reverted"
+```
+
+Additionally you can also enable saving all decoding/tracing information to JSON files with:
 ```
 trace_to_json = true
 ```
+That option should be used with care, when `tracing_level` is set to `all` as it will generate a lot of data.
 
 If you want to check if the RPC is healthy on start, you can enable it with:
 ```
@@ -151,7 +162,7 @@ chain_id = "43113"
 transaction_timeout = "30s"
 # gas limit should be explicitly set only if you are connecting to a node that's incapable of estimating gas limit itself (should only happen for very old versions)
 # gas_limit = 9_000_000
-# gas limit for sending funds
+# hardcoded gas limit for sending funds that will be used if estimation of gas limit fails
 transfer_gas_fee = 21_000
 # legacy transactions
 gas_price = 1_000_000_000
@@ -160,8 +171,6 @@ eip_1559_dynamic_fees = true
 gas_fee_cap = 25_000_000_000
 gas_tip_cap = 1_800_000_000
 urls_secret = ["..."]
-# if set to true we will check if address has a pending nonce (transaction) and panic if it does
-pending_nonce_protection_enabled = false
 # if set to true we will dynamically estimate gas for every transaction (explained in more detail below)
 gas_price_estimation_enabled = true
 # how many last blocks to use, when estimating gas for a transaction
@@ -351,7 +360,7 @@ For both transaction types if any of the steps fails, we fallback to hardcoded v
 In order to enable an experimental feature you need to pass it's name in config. It's a global config, you cannot enable it per-network. Example:
 ```toml
 # other settings before...
-tracing_enabled = false
+tracing_level = "reverted"
 trace_to_json = false
 experiments_enabled = ["slow_funds_return", "eip_1559_fee_equalizer"]
 ```

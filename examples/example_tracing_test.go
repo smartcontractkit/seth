@@ -20,8 +20,8 @@ func TestDecodeExample(t *testing.T) {
 	c, err := seth.NewClient()
 	require.NoError(t, err, "failed to initalise seth")
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	_, err = c.Decode(contract.TraceDifferent(c.NewTXOpts(), big.NewInt(1), big.NewInt(2)))
 	require.NoError(t, err, "failed to decode transaction")
