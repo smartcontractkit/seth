@@ -18,6 +18,7 @@ const (
 	ErrKeySyncTimeout = "key sync timeout, consider increasing key_sync_timeout in seth.toml, or increasing the number of keys"
 	ErrKeySync        = "failed to sync the key"
 	ErrNonce          = "failed to get nonce"
+	TimeoutKeyNum     = -80001
 )
 
 // NonceManager tracks nonce for each address
@@ -93,7 +94,8 @@ func (m *NonceManager) anySyncedKey() int {
 	select {
 	case <-ctx.Done():
 		L.Error().Msg(ErrKeySyncTimeout)
-		return 0
+		m.Client.Errors = append(m.Client.Errors, errors.New(ErrKeySync))
+		return TimeoutKeyNum //so that it's pretty uniqe number of invalid key
 	case keyData := <-m.SyncedKeys:
 		L.Trace().
 			Interface("KeyNum", keyData.KeyNum).
@@ -123,6 +125,13 @@ func (m *NonceManager) anySyncedKey() int {
 							Nonce:  nonce,
 						}
 						return nil
+					} else {
+						L.Trace().
+							Interface("KeyNum", keyData.KeyNum).
+							Uint64("Nonce", nonce).
+							Int("Expected nonce", int(keyData.Nonce+1)).
+							Interface("Address", m.Addresses[keyData.KeyNum]).
+							Msg("Key NOT synced")
 					}
 					return errors.New(ErrKeySync)
 				},

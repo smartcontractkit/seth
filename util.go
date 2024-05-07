@@ -70,11 +70,45 @@ func (m *Client) CalculateSubKeyFunding(addrs int64) (*FundingDetails, error) {
 	if err != nil {
 		return nil, err
 	}
-	L.Info().Str("Balance", balance.String()).Msg("Root key balance")
-	networkTransferFee := m.Cfg.Network.GasPrice * m.Cfg.Network.TransferGasFee
+
+	gasLimit := m.Cfg.Network.TransferGasFee
+	newAddress, _, err := NewAddress()
+	if err == nil {
+		gasLimitRaw, err := m.EstimateGasLimitForFundTransfer(m.Addresses[0], common.HexToAddress(newAddress), big.NewInt(0).Quo(balance, big.NewInt(addrs)))
+		if err == nil {
+			gasLimit = int64(gasLimitRaw)
+		}
+	}
+
+	networkTransferFee := m.Cfg.Network.GasPrice * gasLimit
 	totalFee := new(big.Int).Mul(big.NewInt(networkTransferFee), big.NewInt(addrs))
-	freeBalance := new(big.Int).Sub(balance, totalFee)
+	rootKeyBuffer := new(big.Int).Mul(m.Cfg.RootKeyFundsBuffer, big.NewInt(1_000_000_000_000_000_000))
+	freeBalance := new(big.Int).Sub(balance, big.NewInt(0).Add(totalFee, rootKeyBuffer))
+
+	L.Info().
+		Str("Balance (wei/ether)", fmt.Sprintf("%s/%s", balance.String(), WeiToEther(balance).Text('f', -1))).
+		Str("Total fee (wei/ether)", fmt.Sprintf("%s/%s", totalFee.String(), WeiToEther(totalFee).Text('f', -1))).
+		Str("Free Balance (wei/ether)", fmt.Sprintf("%s/%s", freeBalance.String(), WeiToEther(freeBalance).Text('f', -1))).
+		Str("Buffer (wei/ether)", fmt.Sprintf("%s/%s", rootKeyBuffer.String(), WeiToEther(rootKeyBuffer).Text('f', -1))).
+		Msg("Root key balance")
+
+	if freeBalance.Cmp(big.NewInt(0)) < 0 {
+		return nil, errors.New(fmt.Sprintf(ErrInsufficientRootKeyBalance, freeBalance.String()))
+	}
+
 	addrFunding := new(big.Int).Div(freeBalance, big.NewInt(addrs))
+	requiredBalance := big.NewInt(0).Mul(addrFunding, big.NewInt(addrs))
+
+	L.Debug().
+		Str("Funding per ephemeral key (wei/ether)", fmt.Sprintf("%s/%s", addrFunding.String(), WeiToEther(addrFunding).Text('f', -1))).
+		Str("Available balance (wei/ether)", fmt.Sprintf("%s/%s", freeBalance.String(), WeiToEther(freeBalance).Text('f', -1))).
+		Interface("Required balance (wei/ether)", fmt.Sprintf("%s/%s", requiredBalance.String(), WeiToEther(requiredBalance).Text('f', -1))).
+		Msg("Using hardcoded ephemeral funding")
+
+	if freeBalance.Cmp(requiredBalance) < 0 {
+		return nil, errors.New(fmt.Sprintf(ErrInsufficientRootKeyBalance, freeBalance.String()))
+	}
+
 	bd := &FundingDetails{
 		RootBalance:        balance,
 		TotalFee:           totalFee,
@@ -84,14 +118,13 @@ func (m *Client) CalculateSubKeyFunding(addrs int64) (*FundingDetails, error) {
 	}
 	L.Info().
 		Interface("RootBalance", bd.RootBalance.String()).
+		Interface("RootKeyBuffer", rootKeyBuffer.String()).
 		Interface("TransferFeesTotal", bd.TotalFee.String()).
 		Interface("NetworkTransferFee", bd.NetworkTransferFee).
 		Interface("FreeBalance", bd.FreeBalance.String()).
 		Interface("EachAddrGets", bd.AddrFunding.String()).
 		Msg("Splitting funds from the root account")
-	if freeBalance.Int64() < 0 {
-		return nil, errors.New(fmt.Sprintf(ErrInsufficientRootKeyBalance, freeBalance.String()))
-	}
+
 	return bd, nil
 }
 
@@ -176,13 +209,13 @@ func NewKeyFile() *KeyFile {
 }
 
 // Duration is a non-negative time duration.
-type Duration struct{ d time.Duration }
+type Duration struct{ D time.Duration }
 
 func MakeDuration(d time.Duration) (Duration, error) {
 	if d < time.Duration(0) {
 		return Duration{}, fmt.Errorf("cannot make negative time duration: %s", d)
 	}
-	return Duration{d: d}, nil
+	return Duration{D: d}, nil
 }
 
 func ParseDuration(s string) (Duration, error) {
@@ -204,7 +237,7 @@ func MustMakeDuration(d time.Duration) *Duration {
 
 // Duration returns the value as the standard time.Duration value.
 func (d Duration) Duration() time.Duration {
-	return d.d
+	return d.D
 }
 
 // Before returns the time d units before time t
@@ -213,10 +246,10 @@ func (d Duration) Before(t time.Time) time.Time {
 }
 
 // Shorter returns true if and only if d is shorter than od.
-func (d Duration) Shorter(od Duration) bool { return d.d < od.d }
+func (d Duration) Shorter(od Duration) bool { return d.D < od.D }
 
 // IsInstant is true if and only if d is of duration 0
-func (d Duration) IsInstant() bool { return d.d == 0 }
+func (d Duration) IsInstant() bool { return d.D == 0 }
 
 // String returns a string representing the duration in the form "72h3m0.5s".
 // Leading zero units are omitted. As a special case, durations less than one
@@ -261,12 +294,12 @@ func (d *Duration) Scan(v interface{}) (err error) {
 }
 
 func (d Duration) Value() (driver.Value, error) {
-	return int64(d.d), nil
+	return int64(d.D), nil
 }
 
 // MarshalText implements the text.Marshaler interface.
 func (d Duration) MarshalText() ([]byte, error) {
-	return []byte(d.d.String()), nil
+	return []byte(d.D.String()), nil
 }
 
 // UnmarshalText implements the text.Unmarshaler interface.
@@ -368,4 +401,19 @@ func WeiToEther(wei *big.Int) *big.Float {
 	fWei.SetPrec(236) //  IEEE 754 octuple-precision binary floating-point format: binary256
 	fWei.SetMode(big.ToNearestEven)
 	return f.Quo(fWei.SetInt(wei), big.NewFloat(params.Ether))
+}
+
+func wrapErrInMessageWithASuggestion(err error) error {
+	message := `
+
+This error could be caused by several issues. Please try these steps to resolve it:
+
+1. Make sure the address you are using has sufficient funds.
+2. Use a different RPC node. The current one might be out of sync or malfunctioning.
+3. Review the logs to see if automatic gas estimations were unsuccessful. If they were, check that the fallback gas prices are set correctly.
+4. If a gas limit was manually set, try commenting it out to let the node estimate it instead and see if that resolves the issue.
+5. Conversely, if a gas limit was set manually, try increasing it to a higher value. This adjustment is especially crucial for some Layer 2 solutions that have variable gas limits.
+
+Original error:`
+	return fmt.Errorf("%s\n%s", message, err.Error())
 }

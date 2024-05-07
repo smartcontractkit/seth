@@ -70,6 +70,7 @@ func ReturnFunds(c *Client, toAddr string) error {
 	if toAddr == "" {
 		toAddr = c.Addresses[0].Hex()
 	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	eg, egCtx := errgroup.WithContext(ctx)
@@ -80,12 +81,21 @@ func ReturnFunds(c *Client, toAddr string) error {
 			if err != nil {
 				return err
 			}
-			networkTransferFee := c.Cfg.Network.GasPrice * c.Cfg.Network.TransferGasFee
+
+			var gasLimit int64
+			gasLimitRaw, err := c.EstimateGasLimitForFundTransfer(c.Addresses[i], common.HexToAddress(toAddr), balance)
+			if err != nil {
+				gasLimit = c.Cfg.Network.TransferGasFee
+			} else {
+				gasLimit = int64(gasLimitRaw)
+			}
+
+			networkTransferFee := c.Cfg.Network.GasPrice * gasLimit
 			fundsToReturn := new(big.Int).Sub(balance, big.NewInt(networkTransferFee))
 			L.Info().
 				Str("Key", c.Addresses[i].Hex()).
 				Interface("Balance", balance).
-				Interface("NetworkFee", c.Cfg.Network.GasPrice*21).
+				Interface("NetworkFee", c.Cfg.Network.GasPrice*gasLimit).
 				Interface("ReturnedFunds", fundsToReturn).
 				Msg("KeyFile key balance")
 			return c.TransferETHFromKey(egCtx, i, toAddr, fundsToReturn)

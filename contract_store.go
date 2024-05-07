@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -20,6 +21,7 @@ const (
 type ContractStore struct {
 	ABIs ABIStore
 	BINs map[string][]byte
+	mu   *sync.RWMutex
 }
 
 type ABIStore map[string]abi.ABI
@@ -28,6 +30,10 @@ func (c *ContractStore) GetABI(name string) (*abi.ABI, bool) {
 	if !strings.HasSuffix(name, ".abi") {
 		name = name + ".abi"
 	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	abi, ok := c.ABIs[name]
 	return &abi, ok
 }
@@ -36,6 +42,10 @@ func (c *ContractStore) AddABI(name string, abi abi.ABI) {
 	if !strings.HasSuffix(name, ".abi") {
 		name = name + ".abi"
 	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	c.ABIs[name] = abi
 }
 
@@ -43,6 +53,10 @@ func (c *ContractStore) GetBIN(name string) ([]byte, bool) {
 	if !strings.HasSuffix(name, ".bin") {
 		name = name + ".bin"
 	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	bin, ok := c.BINs[name]
 	return bin, ok
 }
@@ -51,12 +65,16 @@ func (c *ContractStore) AddBIN(name string, bin []byte) {
 	if !strings.HasSuffix(name, ".bin") {
 		name = name + ".bin"
 	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	c.BINs[name] = bin
 }
 
 // NewContractStore creates a new Contract store
 func NewContractStore(abiPath, binPath string) (*ContractStore, error) {
-	cs := &ContractStore{ABIs: make(ABIStore), BINs: make(map[string][]byte)}
+	cs := &ContractStore{ABIs: make(ABIStore), BINs: make(map[string][]byte), mu: &sync.RWMutex{}}
 
 	if abiPath != "" {
 		files, err := os.ReadDir(abiPath)

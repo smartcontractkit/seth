@@ -63,6 +63,7 @@ func TestSmokeDebugReverts(t *testing.T) {
 
 func TestSmokeDebugData(t *testing.T) {
 	c := newClient(t)
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	type test struct {
 		name   string
