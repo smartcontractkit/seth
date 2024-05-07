@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/smartcontractkit/seth"
 	network_debug_contract "github.com/smartcontractkit/seth/contracts/bind/debug"
+	link_token "github.com/smartcontractkit/seth/contracts/bind/link"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1217,6 +1218,38 @@ func TestTraceTraceContractTraceReverted(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
 }
 
+func TestTraceTraceContractTraceRevertedErrNoValues(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingEnabled = true
+	c.TraceReverted = true
+
+	tx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomErrorNoValues(c.NewTXOpts())
+	require.NoError(t, txErr, "transaction should have reverted")
+	_, decodeErr := c.Decode(tx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErrNoValues, error values: []", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+
+	expectedCall := &seth.DecodedCall{
+		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
+		ToAddress:   strings.ToLower(TestEnv.DebugContractAddress.Hex()),
+		From:        "you",
+		To:          "NetworkDebugContract",
+		CommonData: seth.CommonData{
+			Signature: "b600141f",
+			Method:    "alwaysRevertsCustomErrorNoValues()",
+			Output:    map[string]interface{}{},
+		},
+		Comment: "",
+	}
+
+	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
+}
+
 func TestTraceCallRevertFunctionInTheContract(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
@@ -1258,6 +1291,10 @@ func TestTraceCallRevertInCallback(t *testing.T) {
 	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingEnabled = true
 	c.TraceReverted = true
+
+	linkAbi, err := link_token.LinkTokenMetaData.GetAbi()
+	require.NoError(t, err, "failed to get ABI")
+	c.ContractStore.AddABI("LinkToken", *linkAbi)
 
 	amount := big.NewInt(0)
 	tx, txErr := TestEnv.LinkTokenContract.TransferAndCall(c.NewTXOpts(), TestEnv.DebugContractAddress, amount, []byte{})

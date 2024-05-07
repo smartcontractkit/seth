@@ -41,6 +41,7 @@ contract NetworkDebugContract {
     /* Errors */
 
     error CustomErr(uint256 available, uint256 required);
+    error CustomErrNoValues();
 
     /* Getters/Setters */
     function setMap(int256 x) public returns (int256 value) {
@@ -137,6 +138,10 @@ contract NetworkDebugContract {
             available: 12,
             required: 21
         });
+    }
+
+    function alwaysRevertsCustomErrorNoValues() public {
+        revert CustomErrNoValues();
     }
 
     /* Inputs/Outputs */
