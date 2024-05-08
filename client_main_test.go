@@ -37,6 +37,7 @@ type TestEnvironment struct {
 	Client                  *seth.Client
 	DebugContract           *network_debug_contract.NetworkDebugContract
 	DebugSubContract        *network_sub_contract.NetworkDebugSubContract
+	LinkTokenContract       *link_token.LinkToken
 	DebugContractAddress    common.Address
 	DebugSubContractAddress common.Address
 	DebugContractRaw        *bind.BoundContract
@@ -176,6 +177,24 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
+	linkTokenAbi, err := link_token.LinkTokenMetaData.GetAbi()
+	if err != nil {
+		panic(err)
+	}
+	linkDeploymentData, err := client.DeployContract(client.NewTXOpts(), "LinkToken", *linkTokenAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
+	if err != nil {
+		panic(err)
+	}
+	linkToken, err := link_token.NewLinkToken(linkDeploymentData.Address, client.Client)
+	if err != nil {
+		panic(err)
+	}
+	linkAbi, err := link_token.LinkTokenMetaData.GetAbi()
+	if err != nil {
+		panic(err)
+	}
+	client.ContractStore.AddABI("LinkToken", *linkAbi)
+
 	contractMap := seth.NewEmptyContractMap()
 	for k, v := range client.ContractAddressToNameMap.GetContractMap() {
 		contractMap.AddContract(k, v)
@@ -184,6 +203,7 @@ func TestMain(m *testing.M) {
 	TestEnv = TestEnvironment{
 		Client:                  client,
 		DebugContract:           debugContract,
+		LinkTokenContract:       linkToken,
 		DebugContractAddress:    debugContractAddress,
 		DebugSubContractAddress: debugSubContractAddress,
 		DebugContractRaw:        debugContractRaw,

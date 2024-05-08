@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/smartcontractkit/seth"
 	network_debug_contract "github.com/smartcontractkit/seth/contracts/bind/debug"
+	link_token "github.com/smartcontractkit/seth/contracts/bind/link"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,7 +36,7 @@ func SkipAnvil(t *testing.T, c *seth.Client) {
 
 // since we uploaded the contracts via Seth, we have the contract address in the map
 // and we can trace the calls correctly even though both calls have the same signature
-func TestTraceTraceContractTracingSameMethodSignatures_UploadedViaSeth(t *testing.T) {
+func TestTraceContractTracingSameMethodSignatures_UploadedViaSeth(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -124,7 +125,7 @@ func TestTraceTraceContractTracingSameMethodSignatures_UploadedViaSeth(t *testin
 // in the maps and that depends on addresses generated). We show that even if the initial mapping is incorrect,
 // once we trace a transaction with different method signature, the mapping is corrected and the second transaction
 // is traced correctly.
-func TestTraceTraceContractTracingSameMethodSignatures_UploadedManually(t *testing.T) {
+func TestTraceContractTracingSameMethodSignatures_UploadedManually(t *testing.T) {
 	c := newClient(t)
 	SkipAnvil(t, c)
 
@@ -266,7 +267,7 @@ func TestTraceTraceContractTracingSameMethodSignatures_UploadedManually(t *testi
 	require.EqualValues(t, expectedSecondEvents, actualSecondEvents, "second sameSig decoded call events do not match")
 }
 
-func TestTraceTraceContractTracingSameMethodSignaturesWarningInComment_UploadedManually(t *testing.T) {
+func TestTraceContractTracingSameMethodSignaturesWarningInComment_UploadedManually(t *testing.T) {
 	c := newClient(t)
 	SkipAnvil(t, c)
 
@@ -285,7 +286,7 @@ func TestTraceTraceContractTracingSameMethodSignaturesWarningInComment_UploadedM
 
 // Here we show a certain tracing limitation, where contract A calls B, which calls A again.
 // That call from B to A isn't present in call trace, but it's signature is present in 4bytes trace.
-func TestTraceTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
+func TestTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -410,7 +411,7 @@ func TestTraceTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
 // Here we show that partial tracing works even if we don't have the ABI for the contract.
 // We still try to decode what we can even without ABI and that we can decode the other call
 // for which we do have ABI.
-func TestTraceTraceContractTracingUnknownAbi(t *testing.T) {
+func TestTraceContractTracingUnknownAbi(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -467,7 +468,7 @@ func TestTraceTraceContractTracingUnknownAbi(t *testing.T) {
 	require.EqualValues(t, secondExpectedCall, c.Tracer.DecodedCalls[tx.Hash][1], "second decoded call does not match")
 }
 
-func TestTraceTraceContractTracingNamedInputsAndOutputs(t *testing.T) {
+func TestTraceContractTracingNamedInputsAndOutputs(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -500,7 +501,7 @@ func TestTraceTraceContractTracingNamedInputsAndOutputs(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingNamedInputsAnonymousOutputs(t *testing.T) {
+func TestTraceContractTracingNamedInputsAnonymousOutputs(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -534,7 +535,7 @@ func TestTraceTraceContractTracingNamedInputsAnonymousOutputs(t *testing.T) {
 
 // Shows that when output mixes named and unnamed paramaters, we can still decode the transaction,
 // but that named outputs become unnamed and referenced by their index.
-func TestTraceTraceContractTracingIntInputsWithoutLength(t *testing.T) {
+func TestTraceContractTracingIntInputsWithoutLength(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -567,7 +568,7 @@ func TestTraceTraceContractTracingIntInputsWithoutLength(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingAddressInputAndOutput(t *testing.T) {
+func TestTraceContractTracingAddressInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -599,7 +600,7 @@ func TestTraceTraceContractTracingAddressInputAndOutput(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingBytes32InputAndOutput(t *testing.T) {
+func TestTraceContractTracingBytes32InputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -633,7 +634,7 @@ func TestTraceTraceContractTracingBytes32InputAndOutput(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingUint256ArrayInputAndOutput(t *testing.T) {
+func TestTraceContractTracingUint256ArrayInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -669,7 +670,7 @@ func TestTraceTraceContractTracingUint256ArrayInputAndOutput(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingAddressArrayInputAndOutput(t *testing.T) {
+func TestTraceContractTracingAddressArrayInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -700,7 +701,7 @@ func TestTraceTraceContractTracingAddressArrayInputAndOutput(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingStructWithDynamicFieldsInputAndOutput(t *testing.T) {
+func TestTraceContractTracingStructWithDynamicFieldsInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -742,7 +743,7 @@ func TestTraceTraceContractTracingStructWithDynamicFieldsInputAndOutput(t *testi
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingStructArrayWithDynamicFieldsInputAndOutput(t *testing.T) {
+func TestTraceContractTracingStructArrayWithDynamicFieldsInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -809,7 +810,7 @@ func TestTraceTraceContractTracingStructArrayWithDynamicFieldsInputAndOutput(t *
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingNestedStructsWithDynamicFieldsInputAndOutput(t *testing.T) {
+func TestTraceContractTracingNestedStructsWithDynamicFieldsInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -863,7 +864,7 @@ func TestTraceTraceContractTracingNestedStructsWithDynamicFieldsInputAndOutput(t
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingNestedStructsWithDynamicFieldsInputAndStructOutput(t *testing.T) {
+func TestTraceContractTracingNestedStructsWithDynamicFieldsInputAndStructOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -924,7 +925,7 @@ func TestTraceTraceContractTracingNestedStructsWithDynamicFieldsInputAndStructOu
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingPayable(t *testing.T) {
+func TestTraceContractTracingPayable(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -955,7 +956,7 @@ func TestTraceTraceContractTracingPayable(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingFallback(t *testing.T) {
+func TestTraceContractTracingFallback(t *testing.T) {
 	t.Skip("Need to investigate further how to support it, the call succeds, but we fail to decode it")
 	// our ABIFinder doesn't know anything about fallback, but maybe we should use it, when everything else fails?
 	c := newClientWithContractMapFromEnv(t)
@@ -986,7 +987,7 @@ func TestTraceTraceContractTracingFallback(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingReceive(t *testing.T) {
+func TestTraceContractTracingReceive(t *testing.T) {
 	t.Skip("Need to investigate further how to support it, the call succeds, but we fail to match the signature as input is 0x")
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
@@ -1017,7 +1018,7 @@ func TestTraceTraceContractTracingReceive(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingEnumInputAndOutput(t *testing.T) {
+func TestTraceContractTracingEnumInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -1059,7 +1060,7 @@ func TestTraceTraceContractTracingEnumInputAndOutput(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingNonIndexedEventParameter(t *testing.T) {
+func TestTraceContractTracingNonIndexedEventParameter(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -1099,7 +1100,7 @@ func TestTraceTraceContractTracingNonIndexedEventParameter(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingEventThreeIndexedParameters(t *testing.T) {
+func TestTraceContractTracingEventThreeIndexedParameters(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -1142,7 +1143,7 @@ func TestTraceTraceContractTracingEventThreeIndexedParameters(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingEventFourMixedParameters(t *testing.T) {
+func TestTraceContractTracingEventFourMixedParameters(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -1185,7 +1186,7 @@ func TestTraceTraceContractTracingEventFourMixedParameters(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTraceAll(t *testing.T) {
+func TestTraceContractAll(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -1237,7 +1238,7 @@ func TestTraceTraceContractTraceAll(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[okTx.Hash().Hex()][0], "successful decoded call does not match")
 }
 
-func TestTraceTraceContractTraceOnlyReverted(t *testing.T) {
+func TestTraceContractOnlyReverted(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -1274,7 +1275,7 @@ func TestTraceTraceContractTraceOnlyReverted(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[revertedTx.Hash().Hex()][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTraceNone(t *testing.T) {
+func TestTraceContractNone(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
@@ -1295,7 +1296,123 @@ func TestTraceTraceContractTraceNone(t *testing.T) {
 	require.Empty(t, c.Tracer.DecodedCalls, "expected 1 decoded transacton")
 }
 
-func TestTraceTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing.T) {
+func TestTraceContractRevertedErrNoValues(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
+
+	tx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomErrorNoValues(c.NewTXOpts())
+	require.NoError(t, txErr, "transaction should have reverted")
+	_, decodeErr := c.Decode(tx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErrNoValues, error values: []", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+
+	expectedCall := &seth.DecodedCall{
+		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
+		ToAddress:   strings.ToLower(TestEnv.DebugContractAddress.Hex()),
+		From:        "you",
+		To:          "NetworkDebugContract",
+		CommonData: seth.CommonData{
+			Signature: "b600141f",
+			Method:    "alwaysRevertsCustomErrorNoValues()",
+			Output:    map[string]interface{}{},
+		},
+		Comment: "",
+	}
+
+	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
+}
+
+func TestTraceCallRevertFunctionInTheContract(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
+
+	tx, txErr := TestEnv.DebugContract.CallRevertFunctionInTheContract(c.NewTXOpts())
+	require.NoError(t, txErr, "transaction should have reverted")
+	_, decodeErr := c.Decode(tx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErr, error values: [12 21]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+
+	expectedCall := &seth.DecodedCall{
+		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
+		ToAddress:   strings.ToLower(TestEnv.DebugContractAddress.Hex()),
+		From:        "you",
+		To:          "NetworkDebugContract",
+		CommonData: seth.CommonData{
+			Signature: "9349d00b",
+			Method:    "callRevertFunctionInTheContract()",
+			Output:    map[string]interface{}{},
+		},
+		Comment: "",
+	}
+
+	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
+}
+
+func TestTraceCallRevertFunctionInSubContract(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
+
+	x := big.NewInt(1001)
+	y := big.NewInt(2)
+	tx, txErr := TestEnv.DebugContract.CallRevertFunctionInSubContract(c.NewTXOpts(), x, y)
+	require.NoError(t, txErr, "transaction should have reverted")
+	_, decodeErr := c.Decode(tx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErr, error values: [1001 2]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+
+	expectedCall := &seth.DecodedCall{
+		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
+		ToAddress:   strings.ToLower(TestEnv.DebugContractAddress.Hex()),
+		From:        "you",
+		To:          "NetworkDebugContract",
+		CommonData: seth.CommonData{
+			Signature: "11b3c478",
+			Method:    "callRevertFunctionInSubContract(uint256,uint256)",
+			Input:     map[string]interface{}{"x": x, "y": y},
+			Output:    map[string]interface{}{},
+		},
+		Comment: "",
+	}
+
+	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
+}
+
+func TestTraceCallRevertInCallback(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
+
+	linkAbi, err := link_token.LinkTokenMetaData.GetAbi()
+	require.NoError(t, err, "failed to get ABI")
+	c.ContractStore.AddABI("LinkToken", *linkAbi)
+	c.ContractStore.AddBIN("LinkToken", common.FromHex(link_token.LinkTokenMetaData.Bin))
+
+	amount := big.NewInt(0)
+	tx, txErr := TestEnv.LinkTokenContract.TransferAndCall(c.NewTXOpts(), TestEnv.DebugContractAddress, amount, []byte{})
+	require.NoError(t, txErr, "transaction should have reverted")
+	_, decodeErr := c.Decode(tx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErr, error values: [100 101]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+}
+
+func TestTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing.T) {
 	cfg := deepcopy.MustAnything(TestEnv.Client.Cfg).(*seth.Config)
 
 	as, err := seth.NewContractStore(filepath.Join(cfg.ConfigDir, cfg.ABIDir), filepath.Join(cfg.ConfigDir, cfg.BINDir))
@@ -1344,7 +1461,7 @@ func TestTraceTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *te
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTracingSaveToJson(t *testing.T) {
+func TestTraceContractTracingSaveToJson(t *testing.T) {
 	cfg := deepcopy.MustAnything(TestEnv.Client.Cfg).(*seth.Config)
 
 	as, err := seth.NewContractStore(filepath.Join(cfg.ConfigDir, cfg.ABIDir), filepath.Join(cfg.ConfigDir, cfg.BINDir))
