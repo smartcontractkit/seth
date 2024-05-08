@@ -1340,6 +1340,22 @@ func TestTraceCallRevertFunctionInTheContract(t *testing.T) {
 	require.Error(t, decodeErr, "transaction should have reverted")
 	require.Equal(t, "error type: CustomErr, error values: [12 21]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
 	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+
+	expectedCall := &seth.DecodedCall{
+		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
+		ToAddress:   strings.ToLower(TestEnv.DebugContractAddress.Hex()),
+		From:        "you",
+		To:          "NetworkDebugContract",
+		CommonData: seth.CommonData{
+			Signature: "9349d00b",
+			Method:    "callRevertFunctionInTheContract()",
+			Output:    map[string]interface{}{},
+		},
+		Comment: "",
+	}
+
+	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
 }
 
 func TestTraceCallRevertFunctionInSubContract(t *testing.T) {
@@ -1357,6 +1373,23 @@ func TestTraceCallRevertFunctionInSubContract(t *testing.T) {
 	require.Error(t, decodeErr, "transaction should have reverted")
 	require.Equal(t, "error type: CustomErr, error values: [1001 2]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
 	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+
+	expectedCall := &seth.DecodedCall{
+		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
+		ToAddress:   strings.ToLower(TestEnv.DebugContractAddress.Hex()),
+		From:        "you",
+		To:          "NetworkDebugContract",
+		CommonData: seth.CommonData{
+			Signature: "11b3c478",
+			Method:    "callRevertFunctionInSubContract(uint256,uint256)",
+			Input:     map[string]interface{}{"x": x, "y": y},
+			Output:    map[string]interface{}{},
+		},
+		Comment: "",
+	}
+
+	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
 }
 
 func TestTraceCallRevertInCallback(t *testing.T) {
@@ -1369,6 +1402,7 @@ func TestTraceCallRevertInCallback(t *testing.T) {
 	linkAbi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
 	c.ContractStore.AddABI("LinkToken", *linkAbi)
+	c.ContractStore.AddBIN("LinkToken", common.FromHex(link_token.LinkTokenMetaData.Bin))
 
 	amount := big.NewInt(0)
 	tx, txErr := TestEnv.LinkTokenContract.TransferAndCall(c.NewTXOpts(), TestEnv.DebugContractAddress, amount, []byte{})
