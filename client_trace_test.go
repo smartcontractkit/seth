@@ -1301,8 +1301,7 @@ func TestTraceTraceContractTraceRevertedErrNoValues(t *testing.T) {
 	SkipAnvil(t, c)
 
 	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
-	c.TraceReverted = true
+	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
 
 	tx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomErrorNoValues(c.NewTXOpts())
 	require.NoError(t, txErr, "transaction should have reverted")
@@ -1333,8 +1332,7 @@ func TestTraceCallRevertFunctionInTheContract(t *testing.T) {
 	SkipAnvil(t, c)
 
 	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
-	c.TraceReverted = true
+	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
 
 	tx, txErr := TestEnv.DebugContract.CallRevertFunctionInTheContract(c.NewTXOpts())
 	require.NoError(t, txErr, "transaction should have reverted")
@@ -1349,8 +1347,7 @@ func TestTraceCallRevertFunctionInSubContract(t *testing.T) {
 	SkipAnvil(t, c)
 
 	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
-	c.TraceReverted = true
+	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
 
 	x := big.NewInt(1001)
 	y := big.NewInt(2)
@@ -1367,8 +1364,7 @@ func TestTraceCallRevertInCallback(t *testing.T) {
 	SkipAnvil(t, c)
 
 	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
-	c.TraceReverted = true
+	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
 
 	linkAbi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
