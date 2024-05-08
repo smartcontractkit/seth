@@ -3,6 +3,7 @@ package seth
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,8 +34,8 @@ type Config struct {
 	KeyFilePath              string
 
 	// external fields
-	EphemeralAddrs *int64 `toml:"ephemeral_addresses_number"`
-
+	EphemeralAddrs                *int64           `toml:"ephemeral_addresses_number"`
+	RootKeyFundsBuffer            *big.Int         `toml:"root_key_funds_buffer"`
 	ABIDir                        string           `toml:"abi_dir"`
 	BINDir                        string           `toml:"bin_dir"`
 	ContractMapFile               string           `toml:"contract_map_file"`
@@ -42,7 +43,7 @@ type Config struct {
 	Network                       *Network         `toml:"network"`
 	Networks                      []*Network       `toml:"networks"`
 	NonceManager                  *NonceManagerCfg `toml:"nonce_manager"`
-	TracingEnabled                bool             `toml:"tracing_enabled"`
+	TracingLevel                  string           `toml:"tracing_level"`
 	TraceToJson                   bool             `toml:"trace_to_json"`
 	PendingNonceProtectionEnabled bool             `toml:"pending_nonce_protection_enabled"`
 	ConfigDir                     string           `toml:"abs_path"`
@@ -113,9 +114,6 @@ func ReadConfig() (*Config, error) {
 	} else {
 		cfg.Network.PrivateKeys = append(cfg.Network.PrivateKeys, rootPrivateKey)
 	}
-	if err := readKeyFileConfig(cfg); err != nil {
-		return nil, err
-	}
 	L.Trace().Interface("Config", cfg).Msg("Parsed seth config")
 	return cfg, nil
 }
@@ -162,6 +160,9 @@ func (c *Config) ShoulSaveDeployedContractMap() bool {
 func readKeyFileConfig(cfg *Config) error {
 	cfg.KeyFilePath = os.Getenv("SETH_KEYFILE_PATH")
 	if cfg.KeyFilePath != "" {
+		if cfg.EphemeralAddrs != nil && *cfg.EphemeralAddrs != 0 {
+			return fmt.Errorf("SETH_KEYFILE_PATH environment variable is set to '%s' and ephemeral addresses are enabled, please disable ephemeral addresses or remove the keyfile path from the environment variable. You cannot use both modes at the same time", cfg.KeyFilePath)
+		}
 		if _, err := os.Stat(cfg.KeyFilePath); os.IsNotExist(err) {
 			return nil
 		}
@@ -183,7 +184,7 @@ func readKeyFileConfig(cfg *Config) error {
 
 func (c *Config) setEphemeralAddrs() {
 	if c.EphemeralAddrs == nil {
-		c.EphemeralAddrs = &DefaultEphemeralAddresses
+		c.EphemeralAddrs = &SixtyEphemeralAddresses
 	}
 
 	if *c.EphemeralAddrs == 0 {
@@ -192,6 +193,10 @@ func (c *Config) setEphemeralAddrs() {
 
 	if c.KeyFilePath == "" && *c.EphemeralAddrs != 0 {
 		c.ephemeral = true
+	}
+
+	if c.RootKeyFundsBuffer == nil {
+		c.RootKeyFundsBuffer = ZeroRootKeyFundsBuffer
 	}
 }
 
@@ -207,4 +212,13 @@ func (c *Config) IsExperimentEnabled(experiment string) bool {
 		}
 	}
 	return false
+}
+
+// GetMaxConcurrency returns the maximum number of concurrent transactions. Root key is excluded from the count.
+func (c *Config) GetMaxConcurrency() int {
+	if c.ephemeral {
+		return int(*c.EphemeralAddrs)
+	}
+
+	return len(c.Network.PrivateKeys) - 1
 }

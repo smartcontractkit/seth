@@ -1,6 +1,7 @@
 package seth_test
 
 import (
+	"context"
 	"math/big"
 	"os"
 	"testing"
@@ -40,7 +41,7 @@ type TestEnvironment struct {
 	DebugContractAddress    common.Address
 	DebugSubContractAddress common.Address
 	DebugContractRaw        *bind.BoundContract
-	ContractMap             map[string]string
+	ContractMap             seth.ContractMap
 }
 
 func newClient(t *testing.T) *seth.Client {
@@ -78,17 +79,31 @@ func TestDeploymentLinkTokenFromGethWrapperExample(t *testing.T) {
 	require.NoError(t, err, "failed to decode transaction")
 }
 
+func TestDeploymentAbortedWhenContextHasError(t *testing.T) {
+	c, err := seth.NewClient()
+	require.NoError(t, err, "failed to initalise seth")
+	abi, err := link_token.LinkTokenMetaData.GetAbi()
+	require.NoError(t, err, "failed to get ABI")
+
+	opts := c.NewTXOpts()
+	opts.Context = context.WithValue(context.Background(), seth.ContextErrorKey{}, errors.New("context error"))
+
+	_, err = c.DeployContract(opts, "LinkToken", *abi, []byte(link_token.LinkTokenMetaData.Bin))
+	require.Error(t, err, "did not abort deployment of link token contract due to context error")
+	require.Contains(t, err.Error(), "aborted contract deployment for", "incorrect context error")
+}
+
 func newClientWithContractMapFromEnv(t *testing.T) *seth.Client {
 	c := newClient(t)
-	if len(TestEnv.ContractMap) == 0 {
+	if TestEnv.ContractMap.Size() == 0 {
 		t.Fatal("contract map is empty")
 	}
 
 	// create a copy of the map, so we don't have problem with side effects of modyfing client's map
 	// impacting the global, underlaying one
-	contractMap := make(map[string]string)
-	for k, v := range TestEnv.ContractMap {
-		contractMap[k] = v
+	contractMap := seth.NewEmptyContractMap()
+	for k, v := range TestEnv.ContractMap.GetContractMap() {
+		contractMap.AddContract(k, v)
 	}
 
 	c.ContractAddressToNameMap = contractMap
@@ -123,7 +138,7 @@ func NewDebugContractSetup() (
 	if err != nil {
 		return nil, nil, common.Address{}, common.Address{}, nil, err
 	}
-	contractMap := make(map[string]string)
+	contractMap := seth.NewEmptyContractMap()
 
 	abiFinder := seth.NewABIFinder(contractMap, cs)
 	tracer, err := seth.NewTracer(cfg.Network.URLs[0], cs, &abiFinder, cfg, contractMap, addrs)
@@ -180,9 +195,9 @@ func TestMain(m *testing.M) {
 	}
 	client.ContractStore.AddABI("LinkToken", *linkAbi)
 
-	contractMap := make(map[string]string)
-	for k, v := range client.ContractAddressToNameMap {
-		contractMap[k] = v
+	contractMap := seth.NewEmptyContractMap()
+	for k, v := range client.ContractAddressToNameMap.GetContractMap() {
+		contractMap.AddContract(k, v)
 	}
 
 	TestEnv = TestEnvironment{

@@ -40,8 +40,8 @@ func TestTraceTraceContractTracingSameMethodSignatures_UploadedViaSeth(t *testin
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	var x int64 = 2
 	var y int64 = 4
@@ -129,12 +129,12 @@ func TestTraceTraceContractTracingSameMethodSignatures_UploadedManually(t *testi
 	c := newClient(t)
 	SkipAnvil(t, c)
 
-	for k := range c.ContractAddressToNameMap {
-		delete(c.ContractAddressToNameMap, k)
+	for k := range c.ContractAddressToNameMap.GetContractMap() {
+		delete(c.ContractAddressToNameMap.GetContractMap(), k)
 	}
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	// let's simulate this case, because it doesn't happen always, it all depends on the order of the
 	// contract map, which is non-deterministic (hash map with keys being dynamically generated addresses)
@@ -271,10 +271,10 @@ func TestTraceTraceContractTracingSameMethodSignaturesWarningInComment_UploadedM
 	c := newClient(t)
 	SkipAnvil(t, c)
 
-	c.ContractAddressToNameMap = make(map[string]string)
+	c.ContractAddressToNameMap = seth.NewEmptyContractMap()
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	sameSigTx, err := c.Decode(TestEnv.DebugContract.Trace(c.NewTXOpts(), big.NewInt(2), big.NewInt(2)))
 	require.NoError(t, err, "failed to send transaction")
@@ -290,8 +290,8 @@ func TestTraceTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	// As this test might fail if run multiple times due to undterministic addressed in contract mapping
 	// which sometime causes the call to be traced and sometimes not (it all depends on the order of
@@ -415,11 +415,11 @@ func TestTraceTraceContractTracingUnknownAbi(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	// simulate missing ABI
-	delete(c.ContractAddressToNameMap, strings.ToLower(TestEnv.DebugContractAddress.Hex()))
+	delete(c.ContractAddressToNameMap.GetContractMap(), strings.ToLower(TestEnv.DebugContractAddress.Hex()))
 	delete(c.ContractStore.ABIs, "NetworkDebugContract.abi")
 
 	var x int64 = 2
@@ -472,8 +472,8 @@ func TestTraceTraceContractTracingNamedInputsAndOutputs(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	x := big.NewInt(1000)
 	var testString = "string"
@@ -505,8 +505,8 @@ func TestTraceTraceContractTracingNamedInputsAnonymousOutputs(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	x := big.NewInt(1001)
 	var testString = "string"
@@ -539,8 +539,8 @@ func TestTraceTraceContractTracingIntInputsWithoutLength(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	x := big.NewInt(1001)
 	y := big.NewInt(2)
@@ -572,8 +572,8 @@ func TestTraceTraceContractTracingAddressInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	address := c.Addresses[0]
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitAddress(c.NewTXOpts(), address))
@@ -604,8 +604,8 @@ func TestTraceTraceContractTracingBytes32InputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	addrAsBytes := c.Addresses[0].Bytes()
 	addrAsBytes = append(addrAsBytes, c.Addresses[0].Bytes()...)
@@ -638,8 +638,8 @@ func TestTraceTraceContractTracingUint256ArrayInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	uint256Array := []*big.Int{big.NewInt(1), big.NewInt(19271), big.NewInt(261), big.NewInt(271911), big.NewInt(821762721)}
 	tx, txErr := c.Decode(TestEnv.DebugContract.ProcessUintArray(c.NewTXOpts(), uint256Array))
@@ -674,8 +674,8 @@ func TestTraceTraceContractTracingAddressArrayInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	addressArray := []common.Address{c.Addresses[0], TestEnv.DebugSubContractAddress}
 	tx, txErr := c.Decode(TestEnv.DebugContract.ProcessAddressArray(c.NewTXOpts(), addressArray))
@@ -705,8 +705,8 @@ func TestTraceTraceContractTracingStructWithDynamicFieldsInputAndOutput(t *testi
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	data := network_debug_contract.NetworkDebugContractData{
 		Name:   "my awesome name",
@@ -747,8 +747,8 @@ func TestTraceTraceContractTracingStructArrayWithDynamicFieldsInputAndOutput(t *
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	data := network_debug_contract.NetworkDebugContractData{
 		Name:   "my awesome name",
@@ -814,8 +814,8 @@ func TestTraceTraceContractTracingNestedStructsWithDynamicFieldsInputAndOutput(t
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	data := network_debug_contract.NetworkDebugContractNestedData{
 		Data: network_debug_contract.NetworkDebugContractData{
@@ -868,8 +868,8 @@ func TestTraceTraceContractTracingNestedStructsWithDynamicFieldsInputAndStructOu
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	data := network_debug_contract.NetworkDebugContractData{
 		Name:   "my awesome name",
@@ -929,8 +929,8 @@ func TestTraceTraceContractTracingPayable(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	var value int64 = 1000
 	tx, txErr := c.Decode(TestEnv.DebugContract.Pay(c.NewTXOpts(seth.WithValue(big.NewInt(value)))))
@@ -962,8 +962,8 @@ func TestTraceTraceContractTracingFallback(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	tx, txErr := c.Decode(TestEnv.DebugContractRaw.RawTransact(c.NewTXOpts(), []byte("iDontExist")))
 	require.NoError(t, txErr, FailedToDecode)
@@ -992,8 +992,8 @@ func TestTraceTraceContractTracingReceive(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	value := big.NewInt(29121)
 	tx, txErr := c.Decode(TestEnv.DebugContract.Receive(c.NewTXOpts(seth.WithValue(value))))
@@ -1022,8 +1022,8 @@ func TestTraceTraceContractTracingEnumInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	var status uint8 = 1 // Active
 	tx, txErr := c.Decode(TestEnv.DebugContract.SetStatus(c.NewTXOpts(), status))
@@ -1064,8 +1064,8 @@ func TestTraceTraceContractTracingNonIndexedEventParameter(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitNoIndexEventString(c.NewTXOpts()))
 	require.NoError(t, txErr, "failed to send transaction")
@@ -1104,8 +1104,8 @@ func TestTraceTraceContractTracingEventThreeIndexedParameters(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitThreeIndexEvent(c.NewTXOpts()))
 	require.NoError(t, txErr, FailedToDecode)
@@ -1147,8 +1147,8 @@ func TestTraceTraceContractTracingEventFourMixedParameters(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitFourParamMixedEvent(c.NewTXOpts()))
 	require.NoError(t, txErr, FailedToDecode)
@@ -1186,19 +1186,76 @@ func TestTraceTraceContractTracingEventFourMixedParameters(t *testing.T) {
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-func TestTraceTraceContractTraceReverted(t *testing.T) {
+func TestTraceTraceContractTraceAll(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
-	c.Cfg.TracingEnabled = true
-	c.TraceReverted = true
+	// when this level is set we don't need to call TraceGethTX, because it's automatically executed for all transactions
+	c.Cfg.TracingLevel = seth.TracingLevel_All
 
-	tx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomError(c.NewTXOpts())
-	require.NoError(t, txErr, "transaction should have reverted")
-	_, decodeErr := c.Decode(tx, txErr)
+	revertedTx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomError(c.NewTXOpts())
+	require.NoError(t, txErr, "transaction sending should not fail")
+	_, decodeErr := c.Decode(revertedTx, txErr)
 	require.Error(t, decodeErr, "transaction should have reverted")
 	require.Equal(t, "error type: CustomErr, error values: [12 21]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+
+	okTx, txErr := TestEnv.DebugContract.AddCounter(c.NewTXOpts(), big.NewInt(1), big.NewInt(2))
+	require.NoError(t, txErr, "transaction should not have reverted")
+	_, decodeErr = c.Decode(okTx, txErr)
+	require.NoError(t, decodeErr, "transaction decoding should not err")
+	require.Equal(t, 2, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+
+	expectedCall := &seth.DecodedCall{
+		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
+		ToAddress:   strings.ToLower(TestEnv.DebugContractAddress.Hex()),
+		From:        "you",
+		To:          "NetworkDebugContract",
+		CommonData: seth.CommonData{
+			Signature: "5e9c80d6",
+			Method:    "alwaysRevertsCustomError()",
+			Output:    map[string]interface{}{},
+		},
+		Comment: "",
+	}
+
+	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[revertedTx.Hash().Hex()][0], "reverted decoded call does not match")
+
+	expectedCall = &seth.DecodedCall{
+		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
+		ToAddress:   strings.ToLower(TestEnv.DebugContractAddress.Hex()),
+		From:        "you",
+		To:          "NetworkDebugContract",
+		CommonData: seth.CommonData{
+			Signature: "23515760",
+			Method:    "addCounter(int256,int256)",
+			Output:    map[string]interface{}{"value": big.NewInt(2)},
+			Input:     map[string]interface{}{"idx": big.NewInt(1), "x": big.NewInt(2)},
+		},
+		Comment: "",
+	}
+
+	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[okTx.Hash().Hex()][0], "successful decoded call does not match")
+}
+
+func TestTraceTraceContractTraceOnlyReverted(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this level is set we don't need to call TraceGethTX, because it's automatically executed for all reverted transactions
+	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
+
+	revertedTx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomError(c.NewTXOpts())
+	require.NoError(t, txErr, "transaction sending should not fail")
+	_, decodeErr := c.Decode(revertedTx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErr, error values: [12 21]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+
+	okTx, txErr := TestEnv.DebugContract.AddCounter(c.NewTXOpts(), big.NewInt(1), big.NewInt(2))
+	require.NoError(t, txErr, "transaction should not have reverted")
+	_, decodeErr = c.Decode(okTx, txErr)
+	require.NoError(t, decodeErr, "transaction decoding should not err")
+
 	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
 
 	expectedCall := &seth.DecodedCall{
@@ -1215,7 +1272,28 @@ func TestTraceTraceContractTraceReverted(t *testing.T) {
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
+	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[revertedTx.Hash().Hex()][0], "decoded call does not match")
+}
+
+func TestTraceTraceContractTraceNone(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this level nothing is ever traced or debugged
+	c.Cfg.TracingLevel = seth.TracingLevel_None
+
+	revertedTx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomError(c.NewTXOpts())
+	require.NoError(t, txErr, "transaction sending should not fail")
+	_, decodeErr := c.Decode(revertedTx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErr, error values: [12 21]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+
+	okTx, txErr := TestEnv.DebugContract.AddCounter(c.NewTXOpts(), big.NewInt(1), big.NewInt(2))
+	require.NoError(t, txErr, "transaction should not have reverted")
+	_, decodeErr = c.Decode(okTx, txErr)
+	require.NoError(t, decodeErr, "transaction decoding should not err")
+
+	require.Empty(t, c.Tracer.DecodedCalls, "expected 1 decoded transacton")
 }
 
 func TestTraceTraceContractTraceRevertedErrNoValues(t *testing.T) {
@@ -1313,7 +1391,8 @@ func TestTraceTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *te
 	nm, err := seth.NewNonceManager(cfg, TestEnv.Client.Addresses, TestEnv.Client.PrivateKeys)
 	require.NoError(t, err, "failed to create nonce manager")
 
-	cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	cfg.TracingLevel = seth.TracingLevel_All
 	cfg.Network.TxnTimeout = seth.MustMakeDuration(time.Duration(5 * time.Second))
 
 	c, err := seth.NewClientRaw(
@@ -1361,7 +1440,8 @@ func TestTraceTraceContractTracingSaveToJson(t *testing.T) {
 	nm, err := seth.NewNonceManager(cfg, TestEnv.Client.Addresses, TestEnv.Client.PrivateKeys)
 	require.NoError(t, err, "failed to create nonce manager")
 
-	cfg.TracingEnabled = true
+	// when this level is set we don't need to call TraceGethTX, because it's called automatically
+	cfg.TracingLevel = seth.TracingLevel_All
 	cfg.TraceToJson = true
 	cfg.Network.TxnTimeout = seth.MustMakeDuration(time.Duration(5 * time.Second))
 

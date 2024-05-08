@@ -17,7 +17,12 @@ import (
 )
 
 func TestAPI(t *testing.T) {
+	_ = os.Unsetenv("SETH_KEYFILE_PATH")
 	c := newClientWithEphemeralAddresses(t)
+
+	t.Cleanup(func() {
+		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+	})
 
 	type test struct {
 		name            string
@@ -95,7 +100,12 @@ func TestAPI(t *testing.T) {
 }
 
 func TestAPINonces(t *testing.T) {
+	_ = os.Unsetenv("SETH_KEYFILE_PATH")
 	c := newClientWithEphemeralAddresses(t)
+
+	t.Cleanup(func() {
+		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+	})
 
 	type test struct {
 		name            string
@@ -132,6 +142,10 @@ func TestAPINonces(t *testing.T) {
 
 func TestAPISeqErrors(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
+
+	t.Cleanup(func() {
+		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+	})
 
 	type test struct {
 		name string
@@ -186,20 +200,21 @@ func TestAPIConfig(t *testing.T) {
 }
 
 func TestAPIKeys(t *testing.T) {
-
 	type test struct {
 		name string
 	}
 
 	_ = os.Remove("keyfile_test_api.toml")
 	_ = os.Setenv("SETH_KEYFILE_PATH", "keyfile_test_api.toml")
+
 	err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "split", "-a", "60"})
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "return"})
 		require.NoError(t, err)
+		_ = os.Unsetenv("SETH_KEYFILE_PATH")
 	})
-	c := newClientWithEphemeralAddresses(t)
+	c := newClient(t)
 
 	tests := []test{
 		{
@@ -278,12 +293,22 @@ func TestAPISyncKeysPool(t *testing.T) {
 				t.Cleanup(func() {
 					err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "return"})
 					require.NoError(t, err)
+					_ = os.Unsetenv("SETH_KEYFILE_PATH")
 				})
 			}
+
+			var c *seth.Client
 			if tc.ephemeral {
-				t.Setenv("SETH_KEYFILE_PATH", "")
+				_ = os.Unsetenv("SETH_KEYFILE_PATH")
+				c = newClientWithEphemeralAddresses(t)
+
+				t.Cleanup(func() {
+					_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+				})
+			} else {
+				c = newClient(t)
 			}
-			c := newClientWithEphemeralAddresses(t)
+
 			if tc.shouldFail {
 				c.NonceManager.SyncedKeys = make(chan *seth.KeyNonce)
 			}
@@ -293,9 +318,16 @@ func TestAPISyncKeysPool(t *testing.T) {
 					wg.Add(1)
 					go func() {
 						defer wg.Done()
-						_, err := c.Decode(
-							TestEnv.DebugContract.AddCounter(c.NewTXKeyOpts(c.AnySyncedKey()), big.NewInt(tc.counterIdx), big.NewInt(1)),
-						)
+						keyNum := c.AnySyncedKey()
+						var err error
+						if keyNum == -1 {
+							err = errors.New("-1 keyNum was returned, which means there was a syncing timeout")
+						} else {
+							_, err = c.Decode(
+								TestEnv.DebugContract.AddCounter(c.NewTXKeyOpts(keyNum), big.NewInt(tc.counterIdx), big.NewInt(1)),
+							)
+						}
+
 						if tc.shouldFail {
 							require.Error(t, err)
 							return
@@ -316,6 +348,10 @@ func TestAPISyncKeysPool(t *testing.T) {
 
 func TestManualAPIReconnect(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
+
+	t.Cleanup(func() {
+		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+	})
 
 	type test struct {
 		name            string

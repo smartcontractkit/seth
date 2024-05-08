@@ -40,38 +40,6 @@ type Tracer struct {
 	ABIFinder                *ABIFinder
 }
 
-type ContractMap map[string]string
-
-func (c ContractMap) IsKnownAddress(addr string) bool {
-	return c[strings.ToLower(addr)] != ""
-}
-
-func (c ContractMap) GetContractName(addr string) string {
-	return c[strings.ToLower(addr)]
-}
-
-func (c ContractMap) GetContractAddress(addr string) string {
-	if addr == UNKNOWN {
-		return UNKNOWN
-	}
-
-	for k, v := range c {
-		if v == addr {
-			return k
-		}
-	}
-	return UNKNOWN
-}
-
-func (c ContractMap) AddContract(addr, name string) {
-	if addr == UNKNOWN {
-		return
-	}
-
-	name = strings.TrimSuffix(name, ".abi")
-	c[strings.ToLower(addr)] = name
-}
-
 type Trace struct {
 	TxHash       string
 	FourByte     map[string]*TXFourByteMetadataOutput
@@ -123,7 +91,7 @@ type Call struct {
 	Value   string     `json:"value"`
 }
 
-func NewTracer(url string, cs *ContractStore, abiFinder *ABIFinder, cfg *Config, contractAddressToNameMap map[string]string, addresses []common.Address) (*Tracer, error) {
+func NewTracer(url string, cs *ContractStore, abiFinder *ABIFinder, cfg *Config, contractAddressToNameMap ContractMap, addresses []common.Address) (*Tracer, error) {
 	c, err := rpc.Dial(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to '%s' due to: %w", url, err)
@@ -313,16 +281,6 @@ func (t *Tracer) DecodeTrace(l zerolog.Logger, trace Trace) ([]*DecodedCall, err
 	}
 
 	t.DecodedCalls[trace.TxHash] = decodedCalls
-
-	if t.Cfg.TraceToJson {
-		saveErr := t.SaveDecodedCallsAsJson("traces")
-		if saveErr != nil {
-			L.Warn().
-				Err(saveErr).
-				Msg("Failed to save decoded calls as JSON")
-		}
-	}
-
 	return decodedCalls, nil
 }
 
