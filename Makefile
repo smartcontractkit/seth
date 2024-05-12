@@ -60,6 +60,10 @@ test_cover:
 	NETWORK=$(network) ROOT_PRIVATE_KEY=$(root_private_key) go test -v -coverprofile cover.out -count 1 `go list ./... | grep -v examples` -run "TestAPI|TestSmoke|TestContract|TestGasEstimator"
 	go tool cover -html cover.out
 
+.PHONY: test_wasp
+test_wasp:
+	NETWORK=$(network) ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./...` -run TestWithWasp examples_wasp
+
 .PHONY: lint
 lint:
 	golangci-lint --color=always run -v

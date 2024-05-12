@@ -1,14 +1,11 @@
-package seth_test
+package examples_wasp
 
 import (
 	"errors"
 	"github.com/smartcontractkit/seth"
-	sethcmd "github.com/smartcontractkit/seth/cmd"
 	"github.com/smartcontractkit/wasp"
 	"github.com/stretchr/testify/require"
 	"math/big"
-	"os"
-	"strconv"
 	"testing"
 	"time"
 )
@@ -29,24 +26,19 @@ func (m *ExampleGun) Call(l *wasp.Generator) *wasp.Response {
 	_, err := m.client.Decode(
 		TestEnv.DebugContract.AddCounter(m.client.NewTXKeyOpts(m.client.AnySyncedKey()), big.NewInt(0), big.NewInt(1)),
 	)
-	_, err2 := m.client.Decode(
-		TestEnv.DebugContract.AddCounter(m.client.NewTXKeyOpts(m.client.AnySyncedKey()), big.NewInt(1), big.NewInt(1)),
-	)
-	if err != nil || err2 != nil {
-		return &wasp.Response{Error: errors.Join(err, err2).Error()}
+	if err != nil {
+		return &wasp.Response{Error: errors.Join(err).Error()}
 	}
 	return &wasp.Response{}
 }
 
 func TestWithWasp(t *testing.T) {
 	t.Setenv("ROOT_PRIVATE_KEY", "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
-	err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "split", "-a", strconv.Itoa(60)})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "return"})
-		require.NoError(t, err)
-	})
-	c := newClientWithEphemeralAddresses(t)
+	t.Setenv("SETH_CONFIG_PATH", "seth.toml")
+	cfg, err := seth.ReadConfig()
+	require.NoError(t, err, "failed to read config")
+	c, err := seth.NewClientWithConfig(cfg)
+	require.NoError(t, err, "failed to initalise seth")
 	labels := map[string]string{
 		"go_test_name": "TestWithWasp",
 		"gen_name":     "TestWithWasp",
