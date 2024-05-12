@@ -6,9 +6,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 	"github.com/smartcontractkit/seth"
-	ndbc "github.com/smartcontractkit/seth/contracts/bind/debug"
-	nsdbc "github.com/smartcontractkit/seth/contracts/bind/sub"
+	network_debug_contract "github.com/smartcontractkit/seth/contracts/bind/debug"
+	link_token "github.com/smartcontractkit/seth/contracts/bind/link"
+	network_sub_contract "github.com/smartcontractkit/seth/contracts/bind/sub"
 )
 
 func init() {
@@ -21,17 +23,18 @@ var (
 
 type TestEnvironment struct {
 	Client                  *seth.Client
-	DebugContract           *ndbc.NetworkDebugContract
-	DebugSubContract        *nsdbc.NetworkDebugSubContract
+	DebugContract           *network_debug_contract.NetworkDebugContract
+	DebugSubContract        *network_sub_contract.NetworkDebugSubContract
+	LinkTokenContract       *link_token.LinkToken
 	DebugContractAddress    common.Address
 	DebugSubContractAddress common.Address
 	DebugContractRaw        *bind.BoundContract
-	ContractMap             map[string]string
+	ContractMap             seth.ContractMap
 }
 
 func NewDebugContractSetup() (
 	*seth.Client,
-	*ndbc.NetworkDebugContract,
+	*network_debug_contract.NetworkDebugContract,
 	common.Address,
 	common.Address,
 	*bind.BoundContract,
@@ -49,7 +52,7 @@ func NewDebugContractSetup() (
 	if err != nil {
 		return nil, nil, common.Address{}, common.Address{}, nil, err
 	}
-	contractMap := make(map[string]string)
+	contractMap := seth.NewEmptyContractMap()
 
 	abiFinder := seth.NewABIFinder(contractMap, cs)
 	tracer, err := seth.NewTracer(cfg.Network.URLs[0], cs, &abiFinder, cfg, contractMap, addrs)
@@ -57,7 +60,12 @@ func NewDebugContractSetup() (
 		return nil, nil, common.Address{}, common.Address{}, nil, err
 	}
 
-	c, err := seth.NewClientRaw(cfg, addrs, pkeys, seth.WithContractStore(cs), seth.WithTracer(tracer))
+	nm, err := seth.NewNonceManager(cfg, addrs, pkeys)
+	if err != nil {
+		return nil, nil, common.Address{}, common.Address{}, nil, errors.Wrap(err, seth.ErrCreateNonceManager)
+	}
+
+	c, err := seth.NewClientRaw(cfg, addrs, pkeys, seth.WithContractStore(cs), seth.WithTracer(tracer), seth.WithNonceManager(nm))
 	if err != nil {
 		return nil, nil, common.Address{}, common.Address{}, nil, err
 	}
@@ -69,7 +77,7 @@ func NewDebugContractSetup() (
 	if err != nil {
 		return nil, nil, common.Address{}, common.Address{}, nil, err
 	}
-	contract, err := ndbc.NewNetworkDebugContract(data.Address, c.Client)
+	contract, err := network_debug_contract.NewNetworkDebugContract(data.Address, c.Client)
 	if err != nil {
 		return nil, nil, common.Address{}, common.Address{}, nil, err
 	}
@@ -83,14 +91,33 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	contractMap := make(map[string]string)
-	for k, v := range client.ContractAddressToNameMap {
-		contractMap[k] = v
+	linkTokenAbi, err := link_token.LinkTokenMetaData.GetAbi()
+	if err != nil {
+		panic(err)
+	}
+	linkDeploymentData, err := client.DeployContract(client.NewTXOpts(), "LinkToken", *linkTokenAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
+	if err != nil {
+		panic(err)
+	}
+	linkToken, err := link_token.NewLinkToken(linkDeploymentData.Address, client.Client)
+	if err != nil {
+		panic(err)
+	}
+	linkAbi, err := link_token.LinkTokenMetaData.GetAbi()
+	if err != nil {
+		panic(err)
+	}
+	client.ContractStore.AddABI("LinkToken", *linkAbi)
+
+	contractMap := seth.NewEmptyContractMap()
+	for k, v := range client.ContractAddressToNameMap.GetContractMap() {
+		contractMap.AddContract(k, v)
 	}
 
 	TestEnv = TestEnvironment{
 		Client:                  client,
 		DebugContract:           debugContract,
+		LinkTokenContract:       linkToken,
 		DebugContractAddress:    debugContractAddress,
 		DebugSubContractAddress: debugSubContractAddress,
 		DebugContractRaw:        debugContractRaw,
