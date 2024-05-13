@@ -14,13 +14,12 @@ import (
 )
 
 const (
-	ErrNoTrace                   = "no trace found"
-	ErrNoABIMethod               = "no ABI method found"
-	ErrNoAbiFound                = "no ABI found in Contract Store"
-	ErrNoFourByteFound           = "no method signatures found in tracing data"
-	ErrInvalidMethodSignature    = "no method signature found or it's not 4 bytes long"
-	ErrSignatureNotFoundIn4Bytes = "signature not found in 4 bytes trace"
-	WrnMissingCallTrace          = "This call was missing from call trace, but it's signature was present in 4bytes trace. Most data is missing; Call order remains unknown"
+	ErrNoTrace                = "no trace found"
+	ErrNoABIMethod            = "no ABI method found"
+	ErrNoAbiFound             = "no ABI found in Contract Store"
+	ErrNoFourByteFound        = "no method signatures found in tracing data"
+	ErrInvalidMethodSignature = "no method signature found or it's not 4 bytes long"
+	WrnMissingCallTrace       = "This call was missing from call trace, but it's signature was present in 4bytes trace. Most data is missing; Call order remains unknown"
 
 	FAILED_TO_DECODE = "failed to decode"
 	UNKNOWN          = "unknown"

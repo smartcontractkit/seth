@@ -39,6 +39,9 @@ var (
 // CalculateNetworkCongestionMetric calculates a simple congestion metric based on the last N blocks
 // according to selected strategy.
 func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy string) (float64, error) {
+	if m.HeaderCache == nil {
+		return 0, fmt.Errorf("Header cache is nil")
+	}
 	var getHeaderData = func(bn *big.Int) (*types.Header, error) {
 		if bn == nil {
 			return nil, fmt.Errorf("Block number is nil")

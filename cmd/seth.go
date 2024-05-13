@@ -2,14 +2,12 @@ package seth
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-
 	"github.com/pelletier/go-toml/v2"
-
 	"github.com/pkg/errors"
 	"github.com/smartcontractkit/seth"
 	"github.com/urfave/cli/v2"
+	"os"
+	"path/filepath"
 )
 
 const (
@@ -28,14 +26,54 @@ func RunCLI(args []string) error {
 			&cli.StringFlag{Name: "networkName", Aliases: []string{"n"}},
 		},
 		Before: func(cCtx *cli.Context) error {
-			var err error
 			networkName := cCtx.String("networkName")
 			if networkName == "" {
 				return errors.New(ErrNoNetwork)
 			}
 			_ = os.Setenv("NETWORK", networkName)
 			if cCtx.Args().Len() > 0 && cCtx.Args().First() != "trace" {
-				C, err = seth.NewClient()
+				var err error
+				switch cCtx.Args().First() {
+				case "keys":
+					var cfg *seth.Config
+					cfg, err = seth.ReadConfig()
+					if err != nil {
+						return err
+					}
+					keyfilePath := os.Getenv(seth.KEYFILE_PATH_ENV_VAR)
+					if keyfilePath == "" {
+						return errors.New("No keyfile path specified in KEYFILE_PATH_ENV_VAR env var")
+					}
+					cfg.KeyFileSource = seth.KeyFileSourceFile
+					cfg.KeyFilePath = keyfilePath
+					C, err = seth.NewClientWithConfig(cfg)
+					if err != nil {
+						return err
+					}
+				case "gas":
+					var cfg *seth.Config
+					var pk string
+					_, pk, err = seth.NewAddress()
+					if err != nil {
+						return err
+					}
+
+					err = os.Setenv("ROOT_PRIVATE_KEY", pk)
+					if err != nil {
+						return err
+					}
+
+					cfg, err = seth.ReadConfig()
+					if err != nil {
+						return err
+					}
+					C, err = seth.NewClientWithConfig(cfg)
+					if err != nil {
+						return err
+					}
+				case "trace":
+					return nil
+				}
 				if err != nil {
 					return err
 				}
@@ -57,6 +95,9 @@ func RunCLI(args []string) error {
 					blocks := cCtx.Uint64("blocks")
 					tipPerc := cCtx.Float64("tipPercentile")
 					stats, err := ge.Stats(blocks, tipPerc)
+					if err != nil {
+						return err
+					}
 					seth.L.Info().
 						Interface("Max", stats.GasPrice.Max).
 						Interface("99", stats.GasPrice.Perc99).
@@ -77,6 +118,26 @@ func RunCLI(args []string) error {
 					seth.L.Info().
 						Interface("GasTipCap", stats.SuggestedGasTipCap).
 						Msg("Suggested gas tip cap now")
+
+					type asTomlCfg struct {
+						GasPrice int64 `toml:"gas_price"`
+						GasTip   int64 `toml:"gas_tip_cap"`
+						GasFee   int64 `toml:"gas_fee_cap"`
+					}
+
+					tomlCfg := asTomlCfg{
+						GasPrice: stats.SuggestedGasPrice.Int64(),
+						GasTip:   stats.SuggestedGasTipCap.Int64(),
+						GasFee:   stats.SuggestedGasPrice.Int64() + stats.SuggestedGasTipCap.Int64(),
+					}
+
+					marshalled, err := toml.Marshal(tomlCfg)
+					if err != nil {
+						return err
+					}
+
+					seth.L.Info().Msgf("Fallback prices for TOML config:\n%s", string(marshalled))
+
 					return err
 				},
 			},
@@ -105,10 +166,12 @@ func RunCLI(args []string) error {
 						ArgsUsage:   "-a ${amount of addresses to create}",
 						Flags: []cli.Flag{
 							&cli.Int64Flag{Name: "addresses", Aliases: []string{"a"}},
+							&cli.Int64Flag{Name: "buffer", Aliases: []string{"b"}},
 						},
 						Action: func(cCtx *cli.Context) error {
 							addresses := cCtx.Int64("addresses")
-							opts := &seth.FundKeyFileCmdOpts{Addrs: addresses}
+							rootKeyBuffer := cCtx.Int64("buffer")
+							opts := &seth.FundKeyFileCmdOpts{Addrs: addresses, RootKeyBuffer: rootKeyBuffer}
 							return seth.UpdateAndSplitFunds(C, opts)
 						},
 					},
@@ -123,7 +186,7 @@ func RunCLI(args []string) error {
 						},
 						Action: func(cCtx *cli.Context) error {
 							toAddr := cCtx.String("address")
-							return seth.ReturnFunds(C, toAddr)
+							return seth.ReturnFundsAndUpdateKeyfile(C, toAddr)
 						},
 					},
 					{

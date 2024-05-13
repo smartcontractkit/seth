@@ -17,7 +17,7 @@ import (
 )
 
 func TestAPI(t *testing.T) {
-	_ = os.Unsetenv("SETH_KEYFILE_PATH")
+	_ = os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
@@ -100,7 +100,7 @@ func TestAPI(t *testing.T) {
 }
 
 func TestAPINonces(t *testing.T) {
-	_ = os.Unsetenv("SETH_KEYFILE_PATH")
+	_ = os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
@@ -204,17 +204,18 @@ func TestAPIKeys(t *testing.T) {
 		name string
 	}
 
-	_ = os.Remove("keyfile_test_api.toml")
-	_ = os.Setenv("SETH_KEYFILE_PATH", "keyfile_test_api.toml")
+	keyFilePath := "keyfile_test_api.toml"
+	_ = os.Remove(keyFilePath)
+	_ = os.Setenv(seth.KEYFILE_PATH_ENV_VAR, keyFilePath)
 
 	err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "split", "-a", "60"})
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "return"})
 		require.NoError(t, err)
-		_ = os.Unsetenv("SETH_KEYFILE_PATH")
+		_ = os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
 	})
-	c := newClient(t)
+	c := newClientWithKeyfile(t, keyFilePath)
 
 	tests := []test{
 		{
@@ -284,29 +285,30 @@ func TestAPISyncKeysPool(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_ = os.Remove("keyfile_test_api.toml")
+			keyfilePath := "keyfile_test_api.toml"
+			_ = os.Remove(keyfilePath)
 			t.Setenv("SETH_LOG_LEVEL", "trace")
 			if !tc.ephemeral {
-				t.Setenv("SETH_KEYFILE_PATH", "keyfile_test_api.toml")
+				t.Setenv(seth.KEYFILE_PATH_ENV_VAR, keyfilePath)
 				err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "split", "-a", strconv.Itoa(tc.keys)})
 				require.NoError(t, err)
 				t.Cleanup(func() {
 					err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "return"})
 					require.NoError(t, err)
-					_ = os.Unsetenv("SETH_KEYFILE_PATH")
+					_ = os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
 				})
 			}
 
 			var c *seth.Client
 			if tc.ephemeral {
-				_ = os.Unsetenv("SETH_KEYFILE_PATH")
+				_ = os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
 				c = newClientWithEphemeralAddresses(t)
 
 				t.Cleanup(func() {
 					_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
 				})
 			} else {
-				c = newClient(t)
+				c = newClientWithKeyfile(t, keyfilePath)
 			}
 
 			if tc.shouldFail {
@@ -320,7 +322,7 @@ func TestAPISyncKeysPool(t *testing.T) {
 						defer wg.Done()
 						keyNum := c.AnySyncedKey()
 						var err error
-						if keyNum == -1 {
+						if keyNum == -80001 {
 							err = errors.New("-1 keyNum was returned, which means there was a syncing timeout")
 						} else {
 							_, err = c.Decode(

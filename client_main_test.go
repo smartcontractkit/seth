@@ -26,7 +26,7 @@ import (
 
 func init() {
 	_ = os.Setenv("SETH_CONFIG_PATH", "seth.toml")
-	_ = os.Setenv("SETH_KEYFILE_PATH", "keyfile_test.toml")
+	_ = os.Setenv(seth.KEYFILE_PATH_ENV_VAR, "keyfile_test.toml")
 }
 
 var (
@@ -57,6 +57,19 @@ func newClientWithEphemeralAddresses(t *testing.T) *seth.Client {
 
 	var sixty int64 = 60
 	cfg.EphemeralAddrs = &sixty
+
+	c, err := seth.NewClientWithConfig(cfg)
+	require.NoError(t, err, "failed to initalise seth")
+
+	return c
+}
+
+func newClientWithKeyfile(t *testing.T, keyFilePath string) *seth.Client {
+	cfg, err := seth.ReadConfig()
+	require.NoError(t, err, "failed to read config")
+
+	cfg.KeyFileSource = seth.KeyFileSourceFile
+	cfg.KeyFilePath = keyFilePath
 
 	c, err := seth.NewClientWithConfig(cfg)
 	require.NoError(t, err, "failed to initalise seth")

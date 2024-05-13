@@ -2,8 +2,8 @@ package seth
 
 import (
 	"crypto/ecdsa"
+	"encoding/base64"
 	"fmt"
-	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,17 +25,28 @@ const (
 
 	GETH  = "Geth"
 	ANVIL = "Anvil"
+
+	KEYFILE_BASE64_ENV_VAR = "SETH_KEYFILE_BASE64"
+	KEYFILE_PATH_ENV_VAR   = "SETH_KEYFILE_PATH"
+)
+
+type KeyFileSource string
+
+const (
+	KeyFileSourceBase64EnvVar KeyFileSource = "base64_env"
+	KeyFileSourceFile         KeyFileSource = "file"
 )
 
 type Config struct {
 	// internal fields
 	RevertedTransactionsFile string
 	ephemeral                bool
-	KeyFilePath              string
 
 	// external fields
+	KeyFileSource                 KeyFileSource    `toml:"keyfile_source"`
+	KeyFilePath                   string           `toml:"keyfile_path"`
 	EphemeralAddrs                *int64           `toml:"ephemeral_addresses_number"`
-	RootKeyFundsBuffer            *big.Int         `toml:"root_key_funds_buffer"`
+	RootKeyFundsBuffer            *int64           `toml:"root_key_funds_buffer"`
 	ABIDir                        string           `toml:"abi_dir"`
 	BINDir                        string           `toml:"bin_dir"`
 	ContractMapFile               string           `toml:"contract_map_file"`
@@ -158,45 +169,58 @@ func (c *Config) ShoulSaveDeployedContractMap() bool {
 }
 
 func readKeyFileConfig(cfg *Config) error {
-	cfg.KeyFilePath = os.Getenv("SETH_KEYFILE_PATH")
-	if cfg.KeyFilePath != "" {
-		if cfg.EphemeralAddrs != nil && *cfg.EphemeralAddrs != 0 {
-			return fmt.Errorf("SETH_KEYFILE_PATH environment variable is set to '%s' and ephemeral addresses are enabled, please disable ephemeral addresses or remove the keyfile path from the environment variable. You cannot use both modes at the same time", cfg.KeyFilePath)
-		}
+	if cfg.KeyFileSource == "" {
+		return nil
+	}
+
+	var err error
+	var kf *KeyFile
+	var kfd []byte
+
+	if cfg.KeyFileSource == KeyFileSourceFile {
 		if _, err := os.Stat(cfg.KeyFilePath); os.IsNotExist(err) {
 			return nil
 		}
-		var kf *KeyFile
-		kfd, err := os.ReadFile(cfg.KeyFilePath)
+		kfd, err = os.ReadFile(cfg.KeyFilePath)
 		if err != nil {
 			return errors.Wrap(err, ErrReadKeyFileConfig)
 		}
-		err = toml.Unmarshal(kfd, &kf)
-		if err != nil {
-			return errors.Wrap(err, ErrUnmarshalKeyFileConfig)
-		}
-		for _, pk := range kf.Keys {
-			cfg.Network.PrivateKeys = append(cfg.Network.PrivateKeys, pk.PrivateKey)
+		L.Debug().Msgf("Found keyfile file '%s' found", cfg.KeyFilePath)
+	} else {
+		keyFileEncoded, isSet := os.LookupEnv(KEYFILE_BASE64_ENV_VAR)
+		if isSet && keyFileEncoded != "" {
+			L.Debug().Msgf("Found base64 keyfile environment variable '%s' found", KEYFILE_BASE64_ENV_VAR)
+			kfd, err = base64.StdEncoding.DecodeString(keyFileEncoded)
+			if err != nil {
+				return err
+			}
 		}
 	}
+
+	err = toml.Unmarshal(kfd, &kf)
+	if err != nil {
+		return errors.Wrap(err, ErrUnmarshalKeyFileConfig)
+	}
+	for _, pk := range kf.Keys {
+		cfg.Network.PrivateKeys = append(cfg.Network.PrivateKeys, pk.PrivateKey)
+	}
+
 	return nil
 }
 
 func (c *Config) setEphemeralAddrs() {
 	if c.EphemeralAddrs == nil {
-		c.EphemeralAddrs = &SixtyEphemeralAddresses
+		c.EphemeralAddrs = &ZeroInt64
 	}
 
 	if *c.EphemeralAddrs == 0 {
 		c.ephemeral = false
-	}
-
-	if c.KeyFilePath == "" && *c.EphemeralAddrs != 0 {
+	} else {
 		c.ephemeral = true
 	}
 
 	if c.RootKeyFundsBuffer == nil {
-		c.RootKeyFundsBuffer = ZeroRootKeyFundsBuffer
+		c.RootKeyFundsBuffer = &ZeroInt64
 	}
 }
 

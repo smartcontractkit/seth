@@ -3,13 +3,12 @@ package seth
 import (
 	"context"
 	"crypto/ecdsa"
-	"math/big"
-	"os"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
+	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/sync/errgroup"
@@ -40,7 +39,13 @@ func UpdateAndSplitFunds(c *Client, opts *FundKeyFileCmdOpts) error {
 	if err != nil {
 		return err
 	}
-	bd, err := c.CalculateSubKeyFunding(opts.Addrs)
+
+	gasPrice, err := c.GetSuggestedLegacyFees(context.Background(), Priority_Standard)
+	if err != nil {
+		gasPrice = big.NewInt(c.Cfg.Network.GasPrice)
+	}
+
+	bd, err := c.CalculateSubKeyFunding(opts.Addrs, gasPrice.Int64(), opts.RootKeyBuffer)
 	if err != nil {
 		return err
 	}
@@ -52,7 +57,7 @@ func UpdateAndSplitFunds(c *Client, opts *FundKeyFileCmdOpts) error {
 		kfd := kfd
 		eg.Go(func() error {
 			kfd.Funds = bd.AddrFunding.String()
-			return c.TransferETHFromKey(egCtx, 0, kfd.Address, bd.AddrFunding)
+			return c.TransferETHFromKey(egCtx, 0, kfd.Address, bd.AddrFunding, gasPrice)
 		})
 	}
 	if err := eg.Wait(); err != nil {
@@ -65,53 +70,95 @@ func UpdateAndSplitFunds(c *Client, opts *FundKeyFileCmdOpts) error {
 	return os.WriteFile(c.Cfg.KeyFilePath, b, os.ModePerm)
 }
 
-// ReturnFunds returns funds to the root key from all the test keys in some "keyfile.toml"
+// ReturnFundsAndUpdateKeyfile returns funds to the root key from all other keys
 func ReturnFunds(c *Client, toAddr string) error {
 	if toAddr == "" {
 		toAddr = c.Addresses[0].Hex()
 	}
 
+	gasPrice, err := c.GetSuggestedLegacyFees(context.Background(), Priority_Standard)
+	if err != nil {
+		gasPrice = big.NewInt(c.Cfg.Network.GasPrice)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	eg, egCtx := errgroup.WithContext(ctx)
+
+	if len(c.Addresses) == 1 {
+		return errors.New("No addresses to return funds from. Have you passed correct key file?")
+	}
+
 	for i := 1; i < len(c.Addresses); i++ {
-		i := i
+		idx := i
 		eg.Go(func() error {
-			balance, err := c.Client.BalanceAt(context.Background(), c.Addresses[i], nil)
+			balance, err := c.Client.BalanceAt(context.Background(), c.Addresses[idx], nil)
 			if err != nil {
+				L.Error().Err(err).Msg("Error getting balance")
 				return err
 			}
 
 			var gasLimit int64
-			gasLimitRaw, err := c.EstimateGasLimitForFundTransfer(c.Addresses[i], common.HexToAddress(toAddr), balance)
+			gasLimitRaw, err := c.EstimateGasLimitForFundTransfer(c.Addresses[idx], common.HexToAddress(toAddr), balance)
 			if err != nil {
 				gasLimit = c.Cfg.Network.TransferGasFee
 			} else {
 				gasLimit = int64(gasLimitRaw)
 			}
 
-			networkTransferFee := c.Cfg.Network.GasPrice * gasLimit
+			networkTransferFee := gasPrice.Int64() * gasLimit
 			fundsToReturn := new(big.Int).Sub(balance, big.NewInt(networkTransferFee))
+
+			if fundsToReturn.Cmp(big.NewInt(0)) == -1 {
+				L.Warn().
+					Str("Key", c.Addresses[idx].Hex()).
+					Interface("Balance", balance).
+					Interface("NetworkFee", networkTransferFee).
+					Interface("FundsToReturn", fundsToReturn).
+					Msg("Insufficient funds to return. Skipping.")
+				return nil
+			}
+
 			L.Info().
-				Str("Key", c.Addresses[i].Hex()).
+				Str("Key", c.Addresses[idx].Hex()).
 				Interface("Balance", balance).
 				Interface("NetworkFee", c.Cfg.Network.GasPrice*gasLimit).
-				Interface("ReturnedFunds", fundsToReturn).
+				Interface("GasLimit", gasLimit).
+				Interface("GasPrice", gasPrice).
+				Interface("FundsToReturn", fundsToReturn).
 				Msg("KeyFile key balance")
-			return c.TransferETHFromKey(egCtx, i, toAddr, fundsToReturn)
+
+			return c.TransferETHFromKey(
+				egCtx,
+				idx,
+				toAddr,
+				fundsToReturn,
+				gasPrice,
+			)
 		})
 	}
 	if err := eg.Wait(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ReturnFundsAndUpdateKeyfile returns funds to the root key from all the test keys in some "keyfile.toml"
+func ReturnFundsAndUpdateKeyfile(c *Client, toAddr string) error {
+	err := ReturnFunds(c, toAddr)
+	if err != nil {
 		return err
 	}
 	keyFile, err := c.CreateOrUnmarshalKeyFile(nil)
 	if err != nil {
 		return err
 	}
+	eg, egCtx := errgroup.WithContext(context.Background())
 	for _, kfd := range keyFile.Keys {
 		kfd := kfd
 		eg.Go(func() error {
-			balance, err := c.Client.BalanceAt(context.Background(), common.HexToAddress(kfd.Address), nil)
+			balance, err := c.Client.BalanceAt(egCtx, common.HexToAddress(kfd.Address), nil)
 			if err != nil {
 				return err
 			}

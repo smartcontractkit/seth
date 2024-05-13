@@ -39,7 +39,8 @@ type KeyData struct {
 
 // FundKeyFileCmdOpts funding params for CLI
 type FundKeyFileCmdOpts struct {
-	Addrs int64
+	Addrs         int64
+	RootKeyBuffer int64
 }
 
 // FundingDetails funding details about shares we put into test keys
@@ -65,7 +66,7 @@ func NewEphemeralKeys(addrs int64) ([]string, error) {
 }
 
 // CalculateSubKeyFunding calculates all required params to split funds from the root key to N test keys
-func (m *Client) CalculateSubKeyFunding(addrs int64) (*FundingDetails, error) {
+func (m *Client) CalculateSubKeyFunding(addrs, gasPrice, rooKeyBuffer int64) (*FundingDetails, error) {
 	balance, err := m.Client.BalanceAt(context.Background(), m.Addresses[0], nil)
 	if err != nil {
 		return nil, err
@@ -80,9 +81,9 @@ func (m *Client) CalculateSubKeyFunding(addrs int64) (*FundingDetails, error) {
 		}
 	}
 
-	networkTransferFee := m.Cfg.Network.GasPrice * gasLimit
+	networkTransferFee := gasPrice * gasLimit
 	totalFee := new(big.Int).Mul(big.NewInt(networkTransferFee), big.NewInt(addrs))
-	rootKeyBuffer := new(big.Int).Mul(m.Cfg.RootKeyFundsBuffer, big.NewInt(1_000_000_000_000_000_000))
+	rootKeyBuffer := new(big.Int).Mul(big.NewInt(rooKeyBuffer), big.NewInt(1_000_000_000_000_000_000))
 	freeBalance := new(big.Int).Sub(balance, big.NewInt(0).Add(totalFee, rootKeyBuffer))
 
 	L.Info().
@@ -159,7 +160,7 @@ func (m *Client) CreateOrUnmarshalKeyFile(opts *FundKeyFileCmdOpts) (*KeyFile, e
 		if err := toml.Unmarshal(d, &kf); err != nil {
 			return nil, err
 		}
-		if len(kf.Keys) == 0 {
+		if kf == nil || len(kf.Keys) == 0 {
 			return nil, errors.New(ErrEmptyKeyFile)
 		}
 		return kf, nil

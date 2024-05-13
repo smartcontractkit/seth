@@ -6,6 +6,7 @@ import (
 	verr "errors"
 	"fmt"
 	"math/big"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -39,13 +40,8 @@ const (
 )
 
 var (
-	// Number of ephemeral addresses to create
-	SixtyEphemeralAddresses int64 = 60
-
-	ZeroBigInt = big.NewInt(0)
-
 	// Amount of funds that will be left on the root key, when splitting funds between ephemeral addresses
-	ZeroRootKeyFundsBuffer = big.NewInt(0)
+	ZeroInt64 int64 = 0
 
 	TracingLevel_None     = "NONE"
 	TracingLevel_Reverted = "REVERTED"
@@ -75,7 +71,7 @@ type Client struct {
 func NewClientWithConfig(cfg *Config) (*Client, error) {
 	initDefaultLogging()
 
-	err := validateConfig(cfg)
+	err := ValidateConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +144,7 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 	)
 }
 
-func validateConfig(cfg *Config) error {
+func ValidateConfig(cfg *Config) error {
 	if cfg.Network.GasPriceEstimationEnabled {
 		if cfg.Network.GasPriceEstimationBlocks == 0 {
 			return errors.New("when automating gas estimation is enabled blocks must be greater than 0. fix it or disable gas estimation")
@@ -189,6 +185,24 @@ func validateConfig(cfg *Config) error {
 		return errors.New("tracing level must be one of: NONE, REVERTED, ALL")
 	}
 
+	if cfg.KeyFileSource != "" && cfg.EphemeralAddrs != nil && *cfg.EphemeralAddrs != 0 {
+		return fmt.Errorf("KeyFileSource is set to '%s' and ephemeral addresses are enabled, please disable ephemeral addresses or the keyfile usage. You cannot use both modes at the same time", cfg.KeyFileSource)
+	}
+
+	switch cfg.KeyFileSource {
+	case "", KeyFileSourceFile, KeyFileSourceBase64EnvVar:
+	default:
+		return fmt.Errorf("KeyFileSource must be either empty (disabled) or one of: '%s', '%s'", KeyFileSourceFile, KeyFileSourceBase64EnvVar)
+	}
+
+	if cfg.KeyFileSource == KeyFileSourceBase64EnvVar && os.Getenv(KEYFILE_BASE64_ENV_VAR) == "" {
+		return fmt.Errorf("KeyFileSource is set to 'base64-env-var' but the environment variable '%s' is not set", KEYFILE_BASE64_ENV_VAR)
+	}
+
+	if cfg.KeyFileSource == KeyFileSourceFile && cfg.KeyFilePath == "" {
+		return fmt.Errorf("KeyFileSource is set to 'file' but the path to the key file is not set")
+	}
+
 	return nil
 }
 
@@ -208,6 +222,13 @@ func NewClientRaw(
 	pkeys []*ecdsa.PrivateKey,
 	opts ...ClientOpt,
 ) (*Client, error) {
+	if len(cfg.Network.URLs) == 0 {
+		return nil, errors.New("no RPC URL provided")
+	}
+	if len(cfg.Network.URLs) > 1 {
+		L.Warn().Msg("Multiple RPC URLs provided, only the first one will be used")
+	}
+
 	client, err := ethclient.Dial(cfg.Network.URLs[0])
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to '%s' due to: %w", cfg.Network.URLs[0], err)
@@ -287,7 +308,12 @@ func NewClientRaw(
 		Msg("Created new client")
 
 	if cfg.ephemeral {
-		bd, err := c.CalculateSubKeyFunding(*cfg.EphemeralAddrs)
+		gasPrice, err := c.GetSuggestedLegacyFees(context.Background(), Priority_Standard)
+		if err != nil {
+			gasPrice = big.NewInt(c.Cfg.Network.GasPrice)
+		}
+
+		bd, err := c.CalculateSubKeyFunding(*cfg.EphemeralAddrs, gasPrice.Int64(), *cfg.RootKeyFundsBuffer)
 		if err != nil {
 			return nil, err
 		}
@@ -300,7 +326,7 @@ func NewClientRaw(
 		for _, addr := range c.Addresses[1:] {
 			addr := addr
 			eg.Go(func() error {
-				return c.TransferETHFromKey(egCtx, 0, addr.Hex(), bd.AddrFunding)
+				return c.TransferETHFromKey(egCtx, 0, addr.Hex(), bd.AddrFunding, gasPrice)
 			})
 		}
 		if err := eg.Wait(); err != nil {
@@ -356,7 +382,12 @@ func (m *Client) checkRPCHealth() error {
 	ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
 	defer cancel()
 
-	err := m.TransferETHFromKey(ctx, 0, m.Addresses[0].Hex(), big.NewInt(10_000))
+	gasPrice, err := m.GetSuggestedLegacyFees(context.Background(), Priority_Standard)
+	if err != nil {
+		gasPrice = big.NewInt(m.Cfg.Network.GasPrice)
+	}
+
+	err = m.TransferETHFromKey(ctx, 0, m.Addresses[0].Hex(), big.NewInt(10_000), gasPrice)
 	if err != nil {
 		return errors.Wrap(err, ErrRpcHealtCheckFailed)
 	}
@@ -492,7 +523,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 	return decoded, revertErr
 }
 
-func (m *Client) TransferETHFromKey(ctx context.Context, fromKeyNum int, to string, value *big.Int) error {
+func (m *Client) TransferETHFromKey(ctx context.Context, fromKeyNum int, to string, value *big.Int, gasPrice *big.Int) error {
 	if fromKeyNum > len(m.PrivateKeys) || fromKeyNum > len(m.Addresses) {
 		return errors.Wrap(errors.New(ErrNoKeyLoaded), fmt.Sprintf("requested key: %d", fromKeyNum))
 	}
@@ -510,12 +541,16 @@ func (m *Client) TransferETHFromKey(ctx context.Context, fromKeyNum int, to stri
 		gasLimit = int64(gasLimitRaw)
 	}
 
+	if gasPrice == nil {
+		gasPrice = big.NewInt(m.Cfg.Network.GasPrice)
+	}
+
 	rawTx := &types.LegacyTx{
 		Nonce:    m.NonceManager.NextNonce(m.Addresses[fromKeyNum]).Uint64(),
 		To:       &toAddr,
 		Value:    value,
 		Gas:      uint64(gasLimit),
-		GasPrice: big.NewInt(m.Cfg.Network.GasPrice),
+		GasPrice: gasPrice,
 	}
 	L.Debug().Interface("TransferTx", rawTx).Send()
 	signedTx, err := types.SignNewTx(m.PrivateKeys[fromKeyNum], types.NewEIP155Signer(chainID), rawTx)
@@ -898,7 +933,7 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 		}
 	}
 
-	var calulcateLegacyFees = func() {
+	var calculateLegacyFees = func() {
 		gasPrice, err := m.GetSuggestedLegacyFees(ctx, request.Priority)
 		if err != nil {
 			disableEstimationsIfNeeded(err)
@@ -924,14 +959,14 @@ func (m *Client) CalculateGasEstimations(request GasEstimationRequest) GasEstima
 					L.Warn().Msg("Gas price is 0. If Legacy estimations fail, there will no fallback price and transactions will start fail. Set gas price in config and disable EIP1559DynamicFees")
 				}
 				m.Cfg.Network.EIP1559DynamicFees = false
-				calulcateLegacyFees()
+				calculateLegacyFees()
 			}
 		} else {
 			estimations.GasFeeCap = maxFee
 			estimations.GasTipCap = priorityFee
 		}
 	} else {
-		calulcateLegacyFees()
+		calculateLegacyFees()
 	}
 
 	return estimations
