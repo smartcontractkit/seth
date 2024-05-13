@@ -6,6 +6,8 @@ There are 2 modes: Ephemeral and a static keyfile mode
 ### Ephemeral mode
 We generate 60 ephemeral keys and run the test, set `ephemeral_addresses_number` in `seth.toml`
 
+This mode **should never be used on testnets or mainnets** in order not to lose funds. Please use it to test with simulated networks, like private `Geth` or `Anvil`
+
 ```toml
 ephemeral_addresses_number = 60
 ```
@@ -32,7 +34,7 @@ Check your results [here](https://grafana.ops.prod.cldev.sh/d/WaspDebug/waspdebu
 If you see `key sync timeout`, just increase `ephemeral_addresses_number` to have more load
 
 You can also change default `key_sync` values
-```
+```toml
 [nonce_manager]
 # 20 req/s limit for key syncing
 key_sync_rate_limit_per_sec = 20

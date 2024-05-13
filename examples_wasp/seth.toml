@@ -1,10 +1,9 @@
-abi_dir = "contracts/abi"
-bin_dir = "contracts/bin"
+abi_dir = "../contracts/abi"
+bin_dir = "../contracts/bin"
 tracing_enabled = false
 trace_to_json = false
 ephemeral_addresses_number = 60
 pending_nonce_protection_enabled = false
-experiments_enabled = ["slow_funds_return", "eip_1559_fee_equalizer"]
 
 [[networks]]
 name = "Geth"
