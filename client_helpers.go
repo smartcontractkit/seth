@@ -1,6 +1,7 @@
 package seth
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -21,4 +22,22 @@ func (m *Client) GetRootKeyAddress() (common.Address, error) {
 		return common.Address{}, errors.New("no addresses found in the client configuration")
 	}
 	return m.Addresses[0], nil
+}
+
+// MustGetRootPrivateKey returns the private key of root key/address from the client configuration. If no private keys are found, it panics.
+// Root private key is the first private key in the list of private keys.
+func (m *Client) MustGetRootPrivateKey() *ecdsa.PrivateKey {
+	if len(m.PrivateKeys) == 0 {
+		panic("no private keys found in the client configuration")
+	}
+	return m.PrivateKeys[0]
+}
+
+// GetRootPrivateKey returns the private key of root key/address from the client configuration. If no private keys are found, it returns an error.
+// Root private key is the first private key in the list of private keys.
+func (m *Client) GetRootPrivateKey() (*ecdsa.PrivateKey, error) {
+	if len(m.PrivateKeys) == 0 {
+		return nil, errors.New("no private keys found in the client configuration")
+	}
+	return m.PrivateKeys[0], nil
 }
