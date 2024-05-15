@@ -128,10 +128,28 @@ Setup your BIN directory (relative to `seth.toml`)
 bin_dir = "contracts/bin"
 ```
 
-Set number of ephemeral keys to be generated (0 for no ephemeral keys). Each key will receive a proportion of native tokens from root private key's balance with the value equal to `(root_balance / ephemeral_keys_number) - transfer_fee * ephemeral_keys_number`. Using ephemeral keys together with keyfile will result in an error.
+Decide whether you want to read `keyfile` or use `ephemeral` keys. In the first case you have two options:
+* read it from the filesystem
+```toml
+# If empty Seth will not try to load any keyfiles. You can either set it to 'file' to load keyfiles from
+# a file (providing path to it in 'keyfile_path') or to 'base64_env' to load it from Base64-ed environment variable
+# 'SETH_KEYFILE_BASE64'
+keyfile_source = "file"
+
+# If keyfile_source is set to 'file' this should be a path to a file with keyfiles
+keyfile_path = "keyfile.toml"
 ```
-ephemeral_addresses_number = 0
+* read it from environment variable `SETH_KEYFILE_BASE64` (keyfile needs to be base64-ed)
+```toml
+keyfile_source = "base64_env"
 ```
+If you want to use ephemeral keys, you can set the number of keys to be generated:
+```toml
+# Set number of ephemeral keys to be generated (0 for no ephemeral keys). Each key will receive a proportion of native tokens from root private key's balance with the value equal to `(root_balance / ephemeral_keys_number) - transfer_fee * ephemeral_keys_number`. Using ephemeral keys together with keyfile will result in an error.
+ephemeral_addresses_number = 10
+```
+
+You cannot use both `keyfile` and `ephemeral` keys at the same time. Trying to do so will cause configuration error.
 
 You can enable auto-tracing for all transactions meeting configured level, which means that every time you use `Decode()` we will decode the transaction and also trace all calls made within the transaction, together with all inputs, outputs, logs and events. Three tracing levels are available:
 * `all` - trace all transactions
@@ -152,7 +170,7 @@ If you want to check if the RPC is healthy on start, you can enable it with:
 ```
 check_rpc_health_on_start = false
 ```
-It will execute a simple check of transfering 10k wei from root key to root key and check if the transaction was successful.
+It will execute a simple check of transferring 10k wei from root key to root key and check if the transaction was successful.
 
 You can add more networks like this:
 ```

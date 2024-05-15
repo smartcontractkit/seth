@@ -51,11 +51,7 @@ test.sh
 # Geth data
 geth_data/geth/**
 # KeyFile data
-keyfile.toml
-keyfile_test.toml
-keyfile_test_2.toml
-keyfile_test_api.toml
-examples/keyfile_test_example.toml
+keyfile*.toml
 
 /traces
 reverted_transactions*.json
