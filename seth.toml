@@ -85,8 +85,7 @@ gas_tip_cap = 3_000_000_000
 [[networks]]
 name = "Fuji"
 chain_id = "43113"
-#transaction_timeout = "30s"
-urls_secret = ["https://rpcs.main.stage.cldev.sh/avalanche/fuji"]
+transaction_timeout = "30s"
 eip_1559_dynamic_fees = true
 
 # automated gas estimation
@@ -112,7 +111,6 @@ name = "Sepolia"
 chain_id = "11155111"
 transaction_timeout = "30s"
 eip_1559_dynamic_fees = true
-urls_secret = ["https://rpcs.main.stage.cldev.sh/ethereum/sepolia/chainstack1"]
 
 # automated gas estimation
 gas_price_estimation_enabled = true
