@@ -163,7 +163,7 @@ func RunCLI(args []string) error {
 						HelpName:    "split",
 						Aliases:     []string{"s"},
 						Description: "create a new key file, split all the funds from the root account to new keys",
-						ArgsUsage:   "-a ${amount of addresses to create}",
+						ArgsUsage:   "-a ${amount of addresses to create} -b ${amount in ethers to keep in root key}",
 						Flags: []cli.Flag{
 							&cli.Int64Flag{Name: "addresses", Aliases: []string{"a"}},
 							&cli.Int64Flag{Name: "buffer", Aliases: []string{"b"}},
