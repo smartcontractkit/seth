@@ -42,7 +42,7 @@ func RunCLI(args []string) error {
 					}
 					keyfilePath := os.Getenv(seth.KEYFILE_PATH_ENV_VAR)
 					if keyfilePath == "" {
-						return errors.New("No keyfile path specified in KEYFILE_PATH_ENV_VAR env var")
+						return fmt.Errorf("no keyfile path specified in %s env var", seth.KEYFILE_PATH_ENV_VAR)
 					}
 					cfg.KeyFileSource = seth.KeyFileSourceFile
 					cfg.KeyFilePath = keyfilePath
