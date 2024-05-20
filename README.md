@@ -355,21 +355,26 @@ All values are multiplied by the adjustment factor, which is calculated based on
 	case Priority_Slow:
 		return 0.8
 ```
+For fast transactions we will increase gas price by 20%, for standard we will use the value as is and for slow we will decrease it by 20%.
 
-##### Buffer precents
+##### Buffer percents
 We further adjust the gas price by adding a buffer to it, based on congestion rate:
 ```go
 	case Congestion_Low:
-		return 0.10, nil
+		return 1.10, nil
 	case Congestion_Medium:
-		return 0.20, nil
+		return 1.20, nil
 	case Congestion_High:
-		return 0.30, nil
-	case Congestion_Degen:
-		return 0.40, nil
+		return 1.30, nil
+	case Congestion_VeryHigh:
+		return 1.40, nil
 ```
 
+For low congestion rate we will increase gas price by 10%, for medium by 20%, for high by 30% and for very high by 40%.
+
 We cache block header data in an in-memory cache, so we don't have to fetch it every time we estimate gas. The cache has capacity equal to `gas_price_estimation_blocks` and every time we add a new element, we remove one that is least frequently used and oldest (with block number being a constant and chain always moving forward it makes no sense to keep old blocks).
+
+It's important to know that in order to use congestion metrics we need to fetch at least 80% of the requested blocks. If that fails, we will skip this part of the estimation and only adjust the gas price based on priority.
 
 For both transaction types if any of the steps fails, we fallback to hardcoded values.
 
