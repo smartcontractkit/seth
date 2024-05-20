@@ -1010,6 +1010,31 @@ func (m *Client) configureTransactionOpts(
 	return opts
 }
 
+// ContractLoader is a helper struct for loading contracts
+type ContractLoader[T any] struct {
+	Client *Client
+}
+
+// NewContractLoader creates a new contract loader
+func NewContractLoader[T any](client *Client) *ContractLoader[T] {
+	return &ContractLoader[T]{
+		Client: client,
+	}
+}
+
+// LoadContract loads contract by name, address, ABI loader and wrapper init function, it adds contract ABI to Seth Contract Store and address to Contract Map. Thanks to that we can easily
+// trace and debug interactions with the contract. Signatures of functions passed to this method were chosen to conform to Geth wrappers' GetAbi() and NewXXXContract() functions.
+func (cl *ContractLoader[T]) LoadContract(name string, address common.Address, abiLoadFn func() (*abi.ABI, error), wrapperInitFn func(common.Address, bind.ContractBackend) (*T, error)) (*T, error) {
+	abiData, err := abiLoadFn()
+	if err != nil {
+		return new(T), err
+	}
+	cl.Client.ContractStore.AddABI(name, *abiData)
+	cl.Client.ContractAddressToNameMap.AddContract(address.Hex(), name)
+
+	return wrapperInitFn(address, cl.Client.Client)
+}
+
 // DeployContract deploys contract using ABI and bytecode passed to it, waits for transaction to be minted and contract really
 // available at the address, so that when the method returns it's safe to interact with it. It also saves the contract address and ABI name
 // to the contract map, so that we can use that, when tracing transactions. It is suggested to use name identical to the name of the contract Solidity file.
