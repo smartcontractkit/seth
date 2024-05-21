@@ -127,6 +127,9 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 	}
 
 	abiFinder := NewABIFinder(contractAddressToNameMap, cs)
+	if len(cfg.Network.URLs) == 0 {
+		return nil, fmt.Errorf("at least one url should be present in config in 'secret_urls = []'")
+	}
 	tr, err := NewTracer(cfg.Network.URLs[0], cs, &abiFinder, cfg, contractAddressToNameMap, addrs)
 	if err != nil {
 		return nil, errors.Wrap(err, ErrCreateTracer)

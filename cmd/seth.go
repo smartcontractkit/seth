@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/smartcontractkit/seth"
 	"github.com/urfave/cli/v2"
+	"math/big"
 	"os"
 	"path/filepath"
 )
@@ -51,6 +52,7 @@ func RunCLI(args []string) error {
 						return err
 					}
 				case "gas":
+				case "stats":
 					var cfg *seth.Config
 					var pk string
 					_, pk, err = seth.NewAddress()
@@ -81,6 +83,28 @@ func RunCLI(args []string) error {
 			return nil
 		},
 		Commands: []*cli.Command{
+			{
+				Name:        "stats",
+				HelpName:    "stats",
+				Aliases:     []string{"s"},
+				Description: "get various network related stats",
+				Flags: []cli.Flag{
+					&cli.Int64Flag{Name: "start_block", Aliases: []string{"s"}},
+					&cli.Int64Flag{Name: "end_block", Aliases: []string{"e"}},
+				},
+				Action: func(cCtx *cli.Context) error {
+					start := cCtx.Int64("start_block")
+					end := cCtx.Int64("end_block")
+					if start > 0 && end == 0 {
+						return fmt.Errorf("invalid block params. Last N blocks example: -s -10, interval example: -s 10 -e 20")
+					}
+					cs, err := seth.NewBlockStats(C)
+					if err != nil {
+						return err
+					}
+					return cs.Stats(big.NewInt(start), big.NewInt(end))
+				},
+			},
 			{
 				Name:        "gas",
 				HelpName:    "gas",
