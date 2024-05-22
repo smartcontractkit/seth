@@ -95,6 +95,9 @@ func RunCLI(args []string) error {
 				Action: func(cCtx *cli.Context) error {
 					start := cCtx.Int64("start_block")
 					end := cCtx.Int64("end_block")
+					if start == 0 {
+						return fmt.Errorf("at least start block should be defined, ex.: -s -10")
+					}
 					if start > 0 && end == 0 {
 						return fmt.Errorf("invalid block params. Last N blocks example: -s -10, interval example: -s 10 -e 20")
 					}

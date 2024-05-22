@@ -270,7 +270,7 @@ seth -n MyCustomNetwork blocks -s A -e B
 
 Results can help you to understand if network is stable, what is avg block time, gas price, block utilization and transactions per second
 ```toml
-Stats:
+# Stats
 perc_95_tps = 8.0
 perc_95_block_duration = '3s'
 perc_95_block_gas_used = 1305450
@@ -282,7 +282,7 @@ avg_block_gas_used = 493233
 avg_block_gas_limit = 15000000
 avg_block_base_fee = 25000000000
 
-Recommended performance/chaos test parameters:
+# Recommended performance/chaos test parameters
 duration = '2m0s'
 block_gas_base_fee_initial_value = 25000000000
 block_gas_base_fee_bump_percentage = '100.00% (no bump required)'
