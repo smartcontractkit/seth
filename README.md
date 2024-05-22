@@ -321,7 +321,6 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 - [x] Multi-keys client support
 - [x] CLI to manipulate test keys
 - [x] Simple manual gas price estimation
-- [ ] Tuned gas prices for testnets (optimized for fast transaction times)
 - [ ] Fail over client logic
 - [ ] Decode collided event hashes
 - [x] Tracing support (4byte)
@@ -333,6 +332,7 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 - [x] Saving of deployed contracts mapping (`address -> ABI_name`) for live networks
 - [x] Reading of deployed contracts mappings for live networks
 - [x] Automatic gas estimator (experimental)
+- [x] Block stats CLI
 - [x] Check if address has a pending nonce (transaction) and panic if it does
 
 You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).

@@ -79,8 +79,12 @@ func (cs *BlockStats) Stats(startBlock *big.Int, endBlock *big.Int) error {
 			if err != nil {
 				// invalid blocks on some networks, ignore them for now
 				if strings.Contains(err.Error(), "value overflows uint256") {
+					L.Error().Err(err).Int64("BlockNumber", bn).Msg("skipped block")
 					return nil
+					// that means we need a raw RPC adapter, some chains has block formats that can't be marshalled with
+					// any version of go-ethereum
 				} else if strings.Contains(err.Error(), "transaction type not supported") {
+					L.Error().Err(err).Int64("BlockNumber", bn).Msg("skipped block")
 					return nil
 				}
 				return err
@@ -109,18 +113,23 @@ func (cs *BlockStats) Stats(startBlock *big.Int, endBlock *big.Int) error {
 
 // CalculateBlockDurations calculates and logs the duration, TPS, gas used, and gas limit between each consecutive block
 func (cs *BlockStats) CalculateBlockDurations(blocks []*types.Block) error {
+	if len(blocks) == 0 {
+		return fmt.Errorf("no blocks no analyze")
+	}
 	var (
 		durations          []time.Duration
 		tpsValues          []float64
 		gasUsedValues      []uint64
 		gasLimitValues     []uint64
 		blockBaseFeeValues []uint64
+		blockSizeValues    []uint64
 	)
 	totalDuration := time.Duration(0)
 	totalTransactions := 0
 	totalGasUsed := uint64(0)
 	totalGasLimit := uint64(0)
 	totalBaseFee := uint64(0)
+	totalSize := uint64(0)
 
 	for i := 1; i < len(blocks); i++ {
 		duration := time.Unix(int64(blocks[i].Time()), 0).Sub(time.Unix(int64(blocks[i-1].Time()), 0))
@@ -133,12 +142,15 @@ func (cs *BlockStats) CalculateBlockDurations(blocks []*types.Block) error {
 		gasUsed := blocks[i].GasUsed()
 		gasLimit := blocks[i].GasLimit()
 		blockBaseFee := blocks[i].BaseFee().Uint64()
+		blockSize := blocks[i].Size()
 		gasUsedValues = append(gasUsedValues, gasUsed)
 		gasLimitValues = append(gasLimitValues, gasLimit)
 		blockBaseFeeValues = append(blockBaseFeeValues, blockBaseFee)
+		blockSizeValues = append(blockSizeValues, blockSize)
 		totalGasUsed += gasUsed
 		totalGasLimit += gasLimit
 		totalBaseFee += blockBaseFee
+		totalSize += blockSize
 
 		var tps float64
 		if duration.Seconds() > 0 {
@@ -154,24 +166,27 @@ func (cs *BlockStats) CalculateBlockDurations(blocks []*types.Block) error {
 			Float64("TPS", tps).
 			Uint64("BlockGasFee", blocks[i].BaseFee().Uint64()).
 			Uint64("BlockGasTip", blocks[i].BaseFee().Uint64()).
+			Uint64("BlockSize", blocks[i].Size()).
 			Uint64("GasUsed", gasUsed).
 			Uint64("GasLimit", gasLimit).
-			Msg("Block calculated info")
+			Msg("Block info")
 	}
 
-	// Calculate average TPS, duration, gas used, and gas limit
+	// Calculate average values
 	averageTPS := float64(totalTransactions) / totalDuration.Seconds()
 	averageDuration := totalDuration / time.Duration(len(durations))
 	averageGasUsed := totalGasUsed / uint64(len(gasUsedValues))
 	averageGasLimit := totalGasLimit / uint64(len(gasLimitValues))
 	averageBlockBaseFee := totalBaseFee / uint64(len(blockBaseFeeValues))
+	averageBlockSize := totalSize / uint64(len(blockSizeValues))
 
-	// Calculate 95th percentile TPS, duration, gas used, and gas limit
+	// Calculate 95th percentile
 	sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
 	sort.Float64s(tpsValues)
 	sort.Slice(gasUsedValues, func(i, j int) bool { return gasUsedValues[i] < gasUsedValues[j] })
 	sort.Slice(gasLimitValues, func(i, j int) bool { return gasLimitValues[i] < gasLimitValues[j] })
 	sort.Slice(blockBaseFeeValues, func(i, j int) bool { return blockBaseFeeValues[i] < blockBaseFeeValues[j] })
+	sort.Slice(blockSizeValues, func(i, j int) bool { return blockSizeValues[i] < blockSizeValues[j] })
 
 	index95 := int(0.95 * float64(len(durations)))
 
@@ -180,6 +195,7 @@ func (cs *BlockStats) CalculateBlockDurations(blocks []*types.Block) error {
 	percentile95GasUsed := gasUsedValues[index95]
 	percentile95GasLimit := gasLimitValues[index95]
 	percentile95BlockBaseFee := blockBaseFeeValues[index95]
+	percentile95BlockSize := blockSizeValues[index95]
 
 	L.Debug().
 		Float64("AverageTPS", averageTPS).
@@ -187,11 +203,13 @@ func (cs *BlockStats) CalculateBlockDurations(blocks []*types.Block) error {
 		Uint64("AvgBlockGasUsed", averageGasUsed).
 		Uint64("AvgBlockGasLimit", averageGasLimit).
 		Uint64("AvgBlockBaseFee", averageBlockBaseFee).
+		Uint64("AvgBlockSize", averageBlockSize).
 		Dur("95thBlockDuration", percentile95Duration).
 		Float64("95thTPS", percentile95TPS).
 		Uint64("95thBlockGasUsed", percentile95GasUsed).
 		Uint64("95thBlockGasLimit", percentile95GasLimit).
 		Uint64("95thBlockBaseFee", percentile95BlockBaseFee).
+		Uint64("95thBlockSize", percentile95BlockSize).
 		Float64("RequiredGasBumpPercentage", calculateRatioPercentage(percentile95BlockBaseFee, averageBlockBaseFee)).
 		Msg("Summary")
 
@@ -201,11 +219,13 @@ func (cs *BlockStats) CalculateBlockDurations(blocks []*types.Block) error {
 		Perc95BlockGasUsed  uint64  `toml:"perc_95_block_gas_used"`
 		Perc95BlockGasLimit uint64  `toml:"perc_95_block_gas_limit"`
 		Perc95BlockBaseFee  uint64  `toml:"perc_95_block_base_fee"`
+		Perc95BlockSize     uint64  `toml:"perc_95_block_size"`
 		AvgTPS              float64 `toml:"avg_tps"`
 		AvgBlockDuration    string  `toml:"avg_block_duration"`
 		AvgBlockGasUsed     uint64  `toml:"avg_block_gas_used"`
 		AvgBlockGasLimit    uint64  `toml:"avg_block_gas_limit"`
 		AvgBlockBaseFee     uint64  `toml:"avg_block_base_fee"`
+		AvgBlockSize        uint64  `toml:"avg_block_size"`
 	}
 
 	type performanceTestStats struct {
@@ -223,11 +243,13 @@ func (cs *BlockStats) CalculateBlockDurations(blocks []*types.Block) error {
 		Perc95BlockGasUsed:  percentile95GasUsed,
 		Perc95BlockGasLimit: percentile95GasLimit,
 		Perc95BlockBaseFee:  percentile95BlockBaseFee,
+		Perc95BlockSize:     percentile95BlockSize,
 		AvgTPS:              averageTPS,
 		AvgBlockDuration:    averageDuration.String(),
 		AvgBlockGasUsed:     averageGasUsed,
 		AvgBlockGasLimit:    averageGasLimit,
 		AvgBlockBaseFee:     averageBlockBaseFee,
+		AvgBlockSize:        averageBlockSize,
 	}
 
 	var bumpMsg string
