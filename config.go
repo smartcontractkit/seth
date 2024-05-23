@@ -43,23 +43,24 @@ type Config struct {
 	ephemeral                bool
 
 	// external fields
-	KeyFileSource                 KeyFileSource    `toml:"keyfile_source"`
-	KeyFilePath                   string           `toml:"keyfile_path"`
-	EphemeralAddrs                *int64           `toml:"ephemeral_addresses_number"`
-	RootKeyFundsBuffer            *int64           `toml:"root_key_funds_buffer"`
-	ABIDir                        string           `toml:"abi_dir"`
-	BINDir                        string           `toml:"bin_dir"`
-	ContractMapFile               string           `toml:"contract_map_file"`
-	SaveDeployedContractsMap      bool             `toml:"save_deployed_contracts_map"`
-	Network                       *Network         `toml:"network"`
-	Networks                      []*Network       `toml:"networks"`
-	NonceManager                  *NonceManagerCfg `toml:"nonce_manager"`
-	TracingLevel                  string           `toml:"tracing_level"`
-	TraceToJson                   bool             `toml:"trace_to_json"`
-	PendingNonceProtectionEnabled bool             `toml:"pending_nonce_protection_enabled"`
-	ConfigDir                     string           `toml:"abs_path"`
-	ExperimentsEnabled            []string         `toml:"experiments_enabled"`
-	CheckRpcHealthOnStart         bool             `toml:"check_rpc_health_on_start"`
+	KeyFileSource                 KeyFileSource     `toml:"keyfile_source"`
+	KeyFilePath                   string            `toml:"keyfile_path"`
+	EphemeralAddrs                *int64            `toml:"ephemeral_addresses_number"`
+	RootKeyFundsBuffer            *int64            `toml:"root_key_funds_buffer"`
+	ABIDir                        string            `toml:"abi_dir"`
+	BINDir                        string            `toml:"bin_dir"`
+	ContractMapFile               string            `toml:"contract_map_file"`
+	SaveDeployedContractsMap      bool              `toml:"save_deployed_contracts_map"`
+	Network                       *Network          `toml:"network"`
+	Networks                      []*Network        `toml:"networks"`
+	NonceManager                  *NonceManagerCfg  `toml:"nonce_manager"`
+	TracingLevel                  string            `toml:"tracing_level"`
+	TraceToJson                   bool              `toml:"trace_to_json"`
+	PendingNonceProtectionEnabled bool              `toml:"pending_nonce_protection_enabled"`
+	ConfigDir                     string            `toml:"abs_path"`
+	ExperimentsEnabled            []string          `toml:"experiments_enabled"`
+	CheckRpcHealthOnStart         bool              `toml:"check_rpc_health_on_start"`
+	BlockStatsConfig              *BlockStatsConfig `toml:"block_stats"`
 }
 
 type NonceManagerCfg struct {

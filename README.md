@@ -244,6 +244,53 @@ This will analyze last 10k blocks and give you 25/50/75/99th/Max percentiles for
 
 `-tp 0.99` requests the 99th tip percentile across all the transaction in one block and calculates 25/50/75/99th/Max across all blocks
 
+### Block stats
+If you need to get some insights into network stats and create a realistic load/chaos profile with simulators (`anvil` as an example), you can use `stats` CLI command
+
+Edit your `seth.toml`
+```
+[[networks]]
+name = "MyCustomNetwork"
+chain_id = "11155111"
+urls_secret = ["..."]
+
+[block_stats]
+rpc_requests_per_second_limit = 5
+```
+
+Then check the stats for the last N blocks
+```bash
+seth -n MyCustomNetwork blocks -s -10
+```
+
+To check stats for the interval (A, B)
+```bash
+seth -n MyCustomNetwork blocks -s A -e B
+```
+
+Results can help you to understand if network is stable, what is avg block time, gas price, block utilization and transactions per second
+```toml
+# Stats
+perc_95_tps = 8.0
+perc_95_block_duration = '3s'
+perc_95_block_gas_used = 1305450
+perc_95_block_gas_limit = 15000000
+perc_95_block_base_fee = 25000000000
+avg_tps = 2.433333333333333
+avg_block_duration = '2s' 
+avg_block_gas_used = 493233
+avg_block_gas_limit = 15000000
+avg_block_base_fee = 25000000000
+
+# Recommended performance/chaos test parameters
+duration = '2m0s'
+block_gas_base_fee_initial_value = 25000000000
+block_gas_base_fee_bump_percentage = '100.00% (no bump required)'
+block_gas_usage_percentage = '3.28822000% gas used (no congestion)'
+avg_tps = 3.0
+max_tps = 8.0
+```
+
 ### Bulk tracing
 You can trace multiple transactions at once using `seth trace` command. Example:
 ```
@@ -274,7 +321,6 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 - [x] Multi-keys client support
 - [x] CLI to manipulate test keys
 - [x] Simple manual gas price estimation
-- [ ] Tuned gas prices for testnets (optimized for fast transaction times)
 - [ ] Fail over client logic
 - [ ] Decode collided event hashes
 - [x] Tracing support (4byte)
@@ -286,6 +332,7 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 - [x] Saving of deployed contracts mapping (`address -> ABI_name`) for live networks
 - [x] Reading of deployed contracts mappings for live networks
 - [x] Automatic gas estimator (experimental)
+- [x] Block stats CLI
 - [x] Check if address has a pending nonce (transaction) and panic if it does
 
 You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
