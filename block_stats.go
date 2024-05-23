@@ -71,7 +71,7 @@ func (cs *BlockStats) Stats(startBlock *big.Int, endBlock *big.Int) error {
 	blocks := make([]*types.Block, 0)
 	blockMu := &sync.Mutex{}
 	eg := &errgroup.Group{}
-	for bn := startBlock.Int64(); bn <= endBlock.Int64(); bn++ {
+	for bn := startBlock.Int64(); bn < endBlock.Int64(); bn++ {
 		bn := bn
 		eg.Go(func() error {
 			cs.Limiter.Take()
@@ -92,13 +92,6 @@ func (cs *BlockStats) Stats(startBlock *big.Int, endBlock *big.Int) error {
 			blockMu.Lock()
 			blocks = append(blocks, block)
 			blockMu.Unlock()
-			L.Debug().
-				Uint64("BlockNumber", block.Number().Uint64()).
-				Uint64("Size", block.Size()).
-				Uint64("GasUsed", block.GasUsed()).
-				Uint64("GasLimit", block.GasLimit()).
-				Int("Transactions", len(block.Transactions())).
-				Msg("Block info")
 			return nil
 		})
 	}
@@ -162,7 +155,9 @@ func (cs *BlockStats) CalculateBlockDurations(blocks []*types.Block) error {
 
 		L.Debug().
 			Uint64("BlockNumber", blocks[i].Number().Uint64()).
+			Time("BlockTime", time.Unix(int64(blocks[i].Time()), 0)).
 			Str("Duration", duration.String()).
+			Float64("GasUsedPercentage", calculateRatioPercentage(blocks[i].GasUsed(), blocks[i].GasLimit())).
 			Float64("TPS", tps).
 			Uint64("BlockGasFee", blocks[i].BaseFee().Uint64()).
 			Uint64("BlockGasTip", blocks[i].BaseFee().Uint64()).
@@ -198,6 +193,7 @@ func (cs *BlockStats) CalculateBlockDurations(blocks []*types.Block) error {
 	percentile95BlockSize := blockSizeValues[index95]
 
 	L.Debug().
+		Int("Blocks", len(blocks)).
 		Float64("AverageTPS", averageTPS).
 		Dur("AvgBlockDuration", averageDuration).
 		Uint64("AvgBlockGasUsed", averageGasUsed).
@@ -214,6 +210,7 @@ func (cs *BlockStats) CalculateBlockDurations(blocks []*types.Block) error {
 		Msg("Summary")
 
 	type stats struct {
+		Blocks              int     `toml:"blocks"`
 		Perc95TPS           float64 `toml:"perc_95_tps"`
 		Perc95BlockDuration string  `toml:"perc_95_block_duration"`
 		Perc95BlockGasUsed  uint64  `toml:"perc_95_block_gas_used"`
@@ -238,6 +235,7 @@ func (cs *BlockStats) CalculateBlockDurations(blocks []*types.Block) error {
 	}
 
 	tomlCfg := stats{
+		Blocks:              len(blocks),
 		Perc95TPS:           percentile95TPS,
 		Perc95BlockDuration: percentile95Duration.String(),
 		Perc95BlockGasUsed:  percentile95GasUsed,
