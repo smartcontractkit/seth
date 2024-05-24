@@ -199,3 +199,6 @@ gas_price_estimation_enabled = true
 gas_price_estimation_blocks = 100
 # priority of the transaction, can be "fast", "standard" or "slow" (the higher the priority, the higher adjustment factor will be used for gas estimation) [default: "standard"]
 gas_price_estimation_tx_priority = "standard"
+
+[block_stats]
+rpc_requests_per_second_limit = 15

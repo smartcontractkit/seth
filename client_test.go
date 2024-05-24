@@ -1,6 +1,8 @@
 package seth_test
 
 import (
+	"github.com/ethereum/go-ethereum/common"
+	link_token "github.com/smartcontractkit/seth/contracts/bind/link"
 	"testing"
 
 	"github.com/smartcontractkit/seth"
@@ -52,4 +54,18 @@ func TestRPCHealtCheckDisabled_Node_Unhealthy(t *testing.T) {
 
 	_, err = seth.NewClientWithConfig(cfg)
 	require.NoError(t, err, "expected health check to be skipped")
+}
+
+func TestContractLoader(t *testing.T) {
+	c, err := seth.NewClient()
+	require.NoError(t, err, "failed to initalise seth")
+
+	loader := seth.NewContractLoader[link_token.LinkToken](c)
+
+	contract, err := loader.LoadContract("LinkToken", TestEnv.LinkTokenContract.Address(), link_token.LinkTokenMetaData.GetAbi, link_token.NewLinkToken)
+	require.NoError(t, err, "failed to load contract")
+
+	owner, err := contract.Owner(c.NewCallOpts())
+	require.NoError(t, err, "failed to call loaded LINK contract")
+	require.NotEqual(t, common.Address{}, owner, "expected owner to be set")
 }
