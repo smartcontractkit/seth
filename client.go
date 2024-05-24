@@ -409,6 +409,13 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 		return nil, verr.Join(m.Errors...)
 	}
 	if txErr != nil {
+		//try to decode revert reason
+		reason, decodingErr := m.DecodeCustomABIErr(txErr)
+
+		if decodingErr == nil {
+			return nil, errors.Wrap(txErr, reason)
+		}
+
 		msg := "Skipping decoding, transaction submission failed. Nothing to decode"
 
 		if m.Cfg.Network.GasLimit == 0 {
