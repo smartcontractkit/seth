@@ -27,6 +27,6 @@ func TestCLITracing(t *testing.T) {
 	require.NoError(t, err, "should have written to file")
 
 	_ = os.Setenv(seth.CONFIG_FILE_ENV_VAR, "seth.toml")
-	err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "trace", "-f", file.Name()})
+	err = sethcmd.RunCLI([]string{"seth", "-n", "Geth", "trace", "-f", file.Name()})
 	require.NoError(t, err, "should have traced transactions")
 }
