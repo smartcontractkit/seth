@@ -3,11 +3,13 @@ package seth
 import (
 	"context"
 	"database/sql/driver"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -402,6 +404,105 @@ func WeiToEther(wei *big.Int) *big.Float {
 	fWei.SetPrec(236) //  IEEE 754 octuple-precision binary floating-point format: binary256
 	fWei.SetMode(big.ToNearestEven)
 	return f.Quo(fWei.SetInt(wei), big.NewFloat(params.Ether))
+}
+
+const (
+	MetadataNotFoundErr       = "metadata section not found"
+	InvalidMetadataLengthErr  = "invalid metadata length"
+	FailedToDecodeMetadataErr = "failed to decode metadata"
+	NotCompiledWithSolcErr    = "not compiled with solc"
+)
+
+// Pragma represents the version of the Solidity compiler used to compile the contract
+type Pragma struct {
+	Minor uint64
+	Major uint64
+	Patch uint64
+}
+
+// String returns the string representation of the Pragma
+func (p Pragma) String() string {
+	return fmt.Sprintf("%d.%d.%d", p.Major, p.Minor, p.Patch)
+}
+
+// DecodePragmaVersion extracts the pragma version from the bytecode or returns an error if it's not found or can't be decoded
+func DecodePragmaVersion(bytecode string) (Pragma, error) {
+	metadataEndIndex := len(bytecode) - 4
+	metadataLengthHex := bytecode[metadataEndIndex:]
+	metadataLengthByte, err := hex.DecodeString(metadataLengthHex)
+
+	if err != nil {
+		return Pragma{}, fmt.Errorf("failed to decode metadata length: %v", err)
+	}
+
+	metadataByteLengthUint, err := strconv.ParseUint(hex.EncodeToString(metadataLengthByte), 16, 16)
+	if err != nil {
+		return Pragma{}, fmt.Errorf("failed to convert metadata length to int: %v", err)
+	}
+
+	// each byte is represented by 2 characters in hex
+	metadataLengthInt := int(metadataByteLengthUint) * 2
+
+	// if we get nonsensical metadata length, it means that metadata section is not present and last 2 bytes do not represent metadata length
+	if metadataLengthInt > len(bytecode) {
+		return Pragma{}, errors.New(MetadataNotFoundErr)
+	}
+
+	metadataStarIndex := metadataEndIndex - metadataLengthInt
+	maybeMetadata := bytecode[metadataStarIndex:metadataEndIndex]
+
+	if len(maybeMetadata) != metadataLengthInt {
+		return Pragma{}, fmt.Errorf("%s. expected: %d, actual: %d", InvalidMetadataLengthErr, metadataLengthInt, len(maybeMetadata))
+	}
+
+	// INVALID opcode is used as a marker for the start of the metadata section
+	metadataMarker := "fe"
+	maybeMarker := bytecode[metadataStarIndex-2 : metadataStarIndex]
+
+	if maybeMarker != metadataMarker {
+		return Pragma{}, errors.New(MetadataNotFoundErr)
+	}
+
+	solcMarker := "736f6c63"
+	if !strings.Contains(maybeMetadata, solcMarker) {
+		return Pragma{}, errors.New(NotCompiledWithSolcErr)
+	}
+
+	// now that we know that last section indeed contains metadata let's grab the version
+	maybePragma := bytecode[metadataEndIndex-6 : metadataEndIndex]
+	majorHex := maybePragma[0:2]
+	minorHex := maybePragma[2:4]
+	patchHex := maybePragma[4:6]
+
+	major, err := strconv.ParseUint(majorHex, 16, 16)
+	if err != nil {
+		return Pragma{}, fmt.Errorf("%s: %v", FailedToDecodeMetadataErr, err)
+	}
+
+	minor, err := strconv.ParseUint(minorHex, 16, 16)
+	if err != nil {
+		return Pragma{}, fmt.Errorf("%s: %v", FailedToDecodeMetadataErr, err)
+	}
+
+	patch, err := strconv.ParseUint(patchHex, 16, 16)
+	if err != nil {
+		return Pragma{}, fmt.Errorf("%s: %v", FailedToDecodeMetadataErr, err)
+	}
+
+	return Pragma{Major: major, Minor: minor, Patch: patch}, nil
+}
+
+// DoesPragmaSupportCustomRevert checks if the pragma version supports custom revert messages (must be >= 0.8.4)
+func DoesPragmaSupportCustomRevert(pragma Pragma) bool {
+	if pragma.Minor < 8 {
+		return false
+	}
+
+	if pragma.Patch < 4 {
+		return false
+	}
+
+	return true
 }
 
 func wrapErrInMessageWithASuggestion(err error) error {

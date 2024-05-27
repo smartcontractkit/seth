@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"strconv"
 
 	"github.com/ethereum/go-ethereum"
@@ -264,6 +265,22 @@ func (m *Client) CallMsgFromTx(tx *types.Transaction) ethereum.CallMsg {
 	}
 }
 
+var LatestBlock *big.Int
+
+func (m *Client) DownloadContractAndGetPragma(address common.Address, block *big.Int) (Pragma, error) {
+	bytecode, err := m.Client.CodeAt(context.Background(), address, block)
+	if err != nil {
+		return Pragma{}, errors.Wrap(err, "failed to get contract code")
+	}
+
+	pragma, err := DecodePragmaVersion(string(bytecode))
+	if err != nil {
+		return Pragma{}, errors.Wrap(err, "failed to decode pragma version")
+	}
+
+	return pragma, nil
+}
+
 // callAndGetRevertReason executes transaction locally and gets revert reason
 func (m *Client) callAndGetRevertReason(tx *types.Transaction, rc *types.Receipt) error {
 	L.Trace().Msg("Decoding revert error")
@@ -281,8 +298,23 @@ func (m *Client) callAndGetRevertReason(tx *types.Transaction, rc *types.Receipt
 	if decodedABIErrString != "" {
 		return errors.New(decodedABIErrString)
 	}
+
 	if plainStringErr != nil {
 		L.Warn().Msg("Failed to decode revert reason")
+
+		if plainStringErr.Error() == "execution reverted" && tx != nil && rc != nil {
+			pragma, err := m.DownloadContractAndGetPragma(*tx.To(), rc.BlockNumber)
+			if err == nil {
+				if DoesPragmaSupportCustomRevert(pragma) {
+					L.Warn().Str("Pragma", fmt.Sprint(pragma)).Msg("Custom revert reason is supported by pragma, but we could not decode it. This might be a bug in Seth. Please contact the Test Tooling team.")
+				} else {
+					L.Info().Str("Pragma", fmt.Sprint(pragma)).Msg("Custom revert reason is not supported by pragma version (must be >= 0.8.4). There's nothing more we can do to get custom revert reason.")
+				}
+			} else {
+				L.Debug().Err(err).Msg("Failed to get pragma version")
+			}
+		}
+
 		return plainStringErr
 	}
 	return nil
