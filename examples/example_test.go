@@ -13,9 +13,9 @@ import (
 )
 
 func commonEnvVars(t *testing.T) {
-	t.Setenv("NETWORK", seth.GETH)
-	t.Setenv("ROOT_PRIVATE_KEY", "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
-	t.Setenv("SETH_CONFIG_PATH", "../seth.toml")
+	t.Setenv(seth.NETWORK_ENV_VAR, seth.GETH)
+	t.Setenv(seth.ROOT_PRIVATE_KEY_ENV_VAR, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+	t.Setenv(seth.CONFIG_FILE_ENV_VAR, "../seth.toml")
 }
 
 func deployDebugContracts(t *testing.T) *network_debug_contract.NetworkDebugContract {
@@ -45,7 +45,7 @@ func setup(t *testing.T) *network_debug_contract.NetworkDebugContract {
 func commonMultiKeySetup(t *testing.T) {
 	_ = os.Remove("keyfile_test_example.toml")
 	t.Setenv(seth.KEYFILE_PATH_ENV_VAR, "keyfile_test_example.toml")
-	err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "split", "-a", "2"})
+	err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "split", "-a", "2"})
 	require.NoError(t, err)
 }
 
@@ -79,7 +79,7 @@ func TestSmokeExampleMultiKey(t *testing.T) {
 	c, err := seth.NewClient()
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "return"})
+		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "return"})
 		require.NoError(t, err)
 	})
 

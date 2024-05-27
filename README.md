@@ -107,10 +107,18 @@ Some crucial data is stored in env vars, create `.envrc` and use `source .envrc`
 export SETH_LOG_LEVEL=info # global logger level
 export SETH_CONFIG_PATH=seth.toml # path to the toml config
 export SETH_KEYFILE_PATH=keyfile.toml # keyfile path for using multiple keys
-export NETWORK=Geth # selected network
-export ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 # root private key
+export SETH_NETWORK=Geth # selected network
+export SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 # root private key
 
-alias seth="go run cmd/seth/seth.go" # useful alias for keyfile CLI
+alias seth="SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go" # useful alias for keyfile CLI
+```
+
+Alternatively if you don't have a network defined in the TOML you can still use the CLI by providing these 2 key env vars:
+```
+export SETH_URL=https://rpc.fuji.testnet.anyswap.exchange
+export SETH_CHAIN_ID=43113
+
+go run cmd/seth/seth.go ... # your command
 ```
 
 If `SETH_KEYFILE_PATH` is not set then client will create X ephemeral keys (60 by default, configurable) and won't return any funds.
@@ -160,7 +168,7 @@ Example:
 tracing_level = "reverted"
 ```
 
-Additionally you can also enable saving all decoding/tracing information to JSON files with:
+Additionally, you can also enable saving all decoding/tracing information to JSON files with:
 ```
 trace_to_json = true
 ```
@@ -196,12 +204,12 @@ gas_price_estimation_blocks = 1000
 # priority of the transaction, can be "fast", "standard" or "slow" (the higher the priority, the higher adjustment factor and buffer will be used for gas estimation) [default: "standard"]
 gas_price_estimation_tx_priority = "slow"
 ```
+If you don't we will use the default settings for `Default` network.
 
 If you want to save addresses of deployed contracts, you can enable it with:
 ```
 save_deployed_contracts_map = true
 ```
-
 
 If you want to re-use previously deployed contracts you can indicate file name in `seth.toml`:
 ```
@@ -210,13 +218,14 @@ contract_map_file = "deployed_contracts_mumbai.toml"
 Both features only work for live networks. Otherwise, they are ignored, and nothing is saved/read from for simulated networks.
 
 ## CLI
+You can either define the network you want to interact with in your TOML config and then refer it in the CLI command, or you can pass all network parameters via env vars. Most of the examples below show how to use the former approach.
 
 ### Multiple keys manipulation (keyfile.toml)
 To use multiple keys in your tests you can create a `keyfile.toml` using CLI
 
 Set up the alias, see `.envrc` configuration above
 ```
-alias seth="go run cmd/seth/seth.go"
+alias seth="SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go"
 ```
 
 Create a new `keyfile` with 10 new accounts funded from the root key (KEYS env var)
@@ -247,6 +256,8 @@ This will analyze last 10k blocks and give you 25/50/75/99th/Max percentiles for
 ### Block stats
 If you need to get some insights into network stats and create a realistic load/chaos profile with simulators (`anvil` as an example), you can use `stats` CLI command
 
+#### Define your network in `seth.toml`
+
 Edit your `seth.toml`
 ```
 [[networks]]
@@ -260,12 +271,25 @@ rpc_requests_per_second_limit = 5
 
 Then check the stats for the last N blocks
 ```bash
-seth -n MyCustomNetwork blocks -s -10
+SETH_CONFIG_PATH=seth.toml seth -n MyCustomNetwork stats -s -10
 ```
 
 To check stats for the interval (A, B)
 ```bash
-seth -n MyCustomNetwork blocks -s A -e B
+SETH_CONFIG_PATH=seth.toml seth -n MyCustomNetwork stats -s A -e B
+```
+
+#### Pass all network parameters via env vars
+If you don't have a network defined in the TOML you can still use the CLI by providing these 2 key parameter via cmd arg.
+
+Then check the stats for the last N blocks
+```bash
+SETH_CONFIG_PATH=seth.toml seth -c 327172 -u "https://my-rpc.network.io" stats -s -10
+```
+
+To check stats for the interval (A, B)
+```bash
+SETH_CONFIG_PATH=seth.toml seth -c 327172 -u "https://my-rpc.network.io" stats -s A -e B
 ```
 
 Results can help you to understand if network is stable, what is avg block time, gas price, block utilization and transactions per second
@@ -295,6 +319,11 @@ max_tps = 8.0
 You can trace multiple transactions at once using `seth trace` command. Example:
 ```
 SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go -n=Geth trace -f reverted_transactions.json
+```
+
+or using cmd args
+```
+SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go -c 327172 -u "https://my-rpc.network.io" trace -f reverted_transactions.json
 ```
 
 You need to pass a file with a list of transaction hashes to trace. The file should be a JSON array of transaction hashes, like this:
@@ -337,7 +366,7 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 
 You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
 
-### Autmoatic gas estimator
+### Automatic gas estimator
 
 This section explains how to configure and understand the automatic gas estimator, which is crucial for executing transactions on Ethereum-based networks. Here’s what you need to know:
 
