@@ -73,12 +73,12 @@ func TestCLITestDefaultNetworkNoChainID(t *testing.T) {
 }
 
 func TestCLITestDefaultNetworkNoChainIDNoUrlNorNetworkName(t *testing.T) {
-	err := os.Unsetenv(seth.NETWORK_ENV_VAR)
-	require.NoError(t, err, "Error unsetting env var")
 	network := os.Getenv(seth.NETWORK_ENV_VAR)
 	defer func() {
 		_ = os.Setenv(seth.NETWORK_ENV_VAR, network)
 	}()
+	err := os.Unsetenv(seth.NETWORK_ENV_VAR)
+	require.NoError(t, err, "Error unsetting env var")
 	err = os.Unsetenv(seth.URL_ENV_VAR)
 	require.NoError(t, err, "Error unsetting env var")
 	err = os.Unsetenv(seth.CHAIN_ID_ENV_VAR)
