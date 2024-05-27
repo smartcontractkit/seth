@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNetworkFromEnv(t *testing.T) {
+func TestCLINetworkFromEnv(t *testing.T) {
 	err := os.Unsetenv(seth.NETWORK_ENV_VAR)
 	require.NoError(t, err, "Error unsetting env var")
 	err = os.Unsetenv(seth.CHAIN_ID_ENV_VAR)
@@ -20,14 +20,14 @@ func TestNetworkFromEnv(t *testing.T) {
 	require.NoError(t, err, "Error splitting keys")
 }
 
-func TestDefaultNetwork(t *testing.T) {
+func TestCLIDefaultNetwork(t *testing.T) {
 	err := os.Unsetenv(seth.NETWORK_ENV_VAR)
 	require.NoError(t, err, "Error unsetting env var")
 	err = sethcmd.RunCLI([]string{"seth", "-c", "1337", "-u", "http://localhost:8545", "keys", "split", "-a", "10", "-b", "10"})
 	require.NoError(t, err, "Error splitting keys")
 }
 
-func TestDefaultNetworkNoUrl(t *testing.T) {
+func TestCLIDefaultNetworkNoUrl(t *testing.T) {
 	err := os.Unsetenv(seth.NETWORK_ENV_VAR)
 	require.NoError(t, err, "Error unsetting env var")
 	err = os.Unsetenv(seth.CHAIN_ID_ENV_VAR)
@@ -38,7 +38,7 @@ func TestDefaultNetworkNoUrl(t *testing.T) {
 	require.Error(t, err, "No error when splitting keys without URL")
 }
 
-func TestDefaultNetworkNoChainID(t *testing.T) {
+func TestCLITestDefaultNetworkNoChainID(t *testing.T) {
 	err := os.Unsetenv(seth.NETWORK_ENV_VAR)
 	require.NoError(t, err, "Error unsetting env var")
 	err = os.Unsetenv(seth.CHAIN_ID_ENV_VAR)
@@ -49,7 +49,7 @@ func TestDefaultNetworkNoChainID(t *testing.T) {
 	require.Error(t, err, "No error when splitting keys without URL")
 }
 
-func TestDefaultNetworkNoChainIDNoUrlNorNetworkName(t *testing.T) {
+func TestCLITestDefaultNetworkNoChainIDNoUrlNorNetworkName(t *testing.T) {
 	err := os.Unsetenv(seth.NETWORK_ENV_VAR)
 	require.NoError(t, err, "Error unsetting env var")
 	err = os.Unsetenv(seth.URL_ENV_VAR)
