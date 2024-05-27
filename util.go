@@ -494,15 +494,7 @@ func DecodePragmaVersion(bytecode string) (Pragma, error) {
 
 // DoesPragmaSupportCustomRevert checks if the pragma version supports custom revert messages (must be >= 0.8.4)
 func DoesPragmaSupportCustomRevert(pragma Pragma) bool {
-	if pragma.Minor < 8 {
-		return false
-	}
-
-	if pragma.Patch < 4 {
-		return false
-	}
-
-	return true
+	return pragma.Minor > 8 || (pragma.Minor == 8 && pragma.Patch >= 4) || pragma.Major > 0
 }
 
 func wrapErrInMessageWithASuggestion(err error) error {
