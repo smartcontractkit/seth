@@ -1,4 +1,4 @@
-name: Contract Map & Gas Estimator tests
+name: Rest of them tests
 on:
   push:
 concurrency:
