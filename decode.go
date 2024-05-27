@@ -265,17 +265,15 @@ func (m *Client) CallMsgFromTx(tx *types.Transaction) ethereum.CallMsg {
 	}
 }
 
-var LatestBlock *big.Int
-
 func (m *Client) DownloadContractAndGetPragma(address common.Address, block *big.Int) (Pragma, error) {
 	bytecode, err := m.Client.CodeAt(context.Background(), address, block)
 	if err != nil {
 		return Pragma{}, errors.Wrap(err, "failed to get contract code")
 	}
 
-	pragma, err := DecodePragmaVersion(string(bytecode))
+	pragma, err := DecodePragmaVersion(common.Bytes2Hex(bytecode))
 	if err != nil {
-		return Pragma{}, errors.Wrap(err, "failed to decode pragma version")
+		return Pragma{}, err
 	}
 
 	return pragma, nil
@@ -311,7 +309,7 @@ func (m *Client) callAndGetRevertReason(tx *types.Transaction, rc *types.Receipt
 					L.Info().Str("Pragma", fmt.Sprint(pragma)).Msg("Custom revert reason is not supported by pragma version (must be >= 0.8.4). There's nothing more we can do to get custom revert reason.")
 				}
 			} else {
-				L.Debug().Err(err).Msg("Failed to get pragma version")
+				L.Warn().Err(err).Msg("Failed to decode pragma version. Contract either uses very old version or was compiled without metadata. We won't be able to decode revert reason.")
 			}
 		}
 
