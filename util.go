@@ -425,7 +425,8 @@ func (p Pragma) String() string {
 	return fmt.Sprintf("%d.%d.%d", p.Major, p.Minor, p.Patch)
 }
 
-// DecodePragmaVersion extracts the pragma version from the bytecode or returns an error if it's not found or can't be decoded
+// DecodePragmaVersion extracts the pragma version from the bytecode or returns an error if it's not found or can't be decoded.
+// Based on https://www.rareskills.io/post/solidity-metadata
 func DecodePragmaVersion(bytecode string) (Pragma, error) {
 	metadataEndIndex := len(bytecode) - 4
 	metadataLengthHex := bytecode[metadataEndIndex:]
@@ -463,6 +464,7 @@ func DecodePragmaVersion(bytecode string) (Pragma, error) {
 		return Pragma{}, errors.New(MetadataNotFoundErr)
 	}
 
+	// this is byte-encoded version of the string "solc"
 	solcMarker := "736f6c63"
 	if !strings.Contains(maybeMetadata, solcMarker) {
 		return Pragma{}, errors.New(NotCompiledWithSolcErr)

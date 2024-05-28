@@ -1,4 +1,4 @@
-name: Rest of them tests
+name: Other tests
 on:
   push:
 concurrency:
