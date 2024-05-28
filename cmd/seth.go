@@ -309,7 +309,7 @@ func RunCLI(args []string) error {
 						}
 						defer client.Close()
 
-						if cfg.Network.ChainID == seth.DefaultChainID {
+						if cfg.Network.ChainID == seth.DefaultNetworkName {
 							chainId, err := client.ChainID(context.Background())
 							if err != nil {
 								return errors.Wrap(err, "failed to get chain ID")

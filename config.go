@@ -34,7 +34,6 @@ const (
 	URL_ENV_VAR              = "SETH_URL"
 
 	DefaultNetworkName = "Default"
-	DefaultChainID     = "-1"
 )
 
 type KeyFileSource string
