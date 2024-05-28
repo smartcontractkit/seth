@@ -29,7 +29,7 @@ GethSync:
 
 .PHONY: test
 test:
-	NETWORK=$(network) ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestSmoke
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestSmoke
 
 .PHONY: kill_node
 kill_node:
@@ -37,27 +37,27 @@ kill_node:
 
 .PHONY: test_api
 test_api:
-	NETWORK=$(network) ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestAPI
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestAPI
 
 .PHONY: test_trace
 test_trace:
-	NETWORK=$(network) ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestTrace
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestTrace
 
 .PHONY: test_cli
 test_cli:
-	NETWORK=$(network) ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestCLI
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestCLI
 
 .PHONY: test_others
 test_others:
-	NETWORK=$(network) ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run "TestContractMap|TestGasEstimator|TestRPCHealtCheck|TestUtil"
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run "TestContractMap|TestGasEstimator|TestRPCHealtCheck|TestUtil"
 
 .PHONY: test_race
 test_race:
-	NETWORK=$(network) ROOT_PRIVATE_KEY=$(root_private_key) go test -v -race -count 1 `go list ./... | grep -v examples` -run TestSmoke
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -race -count 1 `go list ./... | grep -v examples` -run TestSmoke
 
 .PHONY: test+cover
 test_cover:
-	NETWORK=$(network) ROOT_PRIVATE_KEY=$(root_private_key) go test -v -coverprofile cover.out -count 1 `go list ./... | grep -v examples` -run "TestAPI|TestSmoke|TestContract|TestGasEstimator"
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -coverprofile cover.out -count 1 `go list ./... | grep -v examples` -run "TestAPI|TestSmoke|TestContract|TestGasEstimator"
 	go tool cover -html cover.out
 
 .PHONY: lint

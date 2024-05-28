@@ -208,10 +208,10 @@ func TestAPIKeys(t *testing.T) {
 	_ = os.Remove(keyFilePath)
 	_ = os.Setenv(seth.KEYFILE_PATH_ENV_VAR, keyFilePath)
 
-	err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "split", "-a", "60"})
+	err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "split", "-a", "60"})
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "return"})
+		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "return"})
 		require.NoError(t, err)
 		_ = os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
 	})
@@ -287,13 +287,13 @@ func TestAPISyncKeysPool(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			keyfilePath := "keyfile_test_api.toml"
 			_ = os.Remove(keyfilePath)
-			t.Setenv("SETH_LOG_LEVEL", "trace")
+			t.Setenv(seth.LogLevelEnvVar, "trace")
 			if !tc.ephemeral {
 				t.Setenv(seth.KEYFILE_PATH_ENV_VAR, keyfilePath)
-				err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "split", "-a", strconv.Itoa(tc.keys)})
+				err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "split", "-a", strconv.Itoa(tc.keys)})
 				require.NoError(t, err)
 				t.Cleanup(func() {
-					err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "keys", "return"})
+					err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "return"})
 					require.NoError(t, err)
 					_ = os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
 				})

@@ -20,14 +20,22 @@ const (
 	ErrReadKeyFileConfig      = "failed to read TOML keyfile config"
 	ErrUnmarshalSethConfig    = "failed to unmarshal TOML config for seth"
 	ErrUnmarshalKeyFileConfig = "failed to unmarshal TOML keyfile config for seth"
-	ErrEmptyNetwork           = "no network was selected, set NETWORK=..., check TOML config for available networks and set the env var"
-	ErrEmptyRootPrivateKey    = "no private keys were set, set ROOT_PRIVATE_KEY=..."
+	ErrEmptyRootPrivateKey    = "no private keys were set, set %s=..."
 
 	GETH  = "Geth"
 	ANVIL = "Anvil"
 
+	CONFIG_FILE_ENV_VAR    = "SETH_CONFIG_PATH"
 	KEYFILE_BASE64_ENV_VAR = "SETH_KEYFILE_BASE64"
 	KEYFILE_PATH_ENV_VAR   = "SETH_KEYFILE_PATH"
+
+	ROOT_PRIVATE_KEY_ENV_VAR = "SETH_ROOT_PRIVATE_KEY"
+	NETWORK_ENV_VAR          = "SETH_NETWORK"
+	CHAIN_ID_ENV_VAR         = "SETH_CHAIN_ID"
+	URL_ENV_VAR              = "SETH_URL"
+
+	DefaultNetworkName = "Default"
+	DefaultChainID     = "-1"
 )
 
 type KeyFileSource string
@@ -89,7 +97,7 @@ type Network struct {
 
 // ReadConfig reads the TOML config file from location specified by env var "SETH_CONFIG_PATH" and returns a Config struct
 func ReadConfig() (*Config, error) {
-	cfgPath := os.Getenv("SETH_CONFIG_PATH")
+	cfgPath := os.Getenv(CONFIG_FILE_ENV_VAR)
 	if cfgPath == "" {
 		return nil, errors.New(ErrEmptyConfigPath)
 	}
@@ -107,22 +115,44 @@ func ReadConfig() (*Config, error) {
 		return nil, err
 	}
 	cfg.ConfigDir = filepath.Dir(absPath)
-	snet := os.Getenv("NETWORK")
-	if snet == "" {
-		return nil, errors.New(ErrEmptyNetwork)
-	}
-	for _, n := range cfg.Networks {
-		if n.Name == snet {
-			cfg.Network = n
+	snet := os.Getenv(NETWORK_ENV_VAR)
+	if snet != "" {
+		for _, n := range cfg.Networks {
+			if n.Name == snet {
+				cfg.Network = n
+				break
+			}
+		}
+		if cfg.Network == nil {
+			return nil, fmt.Errorf("network %s not defined in the TOML file", snet)
+		}
+	} else {
+		chainId := os.Getenv(CHAIN_ID_ENV_VAR)
+		url := os.Getenv(URL_ENV_VAR)
+
+		if chainId == "" || url == "" {
+			return nil, fmt.Errorf("network not selected, set %s=... or %s=... and %s=..., check TOML config for available networks", NETWORK_ENV_VAR, CHAIN_ID_ENV_VAR, URL_ENV_VAR)
+		}
+
+		//look for default network
+		for _, n := range cfg.Networks {
+			if n.Name == DefaultNetworkName {
+				cfg.Network = n
+				cfg.Network.Name = DefaultNetworkName
+				cfg.Network.ChainID = chainId
+				cfg.Network.URLs = []string{url}
+				break
+			}
+		}
+
+		if cfg.Network == nil {
+			return nil, fmt.Errorf("default network not defined in the TOML file")
 		}
 	}
-	if cfg.Network == nil {
-		return nil, fmt.Errorf("network %s not found", snet)
-	}
 
-	rootPrivateKey := os.Getenv("ROOT_PRIVATE_KEY")
+	rootPrivateKey := os.Getenv(ROOT_PRIVATE_KEY_ENV_VAR)
 	if rootPrivateKey == "" {
-		return nil, errors.New(ErrEmptyRootPrivateKey)
+		return nil, errors.Errorf(ErrEmptyRootPrivateKey, ROOT_PRIVATE_KEY_ENV_VAR)
 	} else {
 		cfg.Network.PrivateKeys = append(cfg.Network.PrivateKeys, rootPrivateKey)
 	}

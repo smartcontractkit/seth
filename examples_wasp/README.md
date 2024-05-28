@@ -20,8 +20,8 @@ make GethSync
 // another terminal, from examples_wasp dir
 export SETH_LOG_LEVEL=debug
 export SETH_CONFIG_PATH=seth.toml
-export NETWORK=Geth
-export ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+export SETH_NETWORK=Geth
+export SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 export LOKI_TENANT_ID=promtail
 export LOKI_URL=...
 

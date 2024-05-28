@@ -21,7 +21,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Run tests
         env:
-          NETWORK: ${{ matrix.network }}
-          ROOT_PRIVATE_KEY: ${{ secrets.TESTNET_COMMON_KEYS }}
+          SETH_NETWORK: ${{ matrix.network }}
+          SETH_ROOT_PRIVATE_KEY: ${{ secrets.TESTNET_COMMON_KEYS }}
         run: |
-          nix develop -c make root_private_key=$ROOT_PRIVATE_KEY network=$NETWORK test
+          nix develop -c make root_private_key=$SETH_ROOT_PRIVATE_KEY network=$SETH_NETWORK test

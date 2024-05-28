@@ -11,7 +11,7 @@ jobs:
       matrix:
         network: [ Anvil, Geth ]
     env:
-      ROOT_PRIVATE_KEY: ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+      SETH_ROOT_PRIVATE_KEY: ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
     steps:
       - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
       - uses: cachix/install-nix-action@8887e596b4ee1134dae06b98d573bd674693f47c # v26
@@ -19,6 +19,6 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Run tests
         env:
-          NETWORK: ${{ matrix.network }}
+          SETH_NETWORK: ${{ matrix.network }}
         run: |
-          nix develop -c make $NETWORK && make root_private_key=$ROOT_PRIVATE_KEY network=$NETWORK test_cli
+          nix develop -c make $SETH_NETWORK && make root_private_key=$SETH_ROOT_PRIVATE_KEY network=$SETH_NETWORK test_cli

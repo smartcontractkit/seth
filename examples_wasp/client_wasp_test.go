@@ -33,8 +33,8 @@ func (m *ExampleGun) Call(l *wasp.Generator) *wasp.Response {
 }
 
 func TestWithWasp(t *testing.T) {
-	t.Setenv("ROOT_PRIVATE_KEY", "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
-	t.Setenv("SETH_CONFIG_PATH", "seth.toml")
+	t.Setenv(seth.ROOT_PRIVATE_KEY_ENV_VAR, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+	t.Setenv(seth.CONFIG_FILE_ENV_VAR, "seth.toml")
 	cfg, err := seth.ReadConfig()
 	require.NoError(t, err, "failed to read config")
 	c, err := seth.NewClientWithConfig(cfg)

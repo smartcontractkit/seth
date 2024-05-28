@@ -26,7 +26,7 @@ func TestCLITracing(t *testing.T) {
 	err = seth.CreateOrAppendToJsonArray(file.Name(), tx.Hash().Hex())
 	require.NoError(t, err, "should have written to file")
 
-	_ = os.Setenv("SETH_CONFIG_FILE", "seth.toml")
-	err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv("NETWORK"), "trace", "-f", file.Name()})
+	_ = os.Setenv(seth.CONFIG_FILE_ENV_VAR, "seth.toml")
+	err = sethcmd.RunCLI([]string{"seth", "-n", "Geth", "trace", "-f", file.Name()})
 	require.NoError(t, err, "should have traced transactions")
 }

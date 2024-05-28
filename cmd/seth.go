@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	ErrNoNetwork = "no network specified, use -n flag. Ex.: seth -n Geth keys update"
+	ErrNoNetwork = "no network specified, use -n flag. Ex.: 'seth -n Geth keys update' or -u and -c flags. Ex.: 'seth -u http://localhost:8545 -c 1337 keys update'"
 )
 
 var C *seth.Client
@@ -25,13 +25,22 @@ func RunCLI(args []string) error {
 		UsageText: `utility to create and control Ethereum keys and give you more debug info about chains`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "networkName", Aliases: []string{"n"}},
+			&cli.StringFlag{Name: "url", Aliases: []string{"u"}},
+			&cli.StringFlag{Name: "chainId", Aliases: []string{"c"}},
 		},
 		Before: func(cCtx *cli.Context) error {
 			networkName := cCtx.String("networkName")
-			if networkName == "" {
+			url := cCtx.String("url")
+			chainId := cCtx.String("chainId")
+			if networkName == "" && (url == "" && chainId == "") {
 				return errors.New(ErrNoNetwork)
 			}
-			_ = os.Setenv("NETWORK", networkName)
+			if networkName != "" {
+				_ = os.Setenv(seth.NETWORK_ENV_VAR, networkName)
+			} else {
+				_ = os.Setenv(seth.URL_ENV_VAR, url)
+				_ = os.Setenv(seth.CHAIN_ID_ENV_VAR, chainId)
+			}
 			if cCtx.Args().Len() > 0 && cCtx.Args().First() != "trace" {
 				var err error
 				switch cCtx.Args().First() {
@@ -51,8 +60,7 @@ func RunCLI(args []string) error {
 					if err != nil {
 						return err
 					}
-				case "gas":
-				case "stats":
+				case "gas", "stats":
 					var cfg *seth.Config
 					var pk string
 					_, pk, err = seth.NewAddress()
@@ -60,7 +68,7 @@ func RunCLI(args []string) error {
 						return err
 					}
 
-					err = os.Setenv("ROOT_PRIVATE_KEY", pk)
+					err = os.Setenv(seth.ROOT_PRIVATE_KEY_ENV_VAR, pk)
 					if err != nil {
 						return err
 					}
@@ -245,7 +253,7 @@ func RunCLI(args []string) error {
 
 					_ = os.Setenv(seth.LogLevelEnvVar, "debug")
 
-					cfgPath := os.Getenv("SETH_CONFIG_PATH")
+					cfgPath := os.Getenv(seth.CONFIG_FILE_ENV_VAR)
 					if cfgPath == "" {
 						return errors.New(seth.ErrEmptyConfigPath)
 					}
@@ -264,18 +272,39 @@ func RunCLI(args []string) error {
 					}
 					cfg.ConfigDir = filepath.Dir(absPath)
 
-					snet := os.Getenv("NETWORK")
-					if snet == "" {
-						return errors.New(ErrNoNetwork)
-					}
-
-					for _, n := range cfg.Networks {
-						if n.Name == snet {
-							cfg.Network = n
+					snet := os.Getenv(seth.NETWORK_ENV_VAR)
+					if snet != "" {
+						for _, n := range cfg.Networks {
+							if n.Name == snet {
+								cfg.Network = n
+								break
+							}
 						}
-					}
-					if cfg.Network == nil {
-						return fmt.Errorf("network %s not found", snet)
+						if cfg.Network == nil {
+							return fmt.Errorf("network %s not defined in the TOML file", snet)
+						}
+					} else {
+						chainId := os.Getenv(seth.CHAIN_ID_ENV_VAR)
+						url := os.Getenv(seth.URL_ENV_VAR)
+
+						if chainId == "" || url == "" {
+							return fmt.Errorf("network not selected, set %s=... or %s=... and %s=..., check TOML config for available networks", seth.NETWORK_ENV_VAR, seth.CHAIN_ID_ENV_VAR, seth.URL_ENV_VAR)
+						}
+
+						//look for default network
+						for _, n := range cfg.Networks {
+							if n.Name == seth.DefaultNetworkName {
+								cfg.Network = n
+								cfg.Network.Name = snet
+								cfg.Network.ChainID = chainId
+								cfg.Network.URLs = []string{url}
+								break
+							}
+						}
+
+						if cfg.Network == nil {
+							return fmt.Errorf("default network not defined in the TOML file")
+						}
 					}
 
 					zero := int64(0)
