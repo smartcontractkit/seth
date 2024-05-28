@@ -45,7 +45,7 @@ func setup(t *testing.T) *network_debug_contract.NetworkDebugContract {
 func commonMultiKeySetup(t *testing.T) {
 	_ = os.Remove("keyfile_test_example.toml")
 	t.Setenv(seth.KEYFILE_PATH_ENV_VAR, "keyfile_test_example.toml")
-	err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "split", "-a", "2"})
+	err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "fund", "-a", "2"})
 	require.NoError(t, err)
 }
 

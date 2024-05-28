@@ -1,7 +1,9 @@
 package seth
 
 import (
+	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
 	"github.com/smartcontractkit/seth"
@@ -26,20 +28,17 @@ func RunCLI(args []string) error {
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "networkName", Aliases: []string{"n"}},
 			&cli.StringFlag{Name: "url", Aliases: []string{"u"}},
-			&cli.StringFlag{Name: "chainId", Aliases: []string{"c"}},
 		},
 		Before: func(cCtx *cli.Context) error {
 			networkName := cCtx.String("networkName")
 			url := cCtx.String("url")
-			chainId := cCtx.String("chainId")
-			if networkName == "" && (url == "" && chainId == "") {
+			if networkName == "" && url == "" {
 				return errors.New(ErrNoNetwork)
 			}
 			if networkName != "" {
 				_ = os.Setenv(seth.NETWORK_ENV_VAR, networkName)
 			} else {
 				_ = os.Setenv(seth.URL_ENV_VAR, url)
-				_ = os.Setenv(seth.CHAIN_ID_ENV_VAR, chainId)
 			}
 			if cCtx.Args().Len() > 0 && cCtx.Args().First() != "trace" {
 				var err error
@@ -194,10 +193,10 @@ func RunCLI(args []string) error {
 						},
 					},
 					{
-						Name:        "split",
-						HelpName:    "split",
-						Aliases:     []string{"s"},
-						Description: "create a new key file, split all the funds from the root account to new keys",
+						Name:        "fund",
+						HelpName:    "fund",
+						Aliases:     []string{"f"},
+						Description: "create a new key file, split the funds from the root account to new keys OR fund existing keys read from keyfile",
 						ArgsUsage:   "-a ${amount of addresses to create} -b ${amount in ethers to keep in root key}",
 						Flags: []cli.Flag{
 							&cli.Int64Flag{Name: "addresses", Aliases: []string{"a"}},
@@ -284,11 +283,10 @@ func RunCLI(args []string) error {
 							return fmt.Errorf("network %s not defined in the TOML file", snet)
 						}
 					} else {
-						chainId := os.Getenv(seth.CHAIN_ID_ENV_VAR)
 						url := os.Getenv(seth.URL_ENV_VAR)
 
-						if chainId == "" || url == "" {
-							return fmt.Errorf("network not selected, set %s=... or %s=... and %s=..., check TOML config for available networks", seth.NETWORK_ENV_VAR, seth.CHAIN_ID_ENV_VAR, seth.URL_ENV_VAR)
+						if url == "" {
+							return fmt.Errorf("network not selected, set %s=... or %s=..., check TOML config for available networks", seth.NETWORK_ENV_VAR, seth.URL_ENV_VAR)
 						}
 
 						//look for default network
@@ -296,7 +294,6 @@ func RunCLI(args []string) error {
 							if n.Name == seth.DefaultNetworkName {
 								cfg.Network = n
 								cfg.Network.Name = snet
-								cfg.Network.ChainID = chainId
 								cfg.Network.URLs = []string{url}
 								break
 							}
@@ -304,6 +301,20 @@ func RunCLI(args []string) error {
 
 						if cfg.Network == nil {
 							return fmt.Errorf("default network not defined in the TOML file")
+						}
+
+						client, err := ethclient.Dial(cfg.Network.URLs[0])
+						if err != nil {
+							return fmt.Errorf("failed to connect to '%s' due to: %w", cfg.Network.URLs[0], err)
+						}
+						defer client.Close()
+
+						if cfg.Network.ChainID == seth.DefaultNetworkName {
+							chainId, err := client.ChainID(context.Background())
+							if err != nil {
+								return errors.Wrap(err, "failed to get chain ID")
+							}
+							cfg.Network.ChainID = chainId.String()
 						}
 					}
 

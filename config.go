@@ -31,11 +31,9 @@ const (
 
 	ROOT_PRIVATE_KEY_ENV_VAR = "SETH_ROOT_PRIVATE_KEY"
 	NETWORK_ENV_VAR          = "SETH_NETWORK"
-	CHAIN_ID_ENV_VAR         = "SETH_CHAIN_ID"
 	URL_ENV_VAR              = "SETH_URL"
 
 	DefaultNetworkName = "Default"
-	DefaultChainID     = "-1"
 )
 
 type KeyFileSource string
@@ -127,11 +125,10 @@ func ReadConfig() (*Config, error) {
 			return nil, fmt.Errorf("network %s not defined in the TOML file", snet)
 		}
 	} else {
-		chainId := os.Getenv(CHAIN_ID_ENV_VAR)
 		url := os.Getenv(URL_ENV_VAR)
 
-		if chainId == "" || url == "" {
-			return nil, fmt.Errorf("network not selected, set %s=... or %s=... and %s=..., check TOML config for available networks", NETWORK_ENV_VAR, CHAIN_ID_ENV_VAR, URL_ENV_VAR)
+		if url == "" {
+			return nil, fmt.Errorf("network not selected, set %s=... or %s=..., check TOML config for available networks", NETWORK_ENV_VAR, URL_ENV_VAR)
 		}
 
 		//look for default network
@@ -139,7 +136,6 @@ func ReadConfig() (*Config, error) {
 			if n.Name == DefaultNetworkName {
 				cfg.Network = n
 				cfg.Network.Name = DefaultNetworkName
-				cfg.Network.ChainID = chainId
 				cfg.Network.URLs = []string{url}
 				break
 			}
@@ -231,6 +227,9 @@ func readKeyFileConfig(cfg *Config) error {
 	err = toml.Unmarshal(kfd, &kf)
 	if err != nil {
 		return errors.Wrap(err, ErrUnmarshalKeyFileConfig)
+	}
+	if kf == nil {
+		return errors.New(ErrEmptyKeyFile)
 	}
 	for _, pk := range kf.Keys {
 		cfg.Network.PrivateKeys = append(cfg.Network.PrivateKeys, pk.PrivateKey)

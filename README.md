@@ -230,19 +230,19 @@ alias seth="SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go"
 
 Create a new `keyfile` with 10 new accounts funded from the root key (KEYS env var)
 ```
-seth -n Geth keys split -a 10
+SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile.toml seth -n Geth keys fund -a 10 [-b 2]
 ```
 Run the tests, then return funds back, when needed
 ```
-seth -n Geth keys return
+SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile.toml seth -n Geth keys return
 ```
 Update the balances
 ```
-seth -n Geth keys update
+SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile.toml seth -n Geth keys update
 ```
 Remove the `keyfile`
 ```
-seth -n Geth keys remove
+SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile.toml seth -n Geth keys remove
 ```
 ### Manual gas price estimation
 In order to adjust gas price for a transaction, you can use `seth gas` command
@@ -271,25 +271,25 @@ rpc_requests_per_second_limit = 5
 
 Then check the stats for the last N blocks
 ```bash
-SETH_CONFIG_PATH=seth.toml seth -n MyCustomNetwork stats -s -10
+seth -n MyCustomNetwork stats -s -10
 ```
 
 To check stats for the interval (A, B)
 ```bash
-SETH_CONFIG_PATH=seth.toml seth -n MyCustomNetwork stats -s A -e B
+seth -n MyCustomNetwork stats -s A -e B
 ```
 
 #### Pass all network parameters via env vars
-If you don't have a network defined in the TOML you can still use the CLI by providing these 2 key parameter via cmd arg.
+If you don't have a network defined in the TOML you can still use the CLI by providing the RPC url via cmd arg.
 
 Then check the stats for the last N blocks
 ```bash
-SETH_CONFIG_PATH=seth.toml seth -c 327172 -u "https://my-rpc.network.io" stats -s -10
+seth -u "https://my-rpc.network.io" stats -s -10
 ```
 
 To check stats for the interval (A, B)
 ```bash
-SETH_CONFIG_PATH=seth.toml seth -c 327172 -u "https://my-rpc.network.io" stats -s A -e B
+SETH_CONFIG_PATH=seth.toml seth -u "https://my-rpc.network.io" stats -s A -e B
 ```
 
 Results can help you to understand if network is stable, what is avg block time, gas price, block utilization and transactions per second
@@ -323,7 +323,7 @@ SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go -n=Geth trace -f reverted_tra
 
 or using cmd args
 ```
-SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go -c 327172 -u "https://my-rpc.network.io" trace -f reverted_transactions.json
+SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go -u "https://my-rpc.network.io" trace -f reverted_transactions.json
 ```
 
 You need to pass a file with a list of transaction hashes to trace. The file should be a JSON array of transaction hashes, like this:

@@ -39,7 +39,7 @@ func TestCLIFundAndReturn(t *testing.T) {
 		}
 		bd, err := c.CalculateSubKeyFunding(10, gasPrice.Int64(), 10)
 		require.NoError(t, err, "Error calculating subkey funding")
-		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "split", "-a", "10", "-b", "10"})
+		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "fund", "-a", "10", "-b", "10"})
 		require.NoError(t, err, "Error splitting keys")
 		AssertFileBalances(t, bd.AddrFunding, keyFilePath)
 		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "return"})
@@ -53,7 +53,7 @@ func TestCLIUpdateBalances(t *testing.T) {
 	_ = os.Remove(keyFilePath)
 	err := os.Setenv(seth.KEYFILE_PATH_ENV_VAR, keyFilePath)
 	require.NoError(t, err)
-	err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "split", "-a", "2", "-b", "10"})
+	err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "fund", "-a", "2", "-b", "10"})
 	require.NoError(t, err)
 	c := newClientWithKeyfile(t, keyFilePath)
 	_, err = c.Decode(
