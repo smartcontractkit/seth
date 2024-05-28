@@ -243,26 +243,32 @@ func (m *Client) DecodeCustomABIErr(txErr error) (string, error) {
 }
 
 // CallMsgFromTx creates ethereum.CallMsg from tx, used in simulated calls
-func (m *Client) CallMsgFromTx(tx *types.Transaction) ethereum.CallMsg {
+func (m *Client) CallMsgFromTx(tx *types.Transaction) (ethereum.CallMsg, error) {
+	signer := types.NewEIP155Signer(tx.ChainId())
+	sender, err := types.Sender(signer, tx)
+	if err != nil {
+		return ethereum.CallMsg{}, err
+	}
+
 	if tx.Type() == types.LegacyTxType {
 		return ethereum.CallMsg{
-			From:     m.Addresses[0],
+			From:     sender,
 			To:       tx.To(),
 			Gas:      tx.Gas(),
 			GasPrice: tx.GasPrice(),
 			Value:    tx.Value(),
 			Data:     tx.Data(),
-		}
+		}, nil
 	}
 	return ethereum.CallMsg{
-		From:      m.Addresses[0],
+		From:      sender,
 		To:        tx.To(),
 		Gas:       tx.Gas(),
 		GasFeeCap: tx.GasFeeCap(),
 		GasTipCap: tx.GasTipCap(),
 		Value:     tx.Value(),
 		Data:      tx.Data(),
-	}
+	}, nil
 }
 
 func (m *Client) DownloadContractAndGetPragma(address common.Address, block *big.Int) (Pragma, error) {
@@ -287,7 +293,12 @@ func (m *Client) callAndGetRevertReason(tx *types.Transaction, rc *types.Receipt
 	// there are 2 types of possible errors, plain old assert/revert string
 	// or new ABI encoded errors, first we try to find ABI one
 	// if there is no match we print the error from CallMsg call
-	_, plainStringErr := m.Client.CallContract(context.Background(), m.CallMsgFromTx(tx), rc.BlockNumber)
+	msg, err := m.CallMsgFromTx(tx)
+	if err != nil {
+		L.Warn().Err(err).Msg("Failed to get call msg from tx. We won't be able to decode revert reason.")
+		return nil
+	}
+	_, plainStringErr := m.Client.CallContract(context.Background(), msg, rc.BlockNumber)
 
 	decodedABIErrString, err := m.DecodeCustomABIErr(plainStringErr)
 	if err != nil {
