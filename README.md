@@ -184,7 +184,6 @@ You can add more networks like this:
 ```
 [[Networks]]
 name = "Fuji"
-chain_id = "43113"
 transaction_timeout = "30s"
 # gas limit should be explicitly set only if you are connecting to a node that's incapable of estimating gas limit itself (should only happen for very old versions)
 # gas_limit = 9_000_000
@@ -205,6 +204,8 @@ gas_price_estimation_blocks = 1000
 gas_price_estimation_tx_priority = "slow"
 ```
 If you don't we will use the default settings for `Default` network.
+
+ChainID is not needed, as it's fetched from the node.
 
 If you want to save addresses of deployed contracts, you can enable it with:
 ```
@@ -262,7 +263,6 @@ Edit your `seth.toml`
 ```
 [[networks]]
 name = "MyCustomNetwork"
-chain_id = "11155111"
 urls_secret = ["..."]
 
 [block_stats]

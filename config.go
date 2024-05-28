@@ -78,7 +78,6 @@ type NonceManagerCfg struct {
 
 type Network struct {
 	Name                         string    `toml:"name"`
-	ChainID                      string    `toml:"chain_id"`
 	URLs                         []string  `toml:"urls_secret"`
 	EIP1559DynamicFees           bool      `toml:"eip_1559_dynamic_fees"`
 	GasPrice                     int64     `toml:"gas_price"`
@@ -91,6 +90,9 @@ type Network struct {
 	GasPriceEstimationEnabled    bool      `toml:"gas_price_estimation_enabled"`
 	GasPriceEstimationBlocks     uint64    `toml:"gas_price_estimation_blocks"`
 	GasPriceEstimationTxPriority string    `toml:"gas_price_estimation_tx_priority"`
+
+	// derivative vars
+	ChainID string
 }
 
 // ReadConfig reads the TOML config file from location specified by env var "SETH_CONFIG_PATH" and returns a Config struct
