@@ -112,8 +112,8 @@ func newClientWithContractMapFromEnv(t *testing.T) *seth.Client {
 		t.Fatal("contract map is empty")
 	}
 
-	// create a copy of the map, so we don't have problem with side effects of modyfing client's map
-	// impacting the global, underlaying one
+	// create a copy of the map, so we don't have problem with side effects of modifying client's map
+	// impacting the global, underlying one
 	contractMap := seth.NewEmptyContractMap()
 	for k, v := range TestEnv.ContractMap.GetContractMap() {
 		contractMap.AddContract(k, v)
