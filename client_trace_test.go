@@ -1373,7 +1373,7 @@ func TestTraceCallRevertFunctionInSubContract(t *testing.T) {
 	_, decodeErr := c.Decode(tx, txErr)
 	require.Error(t, decodeErr, "transaction should have reverted")
 	require.Equal(t, "error type: CustomErr, error values: [1001 2]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transaction")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1436,6 +1436,44 @@ func TestTraceOldPragmaNoRevertReason(t *testing.T) {
 	_, decodeErr := c.Decode(tx, txErr)
 	require.Error(t, decodeErr, "transaction should have reverted")
 	require.Equal(t, "execution reverted", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+}
+
+func TestTraceeRevertReasonNonRootSender(t *testing.T) {
+	cBeta := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, cBeta)
+
+	cfg := cBeta.Cfg
+	one := int64(1)
+	cfg.EphemeralAddrs = &one
+
+	c, err := seth.NewClientWithConfig(cfg)
+	require.NoError(t, err, "failed to create client")
+
+	x := big.NewInt(1001)
+	y := big.NewInt(2)
+	tx, txErr := TestEnv.DebugContract.CallRevertFunctionInSubContract(c.NewTXKeyOpts(1), x, y)
+	require.NoError(t, txErr, "transaction should have reverted")
+	_, decodeErr := c.Decode(tx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "error type: CustomErr, error values: [1001 2]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transaction")
+
+	expectedCall := &seth.DecodedCall{
+		FromAddress: strings.ToLower(c.Addresses[1].Hex()),
+		ToAddress:   strings.ToLower(TestEnv.DebugContractAddress.Hex()),
+		From:        "you",
+		To:          "NetworkDebugContract",
+		CommonData: seth.CommonData{
+			Signature: "11b3c478",
+			Method:    "callRevertFunctionInSubContract(uint256,uint256)",
+			Input:     map[string]interface{}{"x": x, "y": y},
+			Output:    map[string]interface{}{},
+		},
+		Comment: "",
+	}
+
+	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
 }
 
 func TestTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing.T) {
