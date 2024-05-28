@@ -3,6 +3,7 @@ package seth_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/smartcontractkit/seth/contracts/bind/link_token_interface"
 	"io"
 	"math/big"
 	"os"
@@ -1410,6 +1411,31 @@ func TestTraceCallRevertInCallback(t *testing.T) {
 	_, decodeErr := c.Decode(tx, txErr)
 	require.Error(t, decodeErr, "transaction should have reverted")
 	require.Equal(t, "error type: CustomErr, error values: [100 101]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+}
+
+func TestTraceOldPragmaNoRevertReason(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
+	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
+
+	// this is old Link contract used on Ethereum Mainnet that's in pragma 0.4
+	linkAbi, err := link_token_interface.LinkTokenMetaData.GetAbi()
+	require.NoError(t, err, "failed to get ABI")
+
+	data, err := c.DeployContract(c.NewTXOpts(), "LinkTokenInterface", *linkAbi, common.FromHex(link_token_interface.LinkTokenMetaData.Bin))
+	require.NoError(t, err, "failed to deploy contract")
+
+	instance, err := link_token_interface.NewLinkToken(data.Address, c.Client)
+	require.NoError(t, err, "failed to create contract instance")
+
+	amount := big.NewInt(0)
+	tx, txErr := instance.TransferAndCall(c.NewTXOpts(), TestEnv.DebugContractAddress, amount, []byte{})
+	require.NoError(t, txErr, "transaction should have reverted")
+	_, decodeErr := c.Decode(tx, txErr)
+	require.Error(t, decodeErr, "transaction should have reverted")
+	require.Equal(t, "execution reverted", decodeErr.Error(), "expected error message to contain the reverted error type and values")
 }
 
 func TestTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing.T) {

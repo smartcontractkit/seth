@@ -416,14 +416,8 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 			return nil, errors.Wrap(txErr, reason)
 		}
 
-		msg := "Skipping decoding, transaction submission failed. Nothing to decode"
-
-		if m.Cfg.Network.GasLimit == 0 {
-			msg = "Skipping decoding, most probably gas estimation failed. √. You could try to set gas limit manually in config and try again to get decoded transaction"
-		}
-
 		L.Trace().
-			Msg(msg)
+			Msg("Skipping decoding, transaction submission failed. Nothing to decode")
 		return nil, txErr
 	}
 
