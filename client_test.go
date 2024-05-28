@@ -39,7 +39,7 @@ func TestRPCHealtCheckEnabled_Node_Unhealthy(t *testing.T) {
 
 	_, err = seth.NewClientWithConfig(cfg)
 	require.Error(t, err, "expected error when connecting to unhealthy node")
-	require.Contains(t, err.Error(), seth.ErrRpcHealtCheckFailed, "expected error message when connecting to dead node")
+	require.Contains(t, err.Error(), seth.ErrRpcHealthCheckFailed, "expected error message when connecting to dead node")
 }
 
 func TestRPCHealtCheckDisabled_Node_Unhealthy(t *testing.T) {

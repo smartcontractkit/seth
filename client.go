@@ -26,14 +26,14 @@ import (
 )
 
 const (
-	ErrEmptyConfigPath     = "toml config path is empty, set SETH_CONFIG_PATH"
-	ErrCreateABIStore      = "failed to create ABI store"
-	ErrReadingKeys         = "failed to read keys"
-	ErrCreateNonceManager  = "failed to create nonce manager"
-	ErrCreateTracer        = "failed to create tracer"
-	ErrReadContractMap     = "failed to read deployed contract map"
-	ErrNoKeyLoaded         = "failed to load private key"
-	ErrRpcHealtCheckFailed = "RPC health check failed ¯\\_(ツ)_/¯"
+	ErrEmptyConfigPath      = "toml config path is empty, set SETH_CONFIG_PATH"
+	ErrCreateABIStore       = "failed to create ABI store"
+	ErrReadingKeys          = "failed to read keys"
+	ErrCreateNonceManager   = "failed to create nonce manager"
+	ErrCreateTracer         = "failed to create tracer"
+	ErrReadContractMap      = "failed to read deployed contract map"
+	ErrNoKeyLoaded          = "failed to load private key"
+	ErrRpcHealthCheckFailed = "RPC health check failed ¯\\_(ツ)_/¯"
 
 	ContractMapFilePattern          = "deployed_contracts_%s_%s.toml"
 	RevertedTransactionsFilePattern = "reverted_transactions_%s_%s.json"
@@ -237,14 +237,11 @@ func NewClientRaw(
 		return nil, fmt.Errorf("failed to connect to '%s' due to: %w", cfg.Network.URLs[0], err)
 	}
 
-	if cfg.Network.Name == DefaultNetworkName {
-		chainId, err := client.ChainID(context.Background())
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get chain ID")
-		}
-		cfg.Network.ChainID = chainId.String()
+	chainId, err := client.ChainID(context.Background())
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get chain ID")
 	}
-
+	cfg.Network.ChainID = chainId.String()
 	cID, err := strconv.Atoi(cfg.Network.ChainID)
 	if err != nil {
 		return nil, err
@@ -401,7 +398,7 @@ func (m *Client) checkRPCHealth() error {
 
 	err = m.TransferETHFromKey(ctx, 0, m.Addresses[0].Hex(), big.NewInt(10_000), gasPrice)
 	if err != nil {
-		return errors.Wrap(err, ErrRpcHealtCheckFailed)
+		return errors.Wrap(err, ErrRpcHealthCheckFailed)
 	}
 
 	L.Info().Msg("RPC health check passed <---------------- !!!!! ----------------")
