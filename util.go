@@ -153,7 +153,7 @@ func (m *Client) CreateOrUnmarshalKeyFile(opts *FundKeyFileCmdOpts) (*KeyFile, e
 		L.Info().
 			Str("Path", m.Cfg.KeyFilePath).
 			Interface("Opts", opts).
-			Msg("Loading keyfile")
+			Msg("Loading keyfile. Ignoring addresses-related opts")
 		var kf *KeyFile
 		d, err := os.ReadFile(m.Cfg.KeyFilePath)
 		if err != nil {

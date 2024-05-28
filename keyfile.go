@@ -56,8 +56,16 @@ func UpdateAndSplitFunds(c *Client, opts *FundKeyFileCmdOpts) error {
 	for _, kfd := range keyFile.Keys {
 		kfd := kfd
 		eg.Go(func() error {
-			kfd.Funds = bd.AddrFunding.String()
-			return c.TransferETHFromKey(egCtx, 0, kfd.Address, bd.AddrFunding, gasPrice)
+			err := c.TransferETHFromKey(egCtx, 0, kfd.Address, bd.AddrFunding, gasPrice)
+			if err != nil {
+				return err
+			}
+			bal, err := c.Client.BalanceAt(egCtx, common.HexToAddress(kfd.Address), nil)
+			if err != nil {
+				return err
+			}
+			kfd.Funds = bal.String()
+			return nil
 		})
 	}
 	if err := eg.Wait(); err != nil {

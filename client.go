@@ -236,6 +236,15 @@ func NewClientRaw(
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to '%s' due to: %w", cfg.Network.URLs[0], err)
 	}
+
+	if cfg.Network.ChainID == DefaultChainID {
+		chainId, err := client.ChainID(context.Background())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get chain ID")
+		}
+		cfg.Network.ChainID = chainId.String()
+	}
+
 	cID, err := strconv.Atoi(cfg.Network.ChainID)
 	if err != nil {
 		return nil, err
