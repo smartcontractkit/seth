@@ -33,7 +33,7 @@ const (
 	NETWORK_ENV_VAR          = "SETH_NETWORK"
 	URL_ENV_VAR              = "SETH_URL"
 
-	ONE_PASS_VAULT_ENV_VAR = "ONE_PASS_VAULT"
+	ONE_PASS_VAULT_ENV_VAR = "SETH_ONE_PASS_VAULT"
 
 	DefaultNetworkName = "Default"
 )

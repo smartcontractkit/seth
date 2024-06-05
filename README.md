@@ -109,6 +109,7 @@ export SETH_CONFIG_PATH=seth.toml # path to the toml config
 export SETH_KEYFILE_PATH=keyfile.toml # keyfile path for using multiple keys
 export SETH_NETWORK=Geth # selected network
 export SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 # root private key
+export SETH_ONE_PASS_VAULT=712jkhjdyf71289hdjfs7d # id of 1password vault in which we store secrets
 
 alias seth="SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go" # useful alias for keyfile CLI
 ```
@@ -120,9 +121,9 @@ export SETH_CHAIN_ID=43113
 
 go run cmd/seth/seth.go ... # your command
 ```
+In that case you should still pass network name with `-n` flag, especially when using CLI with 1password as network name is used when generating item name. 
 
 If `SETH_KEYFILE_PATH` is not set then client will create X ephemeral keys (60 by default, configurable) and won't return any funds.
-
 Use `SETH_KEYFILE_PATH` for testnets/mainnets and `ephemeral` mode only when testing against simulated network.
 
 ### seth.toml
@@ -226,25 +227,46 @@ To use multiple keys in your tests you can create a `keyfile.toml` using CLI
 
 Set up the alias, see `.envrc` configuration above
 ```
+export SETH_LOG_LEVEL=info # global logger level
 alias seth="SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go"
 ```
 
-Create a new `keyfile` with 10 new accounts funded from the root key (KEYS env var)
+When you run any of the commands from `keys` namespace by default Seth will try to interact with 1password. To do that you need to meet a couple of requirements:
+1. 1password desktop [app](https://1password.com/product/mac/) installed.
+2. 1password CLI tool called [op](https://developer.1password.com/docs/cli/get-started/)
+
+Once you have it setup you can run `op vaults list` to get ids of all vaults you are assigned to. The output will look more or less like this:
+```bash
+ID                            NAME
+4rdre3lw7mqyz4nbrqcygdzwri    Vault 1
+r4qs5dh3zwofum2jse7g53cgrm    Vault 2
 ```
-SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile.toml seth -n Geth keys fund -a 10 [-b 2]
+
+Once you have decided, which vault you want to use you need to export its id in `SETH_ONE_PASS_VAULT` variable. We will use `Vault 1`'s ids in the following examples.
+
+Create a new `keyfile` with 10 new accounts funded from the root key
 ```
+SETH_ONE_PASS_VAULT=4rdre3lw7mqyz4nbrqcygdzwri SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile_geth.toml seth -n Geth keys fund -a 10 [-b 2] [--local]
+```
+This will create a new Secure Note in 1password called GETH_KEYFILE with file attachment containing 10 new keys. Item name is always `<NETWORK_NAME_>_KEYFILE`. It's crucial that you always pass network name with `-n` flag, as it's used in item name. If it's missing we will use `DEFAULT` network name and it will be impossible to distinguish between keyfiles from different networks.
+`SETH_KEYFILE_PATH` is still required, even when using 1password, because if creating the keyfile in 1password fails, we will save it to the file, so that no funds are lost.
+Also remember that you don't need to define your network in TOML file as long as you pass the RPC URL with `-u` flag.
+
 Run the tests, then return funds back, when needed
 ```
-SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile.toml seth -n Geth keys return
+SETH_ONE_PASS_VAULT=4rdre3lw7mqyz4nbrqcygdzwri SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile_geth.toml seth -n Geth keys return [--local]
 ```
 Update the balances
 ```
-SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile.toml seth -n Geth keys update
+SETH_ONE_PASS_VAULT=4rdre3lw7mqyz4nbrqcygdzwri  SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile_geth.toml seth -n Geth keys update [--local]
 ```
 Remove the `keyfile`
 ```
-SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile.toml seth -n Geth keys remove
+SETH_ONE_PASS_VAULT=4rdre3lw7mqyz4nbrqcygdzwri SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile_geth.toml seth -n Geth keys remove [--local]
 ```
+
+If you don't want to use 1password you can still use local keyfile by providing `--local` flag.
+
 ### Manual gas price estimation
 In order to adjust gas price for a transaction, you can use `seth gas` command
 ```
@@ -363,6 +385,7 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 - [x] Automatic gas estimator (experimental)
 - [x] Block stats CLI
 - [x] Check if address has a pending nonce (transaction) and panic if it does
+- [x] 1password integration
 
 You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
 
