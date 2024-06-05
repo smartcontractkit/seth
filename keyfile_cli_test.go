@@ -65,7 +65,7 @@ func TestCLIUpdateBalances(t *testing.T) {
 	require.NoError(t, err)
 	err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "update", "--local"})
 	require.NoError(t, err)
-	kf, _, err := c.CreateOrUnmarshalKeyFile(nil)
+	kf, _, err := c.CreateOrUnmarshalKeyFile(&seth.FundKeyFileCmdOpts{LocalKeyfile: true})
 	require.NoError(t, err)
 	require.NotEqual(t, kf.Keys[0].Funds, kf.Keys[1].Funds)
 	err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "return", "--local"})
