@@ -38,6 +38,7 @@ func TestCLIDefaultNetworkWithNetworkName(t *testing.T) {
 
 func TestCLIDefaultNetwork(t *testing.T) {
 	url, err := getUrlFromEnv()
+	require.NoError(t, err, "Error getting url from env")
 	network := os.Getenv(seth.NETWORK_ENV_VAR)
 	defer func() {
 		_ = os.Setenv(seth.NETWORK_ENV_VAR, network)
