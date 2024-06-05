@@ -33,6 +33,8 @@ const (
 	NETWORK_ENV_VAR          = "SETH_NETWORK"
 	URL_ENV_VAR              = "SETH_URL"
 
+	ONE_PASS_VAULT_ENV_VAR = "ONE_PASS_VAULT"
+
 	DefaultNetworkName = "Default"
 )
 
@@ -123,10 +125,10 @@ func ReadConfig() (*Config, error) {
 				break
 			}
 		}
-		if cfg.Network == nil {
-			return nil, fmt.Errorf("network %s not defined in the TOML file", snet)
-		}
-	} else {
+	}
+
+	if cfg.Network == nil {
+		L.Debug().Msgf("Network %s not found in TOML, trying to use URL", snet)
 		url := os.Getenv(URL_ENV_VAR)
 
 		if url == "" {
@@ -137,8 +139,14 @@ func ReadConfig() (*Config, error) {
 		for _, n := range cfg.Networks {
 			if n.Name == DefaultNetworkName {
 				cfg.Network = n
-				cfg.Network.Name = DefaultNetworkName
+				cfg.Network.Name = snet
 				cfg.Network.URLs = []string{url}
+
+				if snet == "" {
+					L.Warn().Msg("No network name provided, using default network")
+					cfg.Network.Name = DefaultNetworkName
+				}
+
 				break
 			}
 		}

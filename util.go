@@ -43,6 +43,8 @@ type KeyData struct {
 type FundKeyFileCmdOpts struct {
 	Addrs         int64
 	RootKeyBuffer int64
+	LocalKeyfile  bool
+	VaultId       string
 }
 
 // FundingDetails funding details about shares we put into test keys
@@ -131,42 +133,126 @@ func (m *Client) CalculateSubKeyFunding(addrs, gasPrice, rooKeyBuffer int64) (*F
 	return bd, nil
 }
 
-func (m *Client) CreateOrUnmarshalKeyFile(opts *FundKeyFileCmdOpts) (*KeyFile, error) {
-	if _, err := os.Stat(m.Cfg.KeyFilePath); os.IsNotExist(err) {
-		L.Info().
-			Str("Path", m.Cfg.KeyFilePath).
-			Interface("Opts", opts).
-			Msg("Creating a new key file")
-		if _, err := os.Create(m.Cfg.KeyFilePath); err != nil {
-			return nil, err
+type KeyfileStatus = bool
+
+const (
+	NewKeyfile      KeyfileStatus = true
+	ExistingKeyfile KeyfileStatus = false
+)
+
+func (m *Client) CreateOrUnmarshalKeyFile(opts *FundKeyFileCmdOpts) (*KeyFile, KeyfileStatus, error) {
+	if opts.LocalKeyfile {
+		if _, err := os.Stat(m.Cfg.KeyFilePath); os.IsNotExist(err) {
+			L.Info().
+				Str("Path", m.Cfg.KeyFilePath).
+				Interface("Opts", opts).
+				Msg("Creating a new key file")
+			if _, err := os.Create(m.Cfg.KeyFilePath); err != nil {
+				return nil, NewKeyfile, err
+			}
+
+			kf := NewKeyFile()
+			for i := 0; i < int(opts.Addrs); i++ {
+				addr, pKey, err := NewAddress()
+				if err != nil {
+					return nil, false, err
+				}
+				kf.Keys = append(kf.Keys, &KeyData{PrivateKey: pKey, Address: addr})
+			}
+			return kf, NewKeyfile, nil
+		} else {
+			L.Info().
+				Str("Path", m.Cfg.KeyFilePath).
+				Interface("Opts", opts).
+				Msg("Loading keyfile. Ignoring addresses-related opts")
+			var kf *KeyFile
+
+			d, err := os.ReadFile(m.Cfg.KeyFilePath)
+			if err != nil {
+				return nil, false, err
+			}
+			if err := toml.Unmarshal(d, &kf); err != nil {
+				return nil, false, err
+			}
+
+			if kf == nil || len(kf.Keys) == 0 {
+				return nil, false, errors.New(ErrEmptyKeyFile)
+			}
+			return kf, ExistingKeyfile, nil
 		}
+	} else {
+		existsIn1Pass, err := ExistsIn1Pass(m, opts.VaultId)
+		if err != nil {
+			L.Error().Err(err).Msg("error trying to check if keyfile exists in 1Password")
+			return nil, false, err
+		}
+
+		if existsIn1Pass {
+			keyfile, err := LoadFrom1Pass(m, opts.VaultId)
+			if err != nil {
+				return &KeyFile{}, false, err
+			}
+			return &keyfile, ExistingKeyfile, nil
+		}
+
 		kf := NewKeyFile()
 		for i := 0; i < int(opts.Addrs); i++ {
 			addr, pKey, err := NewAddress()
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			kf.Keys = append(kf.Keys, &KeyData{PrivateKey: pKey, Address: addr})
 		}
-		return kf, nil
-	} else {
-		L.Info().
-			Str("Path", m.Cfg.KeyFilePath).
-			Interface("Opts", opts).
-			Msg("Loading keyfile. Ignoring addresses-related opts")
-		var kf *KeyFile
-		d, err := os.ReadFile(m.Cfg.KeyFilePath)
-		if err != nil {
-			return nil, err
-		}
-		if err := toml.Unmarshal(d, &kf); err != nil {
-			return nil, err
-		}
-		if kf == nil || len(kf.Keys) == 0 {
-			return nil, errors.New(ErrEmptyKeyFile)
-		}
-		return kf, nil
+		return kf, NewKeyfile, nil
 	}
+	//
+	//if _, err := os.Stat(m.Cfg.KeyFilePath); os.IsNotExist(err) {
+	//	L.Info().
+	//		Str("Path", m.Cfg.KeyFilePath).
+	//		Interface("Opts", opts).
+	//		Msg("Creating a new key file")
+	//	if opts.LocalKeyfile {
+	//		if _, err := os.Create(m.Cfg.KeyFilePath); err != nil {
+	//			return nil, NewKeyfile, err
+	//		}
+	//	}
+	//	kf := NewKeyFile()
+	//	for i := 0; i < int(opts.Addrs); i++ {
+	//		addr, pKey, err := NewAddress()
+	//		if err != nil {
+	//			return nil, false, err
+	//		}
+	//		kf.Keys = append(kf.Keys, &KeyData{PrivateKey: pKey, Address: addr})
+	//	}
+	//	return kf, NewKeyfile, nil
+	//} else {
+	//	L.Info().
+	//		Str("Path", m.Cfg.KeyFilePath).
+	//		Interface("Opts", opts).
+	//		Msg("Loading keyfile. Ignoring addresses-related opts")
+	//	var kf *KeyFile
+	//
+	//	if opts.LocalKeyfile {
+	//		d, err := os.ReadFile(m.Cfg.KeyFilePath)
+	//		if err != nil {
+	//			return nil, false, err
+	//		}
+	//		if err := toml.Unmarshal(d, &kf); err != nil {
+	//			return nil, false, err
+	//		}
+	//	} else {
+	//		keyfile, err := LoadFrom1Pass(m, opts.VaultId)
+	//		if err != nil {
+	//			return kf, false, err
+	//		}
+	//		kf = &keyfile
+	//	}
+	//
+	//	if kf == nil || len(kf.Keys) == 0 {
+	//		return nil, false, errors.New(ErrEmptyKeyFile)
+	//	}
+	//	return kf, ExistingKeyfile, nil
+	//}
 }
 
 func (m *Client) DeployDebugSubContract() (*network_sub_debug_contract.NetworkDebugSubContract, common.Address, error) {
