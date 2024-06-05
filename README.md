@@ -235,6 +235,11 @@ When you run any of the commands from `keys` namespace by default Seth will try 
 1. 1password desktop [app](https://1password.com/product/mac/) installed.
 2. 1password CLI tool called [op](https://developer.1password.com/docs/cli/get-started/)
 
+Now... if you are working with a vault you have access to via your desktop app, it will ask you to authenticate via the desktop app every time you need to access the vault and no further configuration is required. If it's a vault you don't have access to via the desktop app you will need to set service account token in your env vars:
+```bash
+export OP_SERVICE_ACCOUNT_TOKEN=...
+```
+
 Once you have it setup you can run `op vaults list` to get ids of all vaults you are assigned to. The output will look more or less like this:
 ```bash
 ID                            NAME

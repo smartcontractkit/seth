@@ -215,6 +215,7 @@ func readKeyFileConfig(cfg *Config) error {
 	var kfd []byte
 
 	if cfg.KeyFileSource == KeyFileSourceFile {
+		L.Debug().Msgf("Looking for keyfile file '%s'", cfg.KeyFilePath)
 		if _, err := os.Stat(cfg.KeyFilePath); os.IsNotExist(err) {
 			return nil
 		}
@@ -224,6 +225,7 @@ func readKeyFileConfig(cfg *Config) error {
 		}
 		L.Debug().Msgf("Found keyfile file '%s' found", cfg.KeyFilePath)
 	} else {
+		L.Debug().Msgf("Looking for keyfile base64 env var '%s'", KEYFILE_BASE64_ENV_VAR)
 		keyFileEncoded, isSet := os.LookupEnv(KEYFILE_BASE64_ENV_VAR)
 		if isSet && keyFileEncoded != "" {
 			L.Debug().Msgf("Found base64 keyfile environment variable '%s' found", KEYFILE_BASE64_ENV_VAR)
