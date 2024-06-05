@@ -14,6 +14,7 @@ func TestCLINetworkFromEnv(t *testing.T) {
 	network := os.Getenv(seth.NETWORK_ENV_VAR)
 	defer func() {
 		_ = os.Setenv(seth.NETWORK_ENV_VAR, network)
+		_ = sethcmd.RunCLI([]string{"seth", "-n", network, "keys", "return", "--local"})
 	}()
 	err := os.Unsetenv(seth.NETWORK_ENV_VAR)
 	require.NoError(t, err, "Error unsetting env var")
@@ -23,12 +24,24 @@ func TestCLINetworkFromEnv(t *testing.T) {
 	require.NoError(t, err, "Error splitting keys")
 }
 
-func TestCLIDefaultNetwork(t *testing.T) {
+func TestCLIDefaultNetworkWithNetworkName(t *testing.T) {
 	url, err := getUrlFromEnv()
 	require.NoError(t, err, "Error getting url from env")
 	network := os.Getenv(seth.NETWORK_ENV_VAR)
 	defer func() {
+		_ = sethcmd.RunCLI([]string{"seth", "-n", network, "keys", "return", "--local"})
+	}()
+	require.NoError(t, err, "Error unsetting env var")
+	err = sethcmd.RunCLI([]string{"seth", "-u", url, "-n", network, "keys", "fund", "-a", "10", "-b", "10", "--local"})
+	require.NoError(t, err, "Error splitting keys")
+}
+
+func TestCLIDefaultNetwork(t *testing.T) {
+	url, err := getUrlFromEnv()
+	network := os.Getenv(seth.NETWORK_ENV_VAR)
+	defer func() {
 		_ = os.Setenv(seth.NETWORK_ENV_VAR, network)
+		_ = sethcmd.RunCLI([]string{"seth", "-u", url, "keys", "return", "--local"})
 	}()
 	err = os.Unsetenv(seth.NETWORK_ENV_VAR)
 	require.NoError(t, err, "Error unsetting env var")
