@@ -3,18 +3,20 @@ package seth
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"os"
+	"path/filepath"
+
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
 	"github.com/smartcontractkit/seth"
 	"github.com/urfave/cli/v2"
-	"math/big"
-	"os"
-	"path/filepath"
 )
 
 const (
-	ErrNoNetwork = "no network specified, use -n flag. Ex.: 'seth -n Geth keys update' or -u and -c flags. Ex.: 'seth -u http://localhost:8545 -c 1337 keys update'"
+	ErrNoNetwork    = "no network specified, use -n flag. Ex.: 'seth -n Geth keys update' or -u and -c flags. Ex.: 'seth -u http://localhost:8545 -c 1337 keys update'"
+	ErrNo1PassVault = "1Password vault name or id is required, when running without '--local' flag. Set it as %s env var"
 )
 
 var C *seth.Client
@@ -37,7 +39,8 @@ func RunCLI(args []string) error {
 			}
 			if networkName != "" {
 				_ = os.Setenv(seth.NETWORK_ENV_VAR, networkName)
-			} else {
+			}
+			if url != "" {
 				_ = os.Setenv(seth.URL_ENV_VAR, url)
 			}
 			if cCtx.Args().Len() > 0 && cCtx.Args().First() != "trace" {
@@ -188,8 +191,16 @@ func RunCLI(args []string) error {
 						Aliases:     []string{"u"},
 						Description: "update balances for all the keys in keyfile.toml",
 						ArgsUsage:   "seth keys update",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{Name: "local", Aliases: []string{"l"}},
+						},
 						Action: func(cCtx *cli.Context) error {
-							return seth.UpdateKeyFileBalances(C)
+							localKeyfile := cCtx.Bool("local")
+							vaultId := os.Getenv(seth.ONE_PASS_VAULT_ENV_VAR)
+							if !localKeyfile && vaultId == "" {
+								return fmt.Errorf(ErrNo1PassVault, seth.ONE_PASS_VAULT_ENV_VAR)
+							}
+							return seth.UpdateKeyFileBalances(C, &seth.FundKeyFileCmdOpts{LocalKeyfile: localKeyfile, VaultId: vaultId})
 						},
 					},
 					{
@@ -197,15 +208,21 @@ func RunCLI(args []string) error {
 						HelpName:    "fund",
 						Aliases:     []string{"f"},
 						Description: "create a new key file, split the funds from the root account to new keys OR fund existing keys read from keyfile",
-						ArgsUsage:   "-a ${amount of addresses to create} -b ${amount in ethers to keep in root key}",
+						ArgsUsage:   "-a ${amount of addresses to create} -b ${amount in ethers to keep in root key} -l",
 						Flags: []cli.Flag{
 							&cli.Int64Flag{Name: "addresses", Aliases: []string{"a"}},
 							&cli.Int64Flag{Name: "buffer", Aliases: []string{"b"}},
+							&cli.BoolFlag{Name: "local", Aliases: []string{"l"}},
 						},
 						Action: func(cCtx *cli.Context) error {
 							addresses := cCtx.Int64("addresses")
 							rootKeyBuffer := cCtx.Int64("buffer")
-							opts := &seth.FundKeyFileCmdOpts{Addrs: addresses, RootKeyBuffer: rootKeyBuffer}
+							localKeyfile := cCtx.Bool("local")
+							vaultId := os.Getenv(seth.ONE_PASS_VAULT_ENV_VAR)
+							if !localKeyfile && vaultId == "" {
+								return fmt.Errorf(ErrNo1PassVault, seth.ONE_PASS_VAULT_ENV_VAR)
+							}
+							opts := &seth.FundKeyFileCmdOpts{Addrs: addresses, RootKeyBuffer: rootKeyBuffer, LocalKeyfile: localKeyfile, VaultId: vaultId}
 							return seth.UpdateAndSplitFunds(C, opts)
 						},
 					},
@@ -213,14 +230,19 @@ func RunCLI(args []string) error {
 						Name:        "return",
 						HelpName:    "return",
 						Aliases:     []string{"r"},
-						Description: "returns all the funds from addresses from keyfile.toml to original root key (KEYS env var)",
+						Description: "returns all the funds from addresses from keyfile.toml to original root key",
 						ArgsUsage:   "-a ${addr_to_return_to}",
 						Flags: []cli.Flag{
 							&cli.StringFlag{Name: "address", Aliases: []string{"a"}},
+							&cli.BoolFlag{Name: "local", Aliases: []string{"l"}},
 						},
 						Action: func(cCtx *cli.Context) error {
-							toAddr := cCtx.String("address")
-							return seth.ReturnFundsAndUpdateKeyfile(C, toAddr)
+							localKeyfile := cCtx.Bool("local")
+							vaultId := os.Getenv(seth.ONE_PASS_VAULT_ENV_VAR)
+							if !localKeyfile && vaultId == "" {
+								return fmt.Errorf(ErrNo1PassVault, seth.ONE_PASS_VAULT_ENV_VAR)
+							}
+							return seth.ReturnFundsFromKeyFileAndUpdateIt(C, cCtx.String("address"), &seth.FundKeyFileCmdOpts{LocalKeyfile: localKeyfile, VaultId: vaultId})
 						},
 					},
 					{
@@ -228,8 +250,21 @@ func RunCLI(args []string) error {
 						Aliases:     []string{"rm"},
 						Description: "removes keyfile.toml",
 						HelpName:    "return",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{Name: "local", Aliases: []string{"l"}},
+						},
 						Action: func(cCtx *cli.Context) error {
-							return os.Remove(C.Cfg.KeyFilePath)
+							localKeyfile := cCtx.Bool("local")
+							vaultId := os.Getenv(seth.ONE_PASS_VAULT_ENV_VAR)
+							if !localKeyfile && vaultId == "" {
+								return fmt.Errorf(ErrNo1PassVault, seth.ONE_PASS_VAULT_ENV_VAR)
+							}
+
+							if localKeyfile {
+								return os.Remove(C.Cfg.KeyFilePath)
+							}
+
+							return seth.DeleteFrom1Pass(C, vaultId)
 						},
 					},
 				},
