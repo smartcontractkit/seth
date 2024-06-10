@@ -9,10 +9,10 @@ require (
 	github.com/barkimedes/go-deepcopy v0.0.0-20220514131651-17c30cfc62df
 	github.com/ethereum/go-ethereum v1.13.8
 	github.com/montanaflynn/stats v0.7.1
-	github.com/pelletier/go-toml/v2 v2.1.1
+	github.com/pelletier/go-toml/v2 v2.2.2
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.30.0
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli/v2 v2.25.7
 	go.uber.org/ratelimit v0.3.0
 	golang.org/x/sync v0.5.0
