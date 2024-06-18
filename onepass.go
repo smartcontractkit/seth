@@ -27,9 +27,12 @@ func CreateIn1Pass(c *Client, content string, vaultId string) error {
 	}
 
 	uploadCmd := exec.Command("op", "item", "create", "--vault", vaultId, "--category", "Secure Note", "--title", keyName, fmt.Sprintf("keyfile[file]=%s", absolutePath))
-	output, err := uploadCmd.Output()
+	output, err := uploadCmd.CombinedOutput()
 	if err != nil {
 		L.Err(err).Msgf("failed to upload keyfile to 1Password:\n%s", string(output))
+		if len(output) > 0 {
+			return errors.Wrapf(errors.New(string(output)), "failed to create keyfile in 1Password")
+		}
 		return errors.Wrapf(err, "failed to create keyfile in 1Password")
 	}
 	L.Info().Str("Item name", keyName).Msg("Keyfile created in 1Password")
