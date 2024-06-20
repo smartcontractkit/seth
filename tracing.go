@@ -308,7 +308,7 @@ func (t *Tracer) decodeCall(byteSignature []byte, rawCall Call) (*DecodedCall, e
 	defaultCall.To = t.getHumanReadableAddressName(rawCall.To) //somehow mark it with "*"
 	defaultCall.Comment = generateDuplicatesComment(abiResult)
 
-	if rawCall.Value != "0x0" {
+	if rawCall.Value != "" && rawCall.Value != "0x0" {
 		decimalValue, err := strconv.ParseInt(strings.TrimPrefix(rawCall.Value, "0x"), 16, 64)
 		if err != nil {
 			L.Warn().
@@ -320,7 +320,7 @@ func (t *Tracer) decodeCall(byteSignature []byte, rawCall Call) (*DecodedCall, e
 		}
 	}
 
-	if rawCall.Gas != "0x0" {
+	if rawCall.Gas != "" && rawCall.Gas != "0x0" {
 		decimalValue, err := strconv.ParseInt(strings.TrimPrefix(rawCall.Gas, "0x"), 16, 64)
 		if err != nil {
 			L.Warn().
@@ -332,7 +332,7 @@ func (t *Tracer) decodeCall(byteSignature []byte, rawCall Call) (*DecodedCall, e
 		}
 	}
 
-	if rawCall.GasUsed != "0x0" {
+	if rawCall.GasUsed != "" && rawCall.GasUsed != "0x0" {
 		decimalValue, err := strconv.ParseInt(strings.TrimPrefix(rawCall.GasUsed, "0x"), 16, 64)
 		if err != nil {
 			L.Warn().

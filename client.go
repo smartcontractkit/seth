@@ -6,7 +6,6 @@ import (
 	verr "errors"
 	"fmt"
 	"math/big"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -196,10 +195,6 @@ func ValidateConfig(cfg *Config) error {
 	case "", KeyFileSourceFile, KeyFileSourceBase64EnvVar:
 	default:
 		return fmt.Errorf("KeyFileSource must be either empty (disabled) or one of: '%s', '%s'", KeyFileSourceFile, KeyFileSourceBase64EnvVar)
-	}
-
-	if cfg.KeyFileSource == KeyFileSourceBase64EnvVar && os.Getenv(KEYFILE_BASE64_ENV_VAR) == "" {
-		return fmt.Errorf("KeyFileSource is set to 'base64-env-var' but the environment variable '%s' is not set", KEYFILE_BASE64_ENV_VAR)
 	}
 
 	if cfg.KeyFileSource == KeyFileSourceFile && cfg.KeyFilePath == "" {
