@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -50,8 +51,10 @@ address = '0x15E28dC693cE24A289f8Cd7D424D54d2969EB7d7'
 funds = '987316640856926500'`
 )
 
-func TestFullFlow(t *testing.T) {
-	client := &seth.Client{Cfg: &seth.Config{Network: &seth.Network{Name: "test"}}}
+var test_id = fmt.Sprintf("test-%s", uuid.New().String()[:5])
+
+func TestOnePassFullFlow(t *testing.T) {
+	client := &seth.Client{Cfg: &seth.Config{Network: &seth.Network{Name: test_id}}}
 	vaultId := os.Getenv(seth.ONE_PASS_VAULT_ENV_VAR)
 
 	err := seth.CreateIn1Pass(client, validContent, vaultId)
@@ -73,8 +76,8 @@ func TestFullFlow(t *testing.T) {
 	require.Equal(t, "987316640856926500", keyfile.Keys[0].Funds)
 }
 
-func TestReplaceIn1Pass(t *testing.T) {
-	client := &seth.Client{Cfg: &seth.Config{Network: &seth.Network{Name: "test"}}}
+func TestOnePassReplaceIn1Pass(t *testing.T) {
+	client := &seth.Client{Cfg: &seth.Config{Network: &seth.Network{Name: test_id}}}
 	vaultId := os.Getenv(seth.ONE_PASS_VAULT_ENV_VAR)
 
 	newContent := `[[keys]]
@@ -100,7 +103,7 @@ funds = '987316640856926501'`
 	require.Equal(t, "987316640856926501", keyfile.Keys[0].Funds)
 }
 
-func TestDoesNotExistsIn1Pass(t *testing.T) {
+func TestOnePassDoesNotExistsIn1Pass(t *testing.T) {
 	client := &seth.Client{Cfg: &seth.Config{Network: &seth.Network{Name: "i-don-t-exist"}}}
 	vaultId := os.Getenv(seth.ONE_PASS_VAULT_ENV_VAR)
 
@@ -109,7 +112,7 @@ func TestDoesNotExistsIn1Pass(t *testing.T) {
 	require.False(t, exists)
 }
 
-func TestLoadNonExistentFrom1Pass(t *testing.T) {
+func TestOnePassLoadNonExistentFrom1Pass(t *testing.T) {
 	client := &seth.Client{Cfg: &seth.Config{Network: &seth.Network{Name: "i-don-t-exist"}}}
 	vaultId := os.Getenv(seth.ONE_PASS_VAULT_ENV_VAR)
 
@@ -117,8 +120,8 @@ func TestLoadNonExistentFrom1Pass(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestDeleteFrom1Pass(t *testing.T) {
-	client := &seth.Client{Cfg: &seth.Config{Network: &seth.Network{Name: "test"}}}
+func TestOnePassDeleteFrom1Pass(t *testing.T) {
+	client := &seth.Client{Cfg: &seth.Config{Network: &seth.Network{Name: test_id}}}
 	vaultId := os.Getenv(seth.ONE_PASS_VAULT_ENV_VAR)
 
 	err := seth.CreateIn1Pass(client, validContent, vaultId)
@@ -128,7 +131,7 @@ func TestDeleteFrom1Pass(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestDeleteNonExistentFrom1Pass(t *testing.T) {
+func TestOnePassDeleteNonExistentFrom1Pass(t *testing.T) {
 	client := &seth.Client{Cfg: &seth.Config{Network: &seth.Network{Name: "i-don-t-exist"}}}
 	vaultId := os.Getenv(seth.ONE_PASS_VAULT_ENV_VAR)
 
