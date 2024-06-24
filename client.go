@@ -1063,12 +1063,31 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 		Str("TXHash", tx.Hash().Hex()).
 		Msgf("Waiting for %s contract deployment to finish", name)
 
+	m.ContractAddressToNameMap.AddContract(address.Hex(), name)
+
+	if _, ok := m.ContractStore.GetABI(name); !ok {
+		m.ContractStore.AddABI(name, abi)
+	}
+
 	// I had this one failing sometimes, when transaction has been minted, but contract cannot be found yet at address
 	if err := retry.Do(
 		func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
 			_, err := bind.WaitDeployed(ctx, m.Client, tx)
 			cancel()
+
+			// let's make sure that deployment transaction was successful, before retrying
+			if err != nil {
+				receipt, mineErr := bind.WaitMined(context.Background(), m.Client, tx)
+				if mineErr != nil {
+					return mineErr
+				}
+
+				if receipt.Status == 0 {
+					return errors.New("deployment transaction was reverted")
+				}
+			}
+
 			return err
 		}, retry.OnRetry(func(i uint, _ error) {
 			L.Debug().Uint("Attempt", i).Msg("Waiting for contract to be deployed")
@@ -1081,6 +1100,8 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 				strings.Contains(strings.ToLower(err.Error()), "no contract code after deployment")
 		}),
 	); err != nil {
+		// do not pass the error here, because it's not transaction submission error
+		_, _ = m.Decode(tx, nil)
 		return DeploymentData{}, wrapErrInMessageWithASuggestion(err)
 	}
 
@@ -1088,12 +1109,6 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 		Str("Address", address.Hex()).
 		Str("TXHash", tx.Hash().Hex()).
 		Msgf("Deployed %s contract", name)
-
-	m.ContractAddressToNameMap.AddContract(address.Hex(), name)
-
-	if _, ok := m.ContractStore.GetABI(name); !ok {
-		m.ContractStore.AddABI(name, abi)
-	}
 
 	if !m.Cfg.ShoulSaveDeployedContractMap() {
 		return DeploymentData{Address: address, Transaction: tx, BoundContract: contract}, nil
