@@ -312,15 +312,19 @@ func (m *Client) callAndGetRevertReason(tx *types.Transaction, rc *types.Receipt
 		L.Warn().Msg("Failed to decode revert reason")
 
 		if plainStringErr.Error() == "execution reverted" && tx != nil && rc != nil {
-			pragma, err := m.DownloadContractAndGetPragma(*tx.To(), rc.BlockNumber)
-			if err == nil {
-				if DoesPragmaSupportCustomRevert(pragma) {
-					L.Warn().Str("Pragma", fmt.Sprint(pragma)).Msg("Custom revert reason is supported by pragma, but we could not decode it. This might be a bug in Seth. Please contact the Test Tooling team.")
+			if tx.To() != nil {
+				pragma, err := m.DownloadContractAndGetPragma(*tx.To(), rc.BlockNumber)
+				if err == nil {
+					if DoesPragmaSupportCustomRevert(pragma) {
+						L.Warn().Str("Pragma", fmt.Sprint(pragma)).Msg("Custom revert reason is supported by pragma, but we could not decode it. This might be a bug in Seth. Please contact the Test Tooling team.")
+					} else {
+						L.Info().Str("Pragma", fmt.Sprint(pragma)).Msg("Custom revert reason is not supported by pragma version (must be >= 0.8.4). There's nothing more we can do to get custom revert reason.")
+					}
 				} else {
-					L.Info().Str("Pragma", fmt.Sprint(pragma)).Msg("Custom revert reason is not supported by pragma version (must be >= 0.8.4). There's nothing more we can do to get custom revert reason.")
+					L.Warn().Err(err).Msg("Failed to decode pragma version. Contract either uses very old version or was compiled without metadata. We won't be able to decode revert reason.")
 				}
 			} else {
-				L.Warn().Err(err).Msg("Failed to decode pragma version. Contract either uses very old version or was compiled without metadata. We won't be able to decode revert reason.")
+				L.Warn().Msg("Transaction has no recipient address. Most likely it's a contract creation transaction. We don't support decoding revert reasons for contract creation transactions yet.")
 			}
 		}
 
