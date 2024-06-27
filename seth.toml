@@ -123,6 +123,7 @@ eip_1559_dynamic_fees = true
 name = "Sepolia"
 transaction_timeout = "30s"
 eip_1559_dynamic_fees = true
+urls_secret = ["wss://rpcs.main.stage.cldev.sh/ethereum/sepolia/archive/chainstack1"]
 
 # automated gas estimation
 gas_price_estimation_enabled = true
