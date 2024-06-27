@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
@@ -363,12 +364,17 @@ func RunCLI(args []string) error {
 
 					seth.L.Info().Msgf("Tracing transactions from %s file", file)
 
-					for _, tx := range transactions {
-						seth.L.Info().Msgf("Tracing transaction %s", tx)
-						err = client.Tracer.TraceGethTX(tx)
+					for _, txHash := range transactions {
+						seth.L.Info().Msgf("Tracing transaction %s", txHash)
+						ctx, cancel := context.WithTimeout(context.Background(), cfg.Network.TxnTimeout.Duration())
+						tx, _, err := client.Client.TransactionByHash(ctx, common.HexToHash(txHash))
+						cancel()
 						if err != nil {
-							return err
+							return errors.Wrapf(err, "failed to get transaction %s", txHash)
 						}
+
+						_, err = client.Decode(tx, nil)
+						seth.L.Info().Msgf("Possible revert reason: %s", err.Error())
 					}
 					return err
 				},

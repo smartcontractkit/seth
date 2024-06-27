@@ -244,9 +244,10 @@ func (m *Client) DecodeCustomABIErr(txErr error) (string, error) {
 
 // CallMsgFromTx creates ethereum.CallMsg from tx, used in simulated calls
 func (m *Client) CallMsgFromTx(tx *types.Transaction) (ethereum.CallMsg, error) {
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	sender, err := types.Sender(signer, tx)
 	if err != nil {
+		L.Warn().Err(err).Msg("Failed to get sender from tx")
 		return ethereum.CallMsg{}, err
 	}
 
