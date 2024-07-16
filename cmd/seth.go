@@ -277,13 +277,28 @@ func RunCLI(args []string) error {
 				Description: "trace transactions loaded from JSON file",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "file", Aliases: []string{"f"}},
+					&cli.StringFlag{Name: "txHash", Aliases: []string{"t"}},
 				},
 				Action: func(cCtx *cli.Context) error {
 					file := cCtx.String("file")
+					txHash := cCtx.String("txHash")
+
+					if file == "" && txHash == "" {
+						return fmt.Errorf("no file or transaction hash specified, use -f or -t flags")
+					}
+
+					if file != "" && txHash != "" {
+						return fmt.Errorf("both file and transaction hash specified, use only one")
+					}
+
 					var transactions []string
-					err := seth.OpenJsonFileAsStruct(file, &transactions)
-					if err != nil {
-						return err
+					if file != "" {
+						err := seth.OpenJsonFileAsStruct(file, &transactions)
+						if err != nil {
+							return err
+						}
+					} else {
+						transactions = append(transactions, txHash)
 					}
 
 					_ = os.Setenv(seth.LogLevelEnvVar, "debug")
@@ -356,6 +371,7 @@ func RunCLI(args []string) error {
 
 					zero := int64(0)
 					cfg.EphemeralAddrs = &zero
+					cfg.TracingLevel = seth.TracingLevel_All
 
 					client, err := seth.NewClientWithConfig(cfg)
 					if err != nil {
@@ -374,7 +390,9 @@ func RunCLI(args []string) error {
 						}
 
 						_, err = client.Decode(tx, nil)
-						seth.L.Info().Msgf("Possible revert reason: %s", err.Error())
+						if err != nil {
+							seth.L.Info().Msgf("Possible revert reason: %s", err.Error())
+						}
 					}
 					return err
 				},

@@ -169,11 +169,18 @@ Example:
 tracing_level = "reverted"
 ```
 
-Additionally, you can also enable saving all decoding/tracing information to JSON files with:
+Additionally, you can decide where tracing/decoding data goes to. There are three options:
+* `console` - we will print all tracing data to the console
+* `json` - we will save tracing data for each transaction to a JSON file
+* `dot` - we will save tracing data for each transaction to a DOT file (graph)
 ```
-trace_to_json = true
+trace_outputs = ["console", "json", "dot"]
 ```
-That option should be used with care, when `tracing_level` is set to `all` as it will generate a lot of data.
+For info on viewing DOT files please check the [DOT graphs](#dot-graphs) section below.
+
+Example:
+![image](./docs/tracing_example.png)
+These two options should be used with care, when `tracing_level` is set to `all` as they might generate a lot of data.
 
 If you want to check if the RPC is healthy on start, you can enable it with:
 ```
@@ -342,6 +349,16 @@ avg_tps = 3.0
 max_tps = 8.0
 ```
 
+### Single transaction tracing
+You can trace a single transaction using `seth trace` command. Example:
+```
+SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go -u "https://my-rpc.network.io" trace -t 0x4c21294bf4c0a19de16e0fca74e1ea1687ba96c3cab64f6fca5640fb7b84df65
+```
+or if you want to use a predefined-network:
+```
+SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go -n=Geth trace -t 0x4c21294bf4c0a19de16e0fca74e1ea1687ba96c3cab64f6fca5640fb7b84df65
+```
+
 ### Bulk tracing
 You can trace multiple transactions at once using `seth trace` command. Example:
 ```
@@ -390,7 +407,8 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 - [x] Automatic gas estimator (experimental)
 - [x] Block stats CLI
 - [x] Check if address has a pending nonce (transaction) and panic if it does
-- [x] 1password integration
+- [x] 1password integration for keyfiles
+- [x] DOT graph output for tracing
 
 You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
 
@@ -482,13 +500,34 @@ It's important to know that in order to use congestion metrics we need to fetch 
 
 For both transaction types if any of the steps fails, we fallback to hardcoded values.
 
+### DOT graphs
+There are multiple ways of visualising DOT graphs:
+* `xdot` application [recommended]
+* VSCode Extensions
+* online viewers
+
+### xdot
+To install simply run `hombrew install xdot` and then run `xdot <path_to_dot_file>`. This tool seems to be the best for the job, since the viewer is interactive and supports tooltips, which in our case contain extra tracing information.
+
+### VSCode Extensions
+There are multiple extensions that can be used to view DOT files in VSCode. We recommend using [Graphviz Preview](https://marketplace.visualstudio.com/items?itemName=EFanZh.graphviz-preview). The downside is that it doesn't support tooltips.
+
+### Goland
+We were unable to find any (working) plugins for DOT graph visualization. If you do know any, please let us know.
+
+### Online viewers
+There's at least a dozen of them available, but none of them support tooltips and most can't handle our multi-line labels. These two are known to work, though:
+* [Devtools/daily](https://www.devtoolsdaily.com/graphviz/)
+* [Sketchviz](https://sketchviz.com/)
+
+
 ### Experimental features
 
 In order to enable an experimental feature you need to pass it's name in config. It's a global config, you cannot enable it per-network. Example:
 ```toml
 # other settings before...
 tracing_level = "reverted"
-trace_to_json = false
+trace_outputs = ["console"]
 experiments_enabled = ["slow_funds_return", "eip_1559_fee_equalizer"]
 ```
 

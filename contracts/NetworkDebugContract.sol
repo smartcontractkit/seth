@@ -11,8 +11,11 @@ contract NetworkDebugContract {
 
     NetworkDebugSubContract public subContract;
 
+    uint256 private data;
+
     constructor(address subAddr) {
         subContract = NetworkDebugSubContract(subAddr);
+        data = 256;
     }
 
     /*
@@ -23,6 +26,7 @@ contract NetworkDebugContract {
     event NoIndexEventString(string str);
     event NoIndexEvent(address sender);
     event OneIndexEvent(uint indexed a);
+    event IsValidEvent(bool success);
     event TwoIndexEvent(uint256 indexed roundId, address indexed startedBy);
     event ThreeIndexEvent(uint256 indexed roundId, address indexed startedBy, uint256 indexed startedAt);
     event ThreeIndexAndOneNonIndexedEvent(uint256 indexed roundId, address indexed startedBy, uint256 indexed startedAt, string dataId);
@@ -42,6 +46,7 @@ contract NetworkDebugContract {
 
     error CustomErr(uint256 available, uint256 required);
     error CustomErrNoValues();
+    error CustomErrWithMessage(string message);
 
     /* Getters/Setters */
     function setMap(int256 x) public returns (int256 value) {
@@ -85,6 +90,21 @@ contract NetworkDebugContract {
         subContract.traceOneInt(y);
         emit OneIndexEvent(uint(x));
         return x + y;
+    }
+
+    function validate(int x, int256 y) public returns (bool) {
+        emit IsValidEvent(x > y);
+        return x > y;
+    }
+
+    function traceWithValidate(int x, int256 y) public payable returns (int256) {
+        if (validate(x, y)) {
+            subContract.trace(x, y);
+            emit TwoIndexEvent(uint256(y), address(msg.sender));
+            return x + y;
+        }
+
+        revert CustomErrWithMessage("first int was not greater than second int");
     }
 
     function traceYetDifferent(int x, int256 y) public returns (int256) {
@@ -269,10 +289,30 @@ contract NetworkDebugContract {
     function callRevertFunctionInSubContract(uint256 x, uint256 y) public {
         subContract.alwaysRevertsCustomError(x, y);
     }
-    
+
 
     function callRevertFunctionInTheContract() public {
         alwaysRevertsCustomError();
+    }
+
+    /* Static call */
+    function getData() external view returns (uint256) {
+        return data;
+    }
+
+    function performStaticCall() external view returns (uint256) {
+        address self = address(this);
+
+        // Perform a static call to getData function
+        (bool success, bytes memory returnData) = self.staticcall(
+            abi.encodeWithSelector(this.getData.selector)
+        );
+
+        require(success, "Static call failed");
+
+        uint256 result = abi.decode(returnData, (uint256));
+
+        return result;
     }
 
     /* Callback function */
@@ -281,10 +321,38 @@ contract NetworkDebugContract {
         return x;
     }
 
+    /* ERC677 token transfer */
+
+    event CallDataLength(uint256 length);
+
     function onTokenTransfer(address sender, uint256 amount, bytes calldata data) external {
-        revert CustomErr({
-            available: 100,
-            required: 101
-        });
+        emit CallDataLength(data.length);
+
+        if (data.length == 0) {
+            revert CustomErr({
+                available: 99,
+                required: 101
+            });
+        }
+        (bool success, bytes memory returnData) = address(this).delegatecall(data);
+
+        if (!success) {
+            if (returnData.length > 0) {
+                assembly {
+                    let returndata_size := mload(returnData)
+                    revert(add(32, returnData), returndata_size)
+                }
+            } else {
+                revert CustomErrWithMessage("delegatecall failed with no reason");
+            }
+        }
+        this.performStaticCall();
+
+        bytes4 selector = bytes4(data[:4]);
+        if (selector == this.traceYetDifferent.selector) {
+            revert CustomErrWithMessage("oh oh oh it's magic!");
+        }
+
+        this.traceSubWithCallback(1, 2);
     }
 }

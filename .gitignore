@@ -55,6 +55,7 @@ keyfile*.toml
 
 /traces
 reverted_transactions*.json
+/dot_graphs
 
 #map of address -> ABI name of deployed contracts
 deployed_contracts*.toml
