@@ -591,13 +591,21 @@ func (m *Client) WaitMined(ctx context.Context, l zerolog.Logger, b bind.DeployB
 	for {
 		receipt, err := b.TransactionReceipt(ctx, tx.Hash())
 		if err == nil {
-			l.Info().Int64("BlockNumber", receipt.BlockNumber.Int64()).Msg("Transaction accepted")
+			l.Info().
+				Int64("BlockNumber", receipt.BlockNumber.Int64()).
+				Str("TX", tx.Hash().String()).
+				Msg("Transaction accepted")
 			return receipt, nil
 		}
 		if errors.Is(err, ethereum.NotFound) {
-			l.Debug().Msg("Awaiting transaction")
+			l.Debug().
+				Str("TX", tx.Hash().String()).
+				Msg("Awaiting transaction")
 		} else {
-			l.Warn().Err(err).Msg("Failed to get receipt")
+			l.Warn().
+				Err(err).
+				Str("TX", tx.Hash().String()).
+				Msg("Failed to get receipt")
 		}
 		select {
 		case <-ctx.Done():
