@@ -5,7 +5,10 @@ import (
 	"crypto/ecdsa"
 	verr "errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rpc"
 	"math/big"
+	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -133,7 +136,7 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 	if len(cfg.Network.URLs) == 0 {
 		return nil, fmt.Errorf("at least one url should be present in config in 'secret_urls = []'")
 	}
-	tr, err := NewTracer(cfg.Network.URLs[0], cs, &abiFinder, cfg, contractAddressToNameMap, addrs)
+	tr, err := NewTracer(cfg.Network.URLs[0], cfg.RPCHeaders, cs, &abiFinder, cfg, contractAddressToNameMap, addrs)
 	if err != nil {
 		return nil, errors.Wrap(err, ErrCreateTracer)
 	}
@@ -255,7 +258,7 @@ func NewClientRaw(
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancelFunc := context.WithCancel(context.Background())
 	c := &Client{
 		Cfg:         cfg,
 		Client:      client,
@@ -264,7 +267,7 @@ func NewClientRaw(
 		URL:         cfg.Network.URLs[0],
 		ChainID:     int64(cID),
 		Context:     ctx,
-		CancelFunc:  cancel,
+		CancelFunc:  cancelFunc,
 	}
 	for _, o := range opts {
 		o(c)
@@ -364,7 +367,7 @@ func NewClientRaw(
 			abiFinder := NewABIFinder(c.ContractAddressToNameMap, c.ContractStore)
 			c.ABIFinder = &abiFinder
 		}
-		tr, err := NewTracer(cfg.Network.URLs[0], c.ContractStore, c.ABIFinder, cfg, c.ContractAddressToNameMap, addrs)
+		tr, err := NewTracer(cfg.Network.URLs[0], cfg.RPCHeaders, c.ContractStore, c.ABIFinder, cfg, c.ContractAddressToNameMap, addrs)
 		if err != nil {
 			return nil, errors.Wrap(err, ErrCreateTracer)
 		}

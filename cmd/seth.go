@@ -3,6 +3,7 @@ package seth
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rpc"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -354,10 +355,16 @@ func RunCLI(args []string) error {
 							return fmt.Errorf("default network not defined in the TOML file")
 						}
 
-						client, err := ethclient.Dial(cfg.Network.URLs[0])
-						if err != nil {
-							return fmt.Errorf("failed to connect to '%s' due to: %w", cfg.Network.URLs[0], err)
+						if cfg.Network.DialTimeout == nil {
+							cfg.Network.DialTimeout = &seth.Duration{D: seth.DefaultDialTimeout}
 						}
+						ctx, cancel := context.WithTimeout(context.Background(), cfg.Network.DialTimeout.Duration())
+						defer cancel()
+						rpcClient, err := rpc.DialOptions(ctx, cfg.Network.URLs[0])
+						if err != nil {
+							return fmt.Errorf("failed to connect RPC client to '%s' due to: %w", cfg.Network.URLs[0], err)
+						}
+						client := ethclient.NewClient(rpcClient)
 						defer client.Close()
 
 						if cfg.Network.Name == seth.DefaultNetworkName {
@@ -372,6 +379,9 @@ func RunCLI(args []string) error {
 					zero := int64(0)
 					cfg.EphemeralAddrs = &zero
 					cfg.TracingLevel = seth.TracingLevel_All
+					if cfg.Network.DialTimeout == nil {
+						cfg.Network.DialTimeout = &seth.Duration{D: seth.DefaultDialTimeout}
+					}
 
 					client, err := seth.NewClientWithConfig(cfg)
 					if err != nil {

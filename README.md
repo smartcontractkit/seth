@@ -126,6 +126,11 @@ In that case you should still pass network name with `-n` flag, especially when 
 If `SETH_KEYFILE_PATH` is not set then client will create X ephemeral keys (60 by default, configurable) and won't return any funds.
 Use `SETH_KEYFILE_PATH` for testnets/mainnets and `ephemeral` mode only when testing against simulated network.
 
+In case your RPC node requires custom headers you can set them using `SETH_RPC_HEADERS` in `k=v,k=v` format
+```
+export SETH_RPC_HEADERS=Host=http.com,Host=http.com
+```
+
 ### seth.toml
 Set up your ABI directory (relative to `seth.toml`)
 ```
