@@ -323,7 +323,7 @@ seth -u "https://my-rpc.network.io" stats -s -10
 
 To check stats for the interval (A, B)
 ```bash
-SETH_CONFIG_PATH=seth.toml seth -u "https://my-rpc.network.io" stats -s A -e B
+seth -u "https://my-rpc.network.io" stats -s A -e B
 ```
 
 Results can help you to understand if network is stable, what is avg block time, gas price, block utilization and transactions per second
@@ -350,24 +350,24 @@ max_tps = 8.0
 ```
 
 ### Single transaction tracing
-You can trace a single transaction using `seth trace` command. Example:
+You can trace a single transaction using `seth trace` command. Example with `seth` alias mentioned before:
 ```
-SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go -u "https://my-rpc.network.io" trace -t 0x4c21294bf4c0a19de16e0fca74e1ea1687ba96c3cab64f6fca5640fb7b84df65
+seth -u "https://my-rpc.network.io" trace -t 0x4c21294bf4c0a19de16e0fca74e1ea1687ba96c3cab64f6fca5640fb7b84df65
 ```
 or if you want to use a predefined-network:
 ```
-SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go -n=Geth trace -t 0x4c21294bf4c0a19de16e0fca74e1ea1687ba96c3cab64f6fca5640fb7b84df65
+seth -n=Geth trace -t 0x4c21294bf4c0a19de16e0fca74e1ea1687ba96c3cab64f6fca5640fb7b84df65
 ```
 
 ### Bulk tracing
-You can trace multiple transactions at once using `seth trace` command. Example:
+You can trace multiple transactions at once using `seth trace` command for a predefined network named `Geth`. Example:
 ```
-SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go -n=Geth trace -f reverted_transactions.json
+seth -n=Geth trace -f reverted_transactions.json
 ```
 
-or using cmd args
+or by passing all the RPC parameter with a flag:
 ```
-SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go -u "https://my-rpc.network.io" trace -f reverted_transactions.json
+seth -u "https://my-rpc.network.io" trace -f reverted_transactions.json
 ```
 
 You need to pass a file with a list of transaction hashes to trace. The file should be a JSON array of transaction hashes, like this:
@@ -507,7 +507,7 @@ There are multiple ways of visualising DOT graphs:
 * online viewers
 
 ### xdot
-To install simply run `hombrew install xdot` and then run `xdot <path_to_dot_file>`. This tool seems to be the best for the job, since the viewer is interactive and supports tooltips, which in our case contain extra tracing information.
+To install simply run `homebrew install xdot` and then run `xdot <path_to_dot_file>`. This tool seems to be the best for the job, since the viewer is interactive and supports tooltips, which in our case contain extra tracing information.
 
 ### VSCode Extensions
 There are multiple extensions that can be used to view DOT files in VSCode. We recommend using [Graphviz Preview](https://marketplace.visualstudio.com/items?itemName=EFanZh.graphviz-preview). The downside is that it doesn't support tooltips.
