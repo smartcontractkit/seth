@@ -45,6 +45,10 @@ var (
 	TracingLevel_None     = "NONE"
 	TracingLevel_Reverted = "REVERTED"
 	TracingLevel_All      = "ALL"
+
+	TraceOutput_Console = "console"
+	TraceOutput_JSON    = "json"
+	TraceOutput_DOT     = "dot"
 )
 
 // Client is a vanilla go-ethereum client with enhanced debug logging
@@ -185,6 +189,16 @@ func ValidateConfig(cfg *Config) error {
 	case TracingLevel_All:
 	default:
 		return errors.New("tracing level must be one of: NONE, REVERTED, ALL")
+	}
+
+	for _, output := range cfg.TraceOutputs {
+		switch strings.ToLower(output) {
+		case TraceOutput_Console:
+		case TraceOutput_JSON:
+		case TraceOutput_DOT:
+		default:
+			return errors.New("trace output must be one of: console, json, dot")
+		}
 	}
 
 	if cfg.KeyFileSource != "" && cfg.EphemeralAddrs != nil && *cfg.EphemeralAddrs != 0 {
@@ -445,7 +459,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 	decoded, decodeErr := m.decodeTransaction(l, tx, receipt)
 
 	if decodeErr != nil && errors.Is(decodeErr, errors.New(ErrNoABIMethod)) {
-		if m.Cfg.TraceToJson {
+		if m.Cfg.hasOutput(TraceOutput_JSON) {
 			L.Trace().
 				Err(decodeErr).
 				Msg("Failed to decode transaction. Saving transaction data hash as JSON")
@@ -462,6 +476,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 					Msg("Saved reverted transaction to file")
 			}
 		}
+		m.printDecodedTXData(l, decoded)
 		return decoded, revertErr
 	}
 
@@ -469,13 +484,14 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 		L.Trace().
 			Str("Transaction Hash", tx.Hash().Hex()).
 			Msg("Tracing level is NONE, skipping decoding")
+		m.printDecodedTXData(l, decoded)
 		return decoded, revertErr
 	}
 
 	if m.Cfg.TracingLevel == TracingLevel_All || (m.Cfg.TracingLevel == TracingLevel_Reverted && revertErr != nil) {
-		traceErr := m.Tracer.TraceGethTX(decoded.Hash)
+		traceErr := m.Tracer.TraceGethTX(decoded.Hash, revertErr)
 		if traceErr != nil {
-			if m.Cfg.TraceToJson {
+			if m.Cfg.hasOutput(TraceOutput_JSON) {
 				L.Trace().
 					Err(traceErr).
 					Msg("Failed to trace call, but decoding was successful. Saving decoded data as JSON")
@@ -501,10 +517,11 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 				m.Cfg.TracingLevel = TracingLevel_None
 			}
 
+			m.printDecodedTXData(l, decoded)
 			return decoded, revertErr
 		}
 
-		if m.Cfg.TraceToJson {
+		if m.Cfg.hasOutput(TraceOutput_JSON) {
 			path, saveErr := saveAsJson(m.Tracer.DecodedCalls[decoded.Hash], "traces", decoded.Hash)
 			if saveErr != nil {
 				L.Warn().
@@ -594,7 +611,7 @@ func (m *Client) WaitMined(ctx context.Context, l zerolog.Logger, b bind.DeployB
 			l.Info().
 				Int64("BlockNumber", receipt.BlockNumber.Int64()).
 				Str("TX", tx.Hash().String()).
-				Msg("Transaction accepted")
+				Msg("Transaction receipt found")
 			return receipt, nil
 		}
 		if errors.Is(err, ethereum.NotFound) {

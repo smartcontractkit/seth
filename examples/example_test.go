@@ -6,10 +6,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/smartcontractkit/seth"
 	sethcmd "github.com/smartcontractkit/seth/cmd"
 	network_debug_contract "github.com/smartcontractkit/seth/contracts/bind/debug"
-	"github.com/stretchr/testify/require"
 )
 
 func commonEnvVars(t *testing.T) {
@@ -20,6 +21,7 @@ func commonEnvVars(t *testing.T) {
 
 func deployDebugContracts(t *testing.T) *network_debug_contract.NetworkDebugContract {
 	c, err := seth.NewClient()
+	require.NoError(t, err, "failed to initalise seth")
 	nonce := c.NonceManager.NextNonce(c.Addresses[0])
 	require.NoError(t, err, "failed to initalise seth")
 	subData, err := c.DeployContractFromContractStore(c.NewTXOpts(), "NetworkDebugSubContract.abi")

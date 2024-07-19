@@ -41,10 +41,14 @@ type DecodedTransaction struct {
 }
 
 type CommonData struct {
-	Signature string                 `json:"signature"`
-	Method    string                 `json:"method"`
-	Input     map[string]interface{} `json:"input,omitempty"`
-	Output    map[string]interface{} `json:"output,omitempty"`
+	CallType        string                 `json:"call_type,omitempty"`
+	Signature       string                 `json:"signature"`
+	Method          string                 `json:"method"`
+	Input           map[string]interface{} `json:"input,omitempty"`
+	Output          map[string]interface{} `json:"output,omitempty"`
+	NestingLevel    int                    `json:"nesting_level,omitempty"`
+	ParentSignature string                 `json:"parent_signature,omitempty"`
+	Error           string                 `json:"error,omitempty"`
 }
 
 // DecodedCall decoded call
@@ -71,6 +75,7 @@ type DecodedCommonLog struct {
 func getDefaultDecodedCall() *DecodedCall {
 	return &DecodedCall{
 		CommonData: CommonData{
+			CallType:  UNKNOWN,
 			Signature: UNKNOWN,
 			Method:    UNKNOWN,
 			Input:     make(map[string]interface{}),
@@ -182,7 +187,6 @@ func (m *Client) decodeTransaction(l zerolog.Logger, tx *types.Transaction, rece
 		Hash:        tx.Hash().String(),
 		Events:      txEvents,
 	}
-	m.printDecodedTXData(l, ptx)
 
 	return ptx, nil
 }

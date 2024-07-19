@@ -63,7 +63,7 @@ type Config struct {
 	Networks                      []*Network        `toml:"networks"`
 	NonceManager                  *NonceManagerCfg  `toml:"nonce_manager"`
 	TracingLevel                  string            `toml:"tracing_level"`
-	TraceToJson                   bool              `toml:"trace_to_json"`
+	TraceOutputs                  []string          `toml:"trace_outputs"`
 	PendingNonceProtectionEnabled bool              `toml:"pending_nonce_protection_enabled"`
 	ConfigDir                     string            `toml:"abs_path"`
 	ExperimentsEnabled            []string          `toml:"experiments_enabled"`
@@ -287,4 +287,14 @@ func (c *Config) GetMaxConcurrency() int {
 	}
 
 	return len(c.Network.PrivateKeys) - 1
+}
+
+func (c *Config) hasOutput(output string) bool {
+	for _, o := range c.TraceOutputs {
+		if strings.EqualFold(o, output) {
+			return true
+		}
+	}
+
+	return false
 }

@@ -21,11 +21,15 @@ keyfile_path = "keyfile.toml"
 # to 'reverted' to limit noise. If you combine it with 'trace_to_json' it will save all possible data
 # in JSON files for reverted transactions.
 tracing_level = "reverted"
+
 # saves each decoding/tracing results to JSON files; what exactly is saved depends on what we
 # were able te decode, we try to save maximum information possible. It can either be:
 # just tx hash, decoded transaction or call trace. Which transactions traces are saved depends
 # on 'tracing_level'.
-trace_to_json = false
+# following outputs are possible: dot, json, console
+# dot creates DOT graphs for each transaction, json saves decoded transactions and traces to JSON files
+trace_outputs = ["console"]
+
 # number of addresses to be generated and runtime, if set to 0, no addresses will be generated
 # each generated address will receive a proportion of native tokens from root private key's balance
 # with the value equal to (root_balance / ephemeral_addresses_number) - transfer_fee * ephemeral_addresses_number
@@ -117,7 +121,6 @@ eip_1559_dynamic_fees = true
 # EIP-1559 transactions
 #gas_fee_cap = 30_000_000_000
 #gas_tip_cap = 1_800_000_000
-
 
 [[networks]]
 name = "Sepolia"

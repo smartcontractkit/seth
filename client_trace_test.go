@@ -3,7 +3,6 @@ package seth_test
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/smartcontractkit/seth/contracts/bind/link_token_interface"
 	"io"
 	"math/big"
 	"os"
@@ -13,20 +12,20 @@ import (
 	"time"
 
 	"github.com/barkimedes/go-deepcopy"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/smartcontractkit/seth/contracts/bind/link_token_interface"
+	"github.com/stretchr/testify/require"
+
 	"github.com/smartcontractkit/seth"
 	network_debug_contract "github.com/smartcontractkit/seth/contracts/bind/debug"
 	link_token "github.com/smartcontractkit/seth/contracts/bind/link"
-	"github.com/stretchr/testify/require"
 )
 
 const (
 	NoAnvilSupport = "Anvil doesn't support tracing"
-	FailedToSend   = "failed to send transaction"
-	FailedToMine   = "transaction mining failed"
 	FailedToDecode = "failed to decode transaction"
-	FailedToTrace  = "failed to trace transaction"
 )
 
 func SkipAnvil(t *testing.T, c *seth.Client) {
@@ -41,8 +40,8 @@ func TestTraceContractTracingSameMethodSignatures_UploadedViaSeth(t *testing.T) 
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	var x int64 = 2
 	var y int64 = 4
@@ -62,6 +61,7 @@ func TestTraceContractTracingSameMethodSignatures_UploadedViaSeth(t *testing.T) 
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "3e41f135",
+			CallType:  "CALL",
 			Method:    "trace(int256,int256)",
 			Input:     map[string]interface{}{"x": big.NewInt(x), "y": big.NewInt(y)},
 			Output:    map[string]interface{}{"0": big.NewInt(y + 2)},
@@ -89,10 +89,13 @@ func TestTraceContractTracingSameMethodSignatures_UploadedViaSeth(t *testing.T) 
 		From:        "NetworkDebugContract",
 		To:          "NetworkDebugSubContract",
 		CommonData: seth.CommonData{
-			Signature: "3e41f135",
-			Method:    "trace(int256,int256)",
-			Input:     map[string]interface{}{"x": big.NewInt(x), "y": big.NewInt(y)},
-			Output:    map[string]interface{}{"0": big.NewInt(y + 4)},
+			Signature:       "3e41f135",
+			ParentSignature: "3e41f135",
+			CallType:        "CALL",
+			NestingLevel:    1,
+			Method:          "trace(int256,int256)",
+			Input:           map[string]interface{}{"x": big.NewInt(x), "y": big.NewInt(y)},
+			Output:          map[string]interface{}{"0": big.NewInt(y + 4)},
 		},
 		Comment: "",
 	}
@@ -134,8 +137,8 @@ func TestTraceContractTracingSameMethodSignatures_UploadedManually(t *testing.T)
 		delete(c.ContractAddressToNameMap.GetContractMap(), k)
 	}
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	// let's simulate this case, because it doesn't happen always, it all depends on the order of the
 	// contract map, which is non-deterministic (hash map with keys being dynamically generated addresses)
@@ -162,6 +165,7 @@ func TestTraceContractTracingSameMethodSignatures_UploadedManually(t *testing.T)
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "30985bcc",
+			CallType:  "CALL",
 			Method:    "traceDifferent(int256,int256)",
 			Input:     map[string]interface{}{"x": big.NewInt(x), "y": big.NewInt(y)},
 			Output:    map[string]interface{}{"0": big.NewInt(y + 2)},
@@ -188,10 +192,13 @@ func TestTraceContractTracingSameMethodSignatures_UploadedManually(t *testing.T)
 		From:        "NetworkDebugContract",
 		To:          "NetworkDebugSubContract",
 		CommonData: seth.CommonData{
-			Signature: "047c4425",
-			Method:    "traceOneInt(int256)",
-			Input:     map[string]interface{}{"x": big.NewInt(x + 2)},
-			Output:    map[string]interface{}{"r": big.NewInt(y + 3)},
+			Signature:       "047c4425",
+			ParentSignature: "30985bcc",
+			NestingLevel:    1,
+			CallType:        "CALL",
+			Method:          "traceOneInt(int256)",
+			Input:           map[string]interface{}{"x": big.NewInt(x + 2)},
+			Output:          map[string]interface{}{"r": big.NewInt(y + 3)},
 		},
 		Comment: "",
 	}
@@ -210,6 +217,7 @@ func TestTraceContractTracingSameMethodSignatures_UploadedManually(t *testing.T)
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "3e41f135",
+			CallType:  "CALL",
 			Method:    "trace(int256,int256)",
 			Input:     map[string]interface{}{"x": big.NewInt(x), "y": big.NewInt(y)},
 			Output:    map[string]interface{}{"0": big.NewInt(y + 2)},
@@ -237,10 +245,13 @@ func TestTraceContractTracingSameMethodSignatures_UploadedManually(t *testing.T)
 		From:        "NetworkDebugContract",
 		To:          "NetworkDebugSubContract",
 		CommonData: seth.CommonData{
-			Signature: "3e41f135",
-			Method:    "trace(int256,int256)",
-			Input:     map[string]interface{}{"x": big.NewInt(x), "y": big.NewInt(y)},
-			Output:    map[string]interface{}{"0": big.NewInt(y + 4)},
+			Signature:       "3e41f135",
+			ParentSignature: "3e41f135",
+			NestingLevel:    1,
+			CallType:        "CALL",
+			Method:          "trace(int256,int256)",
+			Input:           map[string]interface{}{"x": big.NewInt(x), "y": big.NewInt(y)},
+			Output:          map[string]interface{}{"0": big.NewInt(y + 4)},
 		},
 	}
 
@@ -274,8 +285,8 @@ func TestTraceContractTracingSameMethodSignaturesWarningInComment_UploadedManual
 
 	c.ContractAddressToNameMap = seth.NewEmptyContractMap()
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	sameSigTx, err := c.Decode(TestEnv.DebugContract.Trace(c.NewTXOpts(), big.NewInt(2), big.NewInt(2)))
 	require.NoError(t, err, "failed to send transaction")
@@ -285,19 +296,17 @@ func TestTraceContractTracingSameMethodSignaturesWarningInComment_UploadedManual
 	require.Equal(t, "potentially inaccurate - method present in 1 other contracts", c.Tracer.DecodedCalls[sameSigTx.Hash][1].Comment, "expected comment to be set")
 }
 
-// Here we show a certain tracing limitation, where contract A calls B, which calls A again.
-// That call from B to A isn't present in call trace, but it's signature is present in 4bytes trace.
 func TestTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
-	// As this test might fail if run multiple times due to undterministic addressed in contract mapping
+	// As this test might fail if run multiple times due to non-deterministic addressed in contract mapping
 	// which sometime causes the call to be traced and sometimes not (it all depends on the order of
 	// addresses in the map), I just remove potentially problematic ABI.
-	delete((c.ContractStore.ABIs), "DebugContractCallback.abi")
+	delete(c.ContractStore.ABIs, "DebugContractCallback.abi")
 
 	var x int64 = 2
 	var y int64 = 4
@@ -316,6 +325,7 @@ func TestTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
 		From:        "you",
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
+			CallType:  "CALL",
 			Signature: "3837a75e",
 			Method:    "traceSubWithCallback(int256,int256)",
 			Input:     map[string]interface{}{"x": big.NewInt(x), "y": big.NewInt(y)},
@@ -351,10 +361,13 @@ func TestTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
 		From:        "NetworkDebugContract",
 		To:          "NetworkDebugSubContract",
 		CommonData: seth.CommonData{
-			Signature: "fa8fca7a",
-			Method:    "traceWithCallback(int256,int256)",
-			Input:     map[string]interface{}{"x": big.NewInt(x), "y": big.NewInt(y + 2)},
-			Output:    map[string]interface{}{"0": big.NewInt(y + 2)},
+			Signature:       "fa8fca7a",
+			CallType:        "CALL",
+			Method:          "traceWithCallback(int256,int256)",
+			NestingLevel:    1,
+			ParentSignature: "3837a75e",
+			Input:           map[string]interface{}{"x": big.NewInt(x), "y": big.NewInt(y + 2)},
+			Output:          map[string]interface{}{"0": big.NewInt(y + 2)},
 		},
 		Events: []seth.DecodedCommonLog{
 			{
@@ -387,24 +400,30 @@ func TestTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
 	require.EqualValues(t, expectedTopics, separatedTopcis, "second decoded first event topics do not match")
 
 	thirdExpectedCall := &seth.DecodedCall{
-		FromAddress: seth.UNKNOWN,
+		FromAddress: strings.ToLower(TestEnv.DebugSubContractAddress.Hex()),
 		ToAddress:   strings.ToLower(TestEnv.DebugContractAddress.Hex()),
-		From:        seth.UNKNOWN,
+		From:        "NetworkDebugSubContract",
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
-			Signature: "0xfbcb8d07",
-			Method:    "callbackMethod",
-			Input:     map[string]interface{}{"warning": seth.NO_DATA},
-			Output:    map[string]interface{}{"warning": seth.NO_DATA},
+			Signature:       "fbcb8d07",
+			CallType:        "CALL",
+			Method:          "callbackMethod(int256)",
+			ParentSignature: "fa8fca7a",
+			NestingLevel:    2,
+			Input:           map[string]interface{}{"x": big.NewInt(x + y)},
+			Output:          map[string]interface{}{"0": big.NewInt(y + x)},
 		},
 		Events: []seth.DecodedCommonLog{
 			{
-				Signature: seth.NO_DATA,
-				EventData: map[string]interface{}{"warning": seth.NO_DATA},
-				Address:   common.Address{},
+				Signature: "CallbackEvent(int256)",
+				EventData: map[string]interface{}{"a": big.NewInt(y + 2)},
+				Address:   TestEnv.DebugContractAddress,
+				Topics: []string{
+					"0xb16dba9242e1aa07ccc47228094628f72c8cc9699ee45d5bc8d67b84d3038c68",
+					"0x0000000000000000000000000000000000000000000000000000000000000006",
+				},
 			},
 		},
-		Comment: seth.WrnMissingCallTrace,
 	}
 	require.EqualValues(t, thirdExpectedCall, c.Tracer.DecodedCalls[tx.Hash][2], "third decoded call does not match")
 }
@@ -416,8 +435,8 @@ func TestTraceContractTracingUnknownAbi(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	// simulate missing ABI
 	delete(c.ContractAddressToNameMap.GetContractMap(), strings.ToLower(TestEnv.DebugContractAddress.Hex()))
@@ -441,6 +460,7 @@ func TestTraceContractTracingUnknownAbi(t *testing.T) {
 		To:          seth.UNKNOWN,
 		CommonData: seth.CommonData{
 			Signature: "30985bcc",
+			CallType:  "CALL",
 			Method:    seth.UNKNOWN,
 			Input:     make(map[string]interface{}),
 			Output:    make(map[string]interface{}),
@@ -457,10 +477,13 @@ func TestTraceContractTracingUnknownAbi(t *testing.T) {
 		From:        seth.UNKNOWN,
 		To:          "NetworkDebugSubContract",
 		CommonData: seth.CommonData{
-			Signature: "047c4425",
-			Method:    "traceOneInt(int256)",
-			Input:     map[string]interface{}{"x": big.NewInt(x + 2)},
-			Output:    map[string]interface{}{"r": big.NewInt(y + 3)},
+			Signature:       "047c4425",
+			CallType:        "CALL",
+			ParentSignature: "30985bcc",
+			NestingLevel:    1,
+			Method:          "traceOneInt(int256)",
+			Input:           map[string]interface{}{"x": big.NewInt(x + 2)},
+			Output:          map[string]interface{}{"r": big.NewInt(y + 3)},
 		},
 		Comment: "",
 	}
@@ -473,8 +496,8 @@ func TestTraceContractTracingNamedInputsAndOutputs(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	x := big.NewInt(1000)
 	var testString = "string"
@@ -491,6 +514,7 @@ func TestTraceContractTracingNamedInputsAndOutputs(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "45f0c9e6",
+			CallType:  "CALL",
 			Method:    "emitNamedInputsOutputs(uint256,string)",
 			Input:     map[string]interface{}{"inputVal1": x, "inputVal2": testString},
 			Output:    map[string]interface{}{"outputVal1": x, "outputVal2": testString},
@@ -506,8 +530,8 @@ func TestTraceContractTracingNamedInputsAnonymousOutputs(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	x := big.NewInt(1001)
 	var testString = "string"
@@ -523,25 +547,25 @@ func TestTraceContractTracingNamedInputsAnonymousOutputs(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "d7a80205",
+			CallType:  "CALL",
 			Method:    "emitInputsOutputs(uint256,string)",
 			Input:     map[string]interface{}{"inputVal1": x, "inputVal2": testString},
 			Output:    map[string]interface{}{"0": x, "1": testString},
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
 }
 
-// Shows that when output mixes named and unnamed paramaters, we can still decode the transaction,
+// Shows that when output mixes named and unnamed parameters, we can still decode the transaction,
 // but that named outputs become unnamed and referenced by their index.
 func TestTraceContractTracingIntInputsWithoutLength(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	x := big.NewInt(1001)
 	y := big.NewInt(2)
@@ -558,11 +582,11 @@ func TestTraceContractTracingIntInputsWithoutLength(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "9e099652",
+			CallType:  "CALL",
 			Method:    "emitInts(int256,int128,uint256)",
 			Input:     map[string]interface{}{"first": x, "second": y, "third": z},
 			Output:    map[string]interface{}{"0": x, "1": y, "2": z},
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -573,8 +597,8 @@ func TestTraceContractTracingAddressInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	address := c.Addresses[0]
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitAddress(c.NewTXOpts(), address))
@@ -590,11 +614,11 @@ func TestTraceContractTracingAddressInputAndOutput(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "ec5c3ede",
+			CallType:  "CALL",
 			Method:    "emitAddress(address)",
 			Input:     map[string]interface{}{"addr": address},
 			Output:    map[string]interface{}{"0": address},
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -605,12 +629,12 @@ func TestTraceContractTracingBytes32InputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	addrAsBytes := c.Addresses[0].Bytes()
 	addrAsBytes = append(addrAsBytes, c.Addresses[0].Bytes()...)
-	var bytes32 [32]byte = [32]byte(addrAsBytes)
+	var bytes32 = [32]byte(addrAsBytes)
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitBytes32(c.NewTXOpts(), bytes32))
 	require.NoError(t, txErr, FailedToDecode)
 
@@ -624,11 +648,11 @@ func TestTraceContractTracingBytes32InputAndOutput(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "33311ef3",
+			CallType:  "CALL",
 			Method:    "emitBytes32(bytes32)",
 			Input:     map[string]interface{}{"input": bytes32},
 			Output:    map[string]interface{}{"output": bytes32},
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -639,8 +663,8 @@ func TestTraceContractTracingUint256ArrayInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	uint256Array := []*big.Int{big.NewInt(1), big.NewInt(19271), big.NewInt(261), big.NewInt(271911), big.NewInt(821762721)}
 	tx, txErr := c.Decode(TestEnv.DebugContract.ProcessUintArray(c.NewTXOpts(), uint256Array))
@@ -648,7 +672,7 @@ func TestTraceContractTracingUint256ArrayInputAndOutput(t *testing.T) {
 	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
 	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
 
-	output := []*big.Int{}
+	var output []*big.Int
 	for _, x := range uint256Array {
 		output = append(output, big.NewInt(0).Add(x, big.NewInt(1)))
 	}
@@ -660,11 +684,11 @@ func TestTraceContractTracingUint256ArrayInputAndOutput(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "12d91233",
+			CallType:  "CALL",
 			Method:    "processUintArray(uint256[])",
 			Input:     map[string]interface{}{"input": uint256Array},
 			Output:    map[string]interface{}{"0": output},
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -675,8 +699,8 @@ func TestTraceContractTracingAddressArrayInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	addressArray := []common.Address{c.Addresses[0], TestEnv.DebugSubContractAddress}
 	tx, txErr := c.Decode(TestEnv.DebugContract.ProcessAddressArray(c.NewTXOpts(), addressArray))
@@ -691,11 +715,11 @@ func TestTraceContractTracingAddressArrayInputAndOutput(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "e1111f79",
+			CallType:  "CALL",
 			Method:    "processAddressArray(address[])",
 			Input:     map[string]interface{}{"input": addressArray},
 			Output:    map[string]interface{}{"0": addressArray},
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -706,8 +730,8 @@ func TestTraceContractTracingStructWithDynamicFieldsInputAndOutput(t *testing.T)
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	data := network_debug_contract.NetworkDebugContractData{
 		Name:   "my awesome name",
@@ -733,11 +757,11 @@ func TestTraceContractTracingStructWithDynamicFieldsInputAndOutput(t *testing.T)
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "7fdc8fe1",
+			CallType:  "CALL",
 			Method:    "processDynamicData((string,uint256[]))",
 			Input:     map[string]interface{}{"data": expected},
 			Output:    map[string]interface{}{"0": expected},
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -748,8 +772,8 @@ func TestTraceContractTracingStructArrayWithDynamicFieldsInputAndOutput(t *testi
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	data := network_debug_contract.NetworkDebugContractData{
 		Name:   "my awesome name",
@@ -800,11 +824,11 @@ func TestTraceContractTracingStructArrayWithDynamicFieldsInputAndOutput(t *testi
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "99adad2e",
+			CallType:  "CALL",
 			Method:    "processFixedDataArray((string,uint256[])[3])",
 			Input:     map[string]interface{}{"data": input},
 			Output:    map[string]interface{}{"0": output},
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -815,8 +839,8 @@ func TestTraceContractTracingNestedStructsWithDynamicFieldsInputAndOutput(t *tes
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	data := network_debug_contract.NetworkDebugContractNestedData{
 		Data: network_debug_contract.NetworkDebugContractData{
@@ -854,6 +878,7 @@ func TestTraceContractTracingNestedStructsWithDynamicFieldsInputAndOutput(t *tes
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "7f12881c",
+			CallType:  "CALL",
 			Method:    "processNestedData(((string,uint256[]),bytes))",
 			Input:     map[string]interface{}{"data": input},
 			Output:    map[string]interface{}{"0": input},
@@ -869,8 +894,8 @@ func TestTraceContractTracingNestedStructsWithDynamicFieldsInputAndStructOutput(
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	data := network_debug_contract.NetworkDebugContractData{
 		Name:   "my awesome name",
@@ -915,11 +940,11 @@ func TestTraceContractTracingNestedStructsWithDynamicFieldsInputAndStructOutput(
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "f499af2a",
+			CallType:  "CALL",
 			Method:    "processNestedData((string,uint256[]))",
 			Input:     map[string]interface{}{"data": input},
 			Output:    map[string]interface{}{"0": output},
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -930,8 +955,8 @@ func TestTraceContractTracingPayable(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	var value int64 = 1000
 	tx, txErr := c.Decode(TestEnv.DebugContract.Pay(c.NewTXOpts(seth.WithValue(big.NewInt(value)))))
@@ -946,11 +971,11 @@ func TestTraceContractTracingPayable(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "1b9265b8",
+			CallType:  "CALL",
 			Method:    "pay()",
 			Output:    map[string]interface{}{},
 		},
-		Comment: "",
-		Value:   value,
+		Value: value,
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -963,8 +988,8 @@ func TestTraceContractTracingFallback(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	tx, txErr := c.Decode(TestEnv.DebugContractRaw.RawTransact(c.NewTXOpts(), []byte("iDontExist")))
 	require.NoError(t, txErr, FailedToDecode)
@@ -978,10 +1003,10 @@ func TestTraceContractTracingFallback(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "1b9265b8",
+			CallType:  "CALL",
 			Method:    "pay()",
 			Output:    map[string]interface{}{},
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -993,8 +1018,8 @@ func TestTraceContractTracingReceive(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	value := big.NewInt(29121)
 	tx, txErr := c.Decode(TestEnv.DebugContract.Receive(c.NewTXOpts(seth.WithValue(value))))
@@ -1010,9 +1035,9 @@ func TestTraceContractTracingReceive(t *testing.T) {
 		CommonData: seth.CommonData{
 			Signature: "1b9265b8",
 			Method:    "pay()",
+			CallType:  "CALL",
 			Output:    map[string]interface{}{},
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -1023,8 +1048,8 @@ func TestTraceContractTracingEnumInputAndOutput(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	var status uint8 = 1 // Active
 	tx, txErr := c.Decode(TestEnv.DebugContract.SetStatus(c.NewTXOpts(), status))
@@ -1039,6 +1064,7 @@ func TestTraceContractTracingEnumInputAndOutput(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "2e49d78b",
+			CallType:  "CALL",
 			Method:    "setStatus(uint8)",
 			Input:     map[string]interface{}{"status": status},
 			Output:    map[string]interface{}{"0": status},
@@ -1065,8 +1091,8 @@ func TestTraceContractTracingNonIndexedEventParameter(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitNoIndexEventString(c.NewTXOpts()))
 	require.NoError(t, txErr, "failed to send transaction")
@@ -1080,6 +1106,7 @@ func TestTraceContractTracingNonIndexedEventParameter(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "788c4772",
+			CallType:  "CALL",
 			Method:    "emitNoIndexEventString()",
 			Input:     nil,
 			Output:    map[string]interface{}{},
@@ -1105,8 +1132,8 @@ func TestTraceContractTracingEventThreeIndexedParameters(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitThreeIndexEvent(c.NewTXOpts()))
 	require.NoError(t, txErr, FailedToDecode)
@@ -1120,6 +1147,7 @@ func TestTraceContractTracingEventThreeIndexedParameters(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "aa3fdcf4",
+			CallType:  "CALL",
 			Method:    "emitThreeIndexEvent()",
 			Input:     nil,
 			Output:    map[string]interface{}{},
@@ -1148,8 +1176,8 @@ func TestTraceContractTracingEventFourMixedParameters(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitFourParamMixedEvent(c.NewTXOpts()))
 	require.NoError(t, txErr, FailedToDecode)
@@ -1163,6 +1191,7 @@ func TestTraceContractTracingEventFourMixedParameters(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "c2124b22",
+			CallType:  "CALL",
 			Method:    "emitFourParamMixedEvent()",
 			Input:     nil,
 			Output:    map[string]interface{}{},
@@ -1191,8 +1220,8 @@ func TestTraceContractAll(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's automatically executed for all transactions
 	c.Cfg.TracingLevel = seth.TracingLevel_All
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	revertedTx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomError(c.NewTXOpts())
 	require.NoError(t, txErr, "transaction sending should not fail")
@@ -1214,10 +1243,11 @@ func TestTraceContractAll(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "5e9c80d6",
+			CallType:  "CALL",
 			Method:    "alwaysRevertsCustomError()",
 			Output:    map[string]interface{}{},
+			Error:     "execution reverted",
 		},
-		Comment: "",
 	}
 
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[revertedTx.Hash().Hex()][0], "reverted decoded call does not match")
@@ -1229,11 +1259,11 @@ func TestTraceContractAll(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "23515760",
+			CallType:  "CALL",
 			Method:    "addCounter(int256,int256)",
 			Output:    map[string]interface{}{"value": big.NewInt(2)},
 			Input:     map[string]interface{}{"idx": big.NewInt(1), "x": big.NewInt(2)},
 		},
-		Comment: "",
 	}
 
 	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[okTx.Hash().Hex()][0], "successful decoded call does not match")
@@ -1243,8 +1273,8 @@ func TestTraceContractOnlyReverted(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this level is set we don't need to call TraceGethTX, because it's automatically executed for all reverted transactions
 	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	revertedTx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomError(c.NewTXOpts())
 	require.NoError(t, txErr, "transaction sending should not fail")
@@ -1266,10 +1296,11 @@ func TestTraceContractOnlyReverted(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "5e9c80d6",
+			CallType:  "CALL",
 			Method:    "alwaysRevertsCustomError()",
 			Output:    map[string]interface{}{},
+			Error:     "execution reverted",
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -1301,8 +1332,8 @@ func TestTraceContractRevertedErrNoValues(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	tx, txErr := TestEnv.DebugContract.AlwaysRevertsCustomErrorNoValues(c.NewTXOpts())
 	require.NoError(t, txErr, "transaction should have reverted")
@@ -1318,10 +1349,11 @@ func TestTraceContractRevertedErrNoValues(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "b600141f",
+			CallType:  "CALL",
 			Method:    "alwaysRevertsCustomErrorNoValues()",
 			Output:    map[string]interface{}{},
+			Error:     "execution reverted",
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -1332,8 +1364,8 @@ func TestTraceCallRevertFunctionInTheContract(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	tx, txErr := TestEnv.DebugContract.CallRevertFunctionInTheContract(c.NewTXOpts())
 	require.NoError(t, txErr, "transaction should have reverted")
@@ -1349,10 +1381,11 @@ func TestTraceCallRevertFunctionInTheContract(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "9349d00b",
+			CallType:  "CALL",
 			Method:    "callRevertFunctionInTheContract()",
 			Output:    map[string]interface{}{},
+			Error:     "execution reverted",
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -1363,8 +1396,8 @@ func TestTraceCallRevertFunctionInSubContract(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	x := big.NewInt(1001)
 	y := big.NewInt(2)
@@ -1382,11 +1415,12 @@ func TestTraceCallRevertFunctionInSubContract(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "11b3c478",
+			CallType:  "CALL",
 			Method:    "callRevertFunctionInSubContract(uint256,uint256)",
 			Input:     map[string]interface{}{"x": x, "y": y},
 			Output:    map[string]interface{}{},
+			Error:     "execution reverted",
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -1397,8 +1431,8 @@ func TestTraceCallRevertInCallback(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	linkAbi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -1410,15 +1444,15 @@ func TestTraceCallRevertInCallback(t *testing.T) {
 	require.NoError(t, txErr, "transaction should have reverted")
 	_, decodeErr := c.Decode(tx, txErr)
 	require.Error(t, decodeErr, "transaction should have reverted")
-	require.Equal(t, "error type: CustomErr, error values: [100 101]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
+	require.Equal(t, "error type: CustomErr, error values: [99 101]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
 }
 
 func TestTraceOldPragmaNoRevertReason(t *testing.T) {
 	c := newClientWithContractMapFromEnv(t)
 	SkipAnvil(t, c)
 
-	// when this flag is enabled we don't need to call TraceGethTX, because it's called automatically
 	c.Cfg.TracingLevel = seth.TracingLevel_Reverted
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	// this is old Link contract used on Ethereum Mainnet that's in pragma 0.4
 	linkAbi, err := link_token_interface.LinkTokenMetaData.GetAbi()
@@ -1445,6 +1479,8 @@ func TestTraceeRevertReasonNonRootSender(t *testing.T) {
 	cfg := cBeta.Cfg
 	one := int64(1)
 	cfg.EphemeralAddrs = &one
+	cfg.TracingLevel = seth.TracingLevel_Reverted
+	cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 
 	c, err := seth.NewClientWithConfig(cfg)
 	require.NoError(t, err, "failed to create client")
@@ -1465,11 +1501,12 @@ func TestTraceeRevertReasonNonRootSender(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "11b3c478",
+			CallType:  "CALL",
 			Method:    "callRevertFunctionInSubContract(uint256,uint256)",
 			Input:     map[string]interface{}{"x": x, "y": y},
 			Output:    map[string]interface{}{},
+			Error:     "execution reverted",
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -1485,8 +1522,8 @@ func TestTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing
 	nm, err := seth.NewNonceManager(cfg, TestEnv.Client.Addresses, TestEnv.Client.PrivateKeys)
 	require.NoError(t, err, "failed to create nonce manager")
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	cfg.TracingLevel = seth.TracingLevel_All
+	cfg.TraceOutputs = []string{seth.TraceOutput_Console}
 	cfg.Network.TxnTimeout = seth.MustMakeDuration(time.Duration(5 * time.Second))
 
 	c, err := seth.NewClientRaw(
@@ -1514,11 +1551,11 @@ func TestTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "9e099652",
+			CallType:  "CALL",
 			Method:    "emitInts(int256,int128,uint256)",
 			Input:     map[string]interface{}{"first": x, "second": y, "third": z},
 			Output:    map[string]interface{}{"0": x, "1": y, "2": z},
 		},
-		Comment: "",
 	}
 
 	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
@@ -1534,9 +1571,8 @@ func TestTraceContractTracingSaveToJson(t *testing.T) {
 	nm, err := seth.NewNonceManager(cfg, TestEnv.Client.Addresses, TestEnv.Client.PrivateKeys)
 	require.NoError(t, err, "failed to create nonce manager")
 
-	// when this level is set we don't need to call TraceGethTX, because it's called automatically
 	cfg.TracingLevel = seth.TracingLevel_All
-	cfg.TraceToJson = true
+	cfg.TraceOutputs = []string{seth.TraceOutput_JSON}
 	cfg.Network.TxnTimeout = seth.MustMakeDuration(time.Duration(5 * time.Second))
 
 	c, err := seth.NewClientRaw(
@@ -1569,6 +1605,7 @@ func TestTraceContractTracingSaveToJson(t *testing.T) {
 		To:          "NetworkDebugContract",
 		CommonData: seth.CommonData{
 			Signature: "9e099652",
+			CallType:  "CALL",
 			Method:    "emitInts(int256,int128,uint256)",
 			Input:     map[string]interface{}{"first": 1001.0, "second": 2.0, "third": 26.0},
 			Output:    map[string]interface{}{"0": 1001.0, "1": 2.0, "2": 26.0},
@@ -1581,15 +1618,170 @@ func TestTraceContractTracingSaveToJson(t *testing.T) {
 
 	var readCall []seth.DecodedCall
 
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	b, _ := io.ReadAll(f)
 	err = json.Unmarshal(b, &readCall)
 	require.NoError(t, err, "failed to unmarshal trace file")
 
 	removeGasDataFromDecodedCalls(map[string][]*seth.DecodedCall{tx.Hash: {&readCall[0]}})
 
-	require.Equal(t, 1, len(readCall), "expected 1 decoded transacton")
+	require.Equal(t, 1, len(readCall), "expected 1 decoded transaction")
 	require.EqualValues(t, expectedCall, &readCall[0], "decoded call does not match one read from file")
+}
+
+func TestTraceContractTracingSaveToDot(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_DOT}
+	c.Cfg.TracingLevel = seth.TracingLevel_All
+
+	linkTokenAbi, err := link_token.LinkTokenMetaData.GetAbi()
+	if err != nil {
+		panic(err)
+	}
+	linkDeploymentData, err := c.DeployContract(c.NewTXOpts(), "LinkToken", *linkTokenAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
+	if err != nil {
+		panic(err)
+	}
+	linkToken, err := link_token.NewLinkToken(linkDeploymentData.Address, c.Client)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = c.Decode(linkToken.GrantMintRole(c.NewTXOpts(), c.MustGetRootKeyAddress()))
+	if err != nil {
+		fmt.Println("failed to grant mint LINK role")
+		os.Exit(1)
+	}
+
+	_, err = c.Decode(linkToken.Mint(c.NewTXOpts(), c.MustGetRootKeyAddress(), big.NewInt(1000000000000000000)))
+	if err != nil {
+		fmt.Println("failed to mint LINK")
+		os.Exit(1)
+	}
+
+	debugAbi, err := abi.JSON(strings.NewReader(network_debug_contract.NetworkDebugContractMetaData.ABI))
+	if err != nil {
+		fmt.Println("failed to get debug contract ABI")
+		os.Exit(1)
+	}
+
+	var x int64 = 6
+	var y int64 = 5
+
+	req, err := debugAbi.Pack(
+		"traceWithValidate",
+		big.NewInt(x),
+		big.NewInt(y),
+	)
+
+	if err != nil {
+		fmt.Println("failed to pack arguments")
+		os.Exit(1)
+	}
+
+	amount := big.NewInt(10)
+	decodedTx, decodeErr := c.Decode(linkToken.TransferAndCall(c.NewTXOpts(), TestEnv.DebugContractAddress, amount, req))
+	require.NoError(t, decodeErr, "transaction should not have reverted")
+
+	fileName := fmt.Sprintf("dot_graphs/%s.dot", decodedTx.Hash)
+	t.Cleanup(func() {
+		_ = os.Remove(fileName)
+	})
+
+	f, err := os.OpenFile(fileName, os.O_RDONLY, 0666)
+	require.NoError(t, err, "expected trace file to exist")
+	require.NotNil(t, f, "expected file to exist")
+	s, err := f.Stat()
+	require.NoError(t, err, "expected file to exist")
+	require.Greater(t, s.Size(), int64(0), "expected file to have content")
+}
+
+func TestTraceVariousCallTypesAndNestingLevels(t *testing.T) {
+	c := newClientWithContractMapFromEnv(t)
+	SkipAnvil(t, c)
+
+	c.Cfg.TraceOutputs = []string{seth.TraceOutput_Console}
+	c.Cfg.TracingLevel = seth.TracingLevel_All
+
+	linkTokenAbi, err := link_token.LinkTokenMetaData.GetAbi()
+	if err != nil {
+		panic(err)
+	}
+	linkDeploymentData, err := c.DeployContract(c.NewTXOpts(), "LinkToken", *linkTokenAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
+	if err != nil {
+		panic(err)
+	}
+	linkToken, err := link_token.NewLinkToken(linkDeploymentData.Address, c.Client)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = c.Decode(linkToken.GrantMintRole(c.NewTXOpts(), c.MustGetRootKeyAddress()))
+	if err != nil {
+		fmt.Println("failed to grant mint LINK role")
+		os.Exit(1)
+	}
+
+	_, err = c.Decode(linkToken.Mint(c.NewTXOpts(), c.MustGetRootKeyAddress(), big.NewInt(1000000000000000000)))
+	if err != nil {
+		fmt.Println("failed to mint LINK")
+		os.Exit(1)
+	}
+
+	debugAbi, err := abi.JSON(strings.NewReader(network_debug_contract.NetworkDebugContractMetaData.ABI))
+	if err != nil {
+		fmt.Println("failed to get debug contract ABI")
+		os.Exit(1)
+	}
+
+	var x int64 = 6
+	var y int64 = 5
+
+	req, err := debugAbi.Pack(
+		"traceWithValidate",
+		big.NewInt(x),
+		big.NewInt(y),
+	)
+
+	if err != nil {
+		fmt.Println("failed to pack arguments")
+		os.Exit(1)
+	}
+
+	amount := big.NewInt(10)
+	decodedTx, decodeErr := c.Decode(linkToken.TransferAndCall(c.NewTXOpts(), TestEnv.DebugContractAddress, amount, req))
+	require.NoError(t, decodeErr, "transaction should not have reverted")
+	require.Equal(t, 3, len(c.Tracer.DecodedCalls), "expected 3 decoded transaction")
+	require.Equal(t, 9, len(c.Tracer.DecodedCalls[decodedTx.Hash]), "expected 9 decoded transaction for tx: "+decodedTx.Hash)
+
+	require.Equal(t, "CALL", c.Tracer.DecodedCalls[decodedTx.Hash][0].CallType, "expected call type to be CALL")
+	require.Equal(t, 0, c.Tracer.DecodedCalls[decodedTx.Hash][0].NestingLevel, "expected nesting level to be 0")
+
+	require.Equal(t, "CALL", c.Tracer.DecodedCalls[decodedTx.Hash][1].CallType, "expected call type to be CALL")
+	require.Equal(t, 1, c.Tracer.DecodedCalls[decodedTx.Hash][1].NestingLevel, "expected nesting level to be 1")
+
+	require.Equal(t, "DELEGATECALL", c.Tracer.DecodedCalls[decodedTx.Hash][2].CallType, "expected call type to be DELEGATECALL")
+	require.Equal(t, 2, c.Tracer.DecodedCalls[decodedTx.Hash][2].NestingLevel, "expected nesting level to be 2")
+
+	require.Equal(t, "CALL", c.Tracer.DecodedCalls[decodedTx.Hash][3].CallType, "expected call type to be CALL")
+	require.Equal(t, 3, c.Tracer.DecodedCalls[decodedTx.Hash][3].NestingLevel, "expected nesting level to be 3")
+
+	require.Equal(t, "STATICCALL", c.Tracer.DecodedCalls[decodedTx.Hash][4].CallType, "expected call type to be STATICCALL")
+	require.Equal(t, 2, c.Tracer.DecodedCalls[decodedTx.Hash][4].NestingLevel, "expected nesting level to be 2")
+
+	require.Equal(t, "STATICCALL", c.Tracer.DecodedCalls[decodedTx.Hash][5].CallType, "expected call type to be STATICCALL")
+	require.Equal(t, 3, c.Tracer.DecodedCalls[decodedTx.Hash][5].NestingLevel, "expected nesting level to be 3")
+
+	require.Equal(t, "CALL", c.Tracer.DecodedCalls[decodedTx.Hash][6].CallType, "expected call type to be CALL")
+	require.Equal(t, 2, c.Tracer.DecodedCalls[decodedTx.Hash][6].NestingLevel, "expected nesting level to be 2")
+
+	require.Equal(t, "CALL", c.Tracer.DecodedCalls[decodedTx.Hash][7].CallType, "expected call type to be CALL")
+	require.Equal(t, 3, c.Tracer.DecodedCalls[decodedTx.Hash][7].NestingLevel, "expected nesting level to be 3")
+
+	require.Equal(t, "CALL", c.Tracer.DecodedCalls[decodedTx.Hash][8].CallType, "expected call type to be CALL")
+	require.Equal(t, 4, c.Tracer.DecodedCalls[decodedTx.Hash][8].NestingLevel, "expected nesting level to be 4")
 }
 
 func removeGasDataFromDecodedCalls(decodedCall map[string][]*seth.DecodedCall) {

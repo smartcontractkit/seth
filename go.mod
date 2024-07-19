@@ -6,8 +6,10 @@ toolchain go1.21.6
 
 require (
 	github.com/avast/retry-go v3.0.0+incompatible
+	github.com/awalterschulze/gographviz v2.0.3+incompatible
 	github.com/barkimedes/go-deepcopy v0.0.0-20220514131651-17c30cfc62df
 	github.com/ethereum/go-ethereum v1.13.8
+	github.com/google/uuid v1.6.0
 	github.com/montanaflynn/stats v0.7.1
 	github.com/pelletier/go-toml/v2 v2.2.2
 	github.com/pkg/errors v0.9.1
@@ -35,7 +37,6 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-ole/go-ole v1.2.5 // indirect
 	github.com/gogo/protobuf v1.3.3 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/holiman/uint256 v1.2.4 // indirect
 	github.com/klauspost/compress v1.17.1 // indirect
