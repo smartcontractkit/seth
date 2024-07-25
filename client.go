@@ -218,7 +218,7 @@ func ValidateConfig(cfg *Config) error {
 	}
 
 	if cfg.Network.DialTimeout == nil {
-		cfg.Network.DialTimeout = &Duration{D: 40 * time.Second}
+		cfg.Network.DialTimeout = &Duration{D: DefaultDialTimeout}
 	}
 
 	return nil
