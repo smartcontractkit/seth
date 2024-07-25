@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,6 +51,7 @@ type Config struct {
 	// internal fields
 	RevertedTransactionsFile string
 	ephemeral                bool
+	RPCHeaders               http.Header
 
 	// external fields
 	KeyFileSource                 KeyFileSource     `toml:"keyfile_source"`

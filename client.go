@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"math/big"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -218,6 +217,10 @@ func ValidateConfig(cfg *Config) error {
 		return fmt.Errorf("KeyFileSource is set to 'file' but the path to the key file is not set")
 	}
 
+	if cfg.Network.DialTimeout == nil {
+		cfg.Network.DialTimeout = &Duration{D: 40 * time.Second}
+	}
+
 	return nil
 }
 
@@ -243,11 +246,19 @@ func NewClientRaw(
 	if len(cfg.Network.URLs) > 1 {
 		L.Warn().Msg("Multiple RPC URLs provided, only the first one will be used")
 	}
-
-	client, err := ethclient.Dial(cfg.Network.URLs[0])
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Network.DialTimeout.Duration())
+	defer cancel()
+	rpcClient, err := rpc.DialOptions(ctx,
+		cfg.Network.URLs[0],
+		rpc.WithHeaders(cfg.RPCHeaders),
+		rpc.WithHTTPClient(&http.Client{
+			Transport: NewLoggingTransport(),
+		}),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to '%s' due to: %w", cfg.Network.URLs[0], err)
+		return nil, fmt.Errorf("failed to connect RPC client to '%s' due to: %w", cfg.Network.URLs[0], err)
 	}
+	client := ethclient.NewClient(rpcClient)
 
 	chainId, err := client.ChainID(context.Background())
 	if err != nil {

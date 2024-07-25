@@ -3,6 +3,7 @@ package seth
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -93,11 +94,7 @@ type Call struct {
 	Calls   []Call     `json:"calls"`
 }
 
-func NewTracer(url string, cs *ContractStore, abiFinder *ABIFinder, cfg *Config, contractAddressToNameMap ContractMap, addresses []common.Address) (*Tracer, error) {
-	headers, err := ReadEnvRPCHeaders()
-	if err != nil {
-		return nil, err
-	}
+func NewTracer(url string, headers http.Header, cs *ContractStore, abiFinder *ABIFinder, cfg *Config, contractAddressToNameMap ContractMap, addresses []common.Address) (*Tracer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Network.DialTimeout.Duration())
 	defer cancel()
 	c, err := rpc.DialOptions(ctx, url, rpc.WithHeaders(headers))

@@ -55,7 +55,7 @@ func NewDebugContractSetup() (
 	contractMap := seth.NewEmptyContractMap()
 
 	abiFinder := seth.NewABIFinder(contractMap, cs)
-	tracer, err := seth.NewTracer(cfg.Network.URLs[0], cs, &abiFinder, cfg, contractMap, addrs)
+	tracer, err := seth.NewTracer(cfg.Network.URLs[0], cfg.RPCHeaders, cs, &abiFinder, cfg, contractMap, addrs)
 	if err != nil {
 		return nil, nil, common.Address{}, common.Address{}, nil, err
 	}

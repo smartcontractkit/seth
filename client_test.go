@@ -3,7 +3,6 @@ package seth_test
 import (
 	"github.com/ethereum/go-ethereum/common"
 	link_token "github.com/smartcontractkit/seth/contracts/bind/link"
-	"net/http"
 	"testing"
 
 	"github.com/smartcontractkit/seth"
@@ -69,50 +68,4 @@ func TestContractLoader(t *testing.T) {
 	owner, err := contract.Owner(c.NewCallOpts())
 	require.NoError(t, err, "failed to call loaded LINK contract")
 	require.NotEqual(t, common.Address{}, owner, "expected owner to be set")
-}
-
-func TestRPCCustomHeadersFromEnv(t *testing.T) {
-	tests := []struct {
-		name            string
-		headerEnvString string
-		expected        http.Header
-		expectedErr     error
-	}{
-		{
-			name:            "single k-v",
-			headerEnvString: "Host=http.com",
-			expected:        http.Header{"Host": []string{"http.com"}},
-		},
-		{
-			name:            "multiple k-v",
-			headerEnvString: "Host=http.com,Accept=application/json",
-			expected: http.Header{
-				"Host":   []string{"http.com"},
-				"Accept": []string{"application/json"},
-			}},
-		{
-			name:            "empty value",
-			headerEnvString: "Host=a,Accept",
-			expectedErr:     seth.InvalidHeadersErr,
-		},
-		{
-			name:            "invalid value",
-			headerEnvString: "Host=a,Accept",
-			expectedErr:     seth.InvalidHeadersErr,
-		},
-		{
-			name:            "invalid k-v, multiple =",
-			headerEnvString: "Host=a=b,Host=c",
-			expectedErr:     seth.InvalidHeadersErr,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("SETH_RPC_HEADERS", tt.headerEnvString)
-			result, err := seth.ReadEnvRPCHeaders()
-			require.Equal(t, tt.expectedErr, err)
-			require.Equal(t, tt.expected, result)
-		})
-	}
 }
