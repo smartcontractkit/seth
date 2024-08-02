@@ -46,7 +46,7 @@ type TestEnvironment struct {
 
 func newClient(t *testing.T) *seth.Client {
 	c, err := seth.NewClient()
-	require.NoError(t, err, "failed to initalise seth")
+	require.NoError(t, err, "failed to initialize seth")
 
 	return c
 }
@@ -59,7 +59,7 @@ func newClientWithEphemeralAddresses(t *testing.T) *seth.Client {
 	cfg.EphemeralAddrs = &sixty
 
 	c, err := seth.NewClientWithConfig(cfg)
-	require.NoError(t, err, "failed to initalise seth")
+	require.NoError(t, err, "failed to initialize seth")
 
 	return c
 }
@@ -72,14 +72,14 @@ func newClientWithKeyfile(t *testing.T, keyFilePath string) *seth.Client {
 	cfg.KeyFilePath = keyFilePath
 
 	c, err := seth.NewClientWithConfig(cfg)
-	require.NoError(t, err, "failed to initalise seth")
+	require.NoError(t, err, "failed to initialize seth")
 
 	return c
 }
 
 func TestDeploymentLinkTokenFromGethWrapperExample(t *testing.T) {
 	c, err := seth.NewClient()
-	require.NoError(t, err, "failed to initalise seth")
+	require.NoError(t, err, "failed to initialize seth")
 	abi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
 	contractData, err := c.DeployContract(c.NewTXOpts(), "LinkToken", *abi, []byte(link_token.LinkTokenMetaData.Bin))
@@ -94,7 +94,7 @@ func TestDeploymentLinkTokenFromGethWrapperExample(t *testing.T) {
 
 func TestDeploymentAbortedWhenContextHasError(t *testing.T) {
 	c, err := seth.NewClient()
-	require.NoError(t, err, "failed to initalise seth")
+	require.NoError(t, err, "failed to initialize seth")
 	abi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
 

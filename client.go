@@ -522,7 +522,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 		}
 
 		if m.Cfg.hasOutput(TraceOutput_JSON) {
-			path, saveErr := saveAsJson(m.Tracer.DecodedCalls[decoded.Hash], "traces", decoded.Hash)
+			path, saveErr := saveAsJson(m.Tracer.DecodedCalls[decoded.Hash], filepath.Join(m.Cfg.ArtifactsDir, "traces"), decoded.Hash)
 			if saveErr != nil {
 				L.Warn().
 					Err(saveErr).

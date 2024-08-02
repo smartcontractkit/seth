@@ -1593,7 +1593,7 @@ func TestTraceContractTracingSaveToJson(t *testing.T) {
 	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
 	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
 
-	fileName := fmt.Sprintf("traces/%s.json", tx.Hash)
+	fileName := filepath.Join(c.Cfg.ArtifactsDir, "traces", fmt.Sprintf("%s.json", tx.Hash))
 	t.Cleanup(func() {
 		_ = os.Remove(fileName)
 	})
