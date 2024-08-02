@@ -496,7 +496,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 					Err(traceErr).
 					Msg("Failed to trace call, but decoding was successful. Saving decoded data as JSON")
 
-				path, saveErr := saveAsJson(decoded, "traces", decoded.Hash)
+				path, saveErr := saveAsJson(decoded, filepath.Join(m.Cfg.ArtifactsDir, "traces"), decoded.Hash)
 				if saveErr != nil {
 					L.Warn().
 						Err(saveErr).
