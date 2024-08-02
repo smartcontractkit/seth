@@ -373,11 +373,11 @@ func NewClientRaw(
 	}
 
 	now := time.Now().Format("2006-01-02-15-04-05")
-	c.Cfg.RevertedTransactionsFile = fmt.Sprintf(RevertedTransactionsFilePattern, c.Cfg.Network.Name, now)
+	c.Cfg.revertedTransactionsFile = filepath.Join(c.Cfg.ArtifactsDir, fmt.Sprintf(RevertedTransactionsFilePattern, c.Cfg.Network.Name, now))
 
 	if c.Cfg.Network.GasPriceEstimationEnabled {
 		L.Debug().Msg("Gas estimation is enabled")
-		L.Debug().Msg("Initialising LFU block header cache")
+		L.Debug().Msg("Initializing LFU block header cache")
 		c.HeaderCache = NewLFUBlockCache(c.Cfg.Network.GasPriceEstimationBlocks)
 
 		if c.Cfg.Network.EIP1559DynamicFees {
@@ -464,7 +464,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 				Err(decodeErr).
 				Msg("Failed to decode transaction. Saving transaction data hash as JSON")
 
-			err = CreateOrAppendToJsonArray(m.Cfg.RevertedTransactionsFile, tx.Hash().Hex())
+			err = CreateOrAppendToJsonArray(m.Cfg.revertedTransactionsFile, tx.Hash().Hex())
 			if err != nil {
 				l.Warn().
 					Err(err).
@@ -1135,7 +1135,7 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 		Str("TXHash", tx.Hash().Hex()).
 		Msgf("Deployed %s contract", name)
 
-	if !m.Cfg.ShoulSaveDeployedContractMap() {
+	if !m.Cfg.ShouldSaveDeployedContractMap() {
 		return DeploymentData{Address: address, Transaction: tx, BoundContract: contract}, nil
 	}
 
