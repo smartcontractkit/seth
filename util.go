@@ -365,7 +365,7 @@ func saveAsJson(v any, dirName, name string) (string, error) {
 	}
 	dir := filepath.Join(pwd, dirName)
 	if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
-		err := os.Mkdir(dir, os.ModePerm)
+		err := os.MkdirAll(dir, os.ModePerm)
 		if err != nil {
 			return "", err
 		}
