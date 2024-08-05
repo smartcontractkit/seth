@@ -274,7 +274,7 @@ func (t *Tracer) generateDotGraph(txHash string, calls []*DecodedCall, revertErr
 		}
 	}
 
-	dirPath := "dot_graphs"
+	dirPath := filepath.Join(t.Cfg.ArtifactsDir, "dot_graphs")
 	err := os.MkdirAll(dirPath, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)

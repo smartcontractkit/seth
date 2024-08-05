@@ -1,4 +1,5 @@
 # Seth
+
 Reliable and debug-friendly Ethereum client
 
 [![Decoding tests](https://github.com/smartcontractkit/seth/actions/workflows/test_decode.yml/badge.svg)](https://github.com/smartcontractkit/seth/actions/workflows/test_decode.yml)
@@ -9,6 +10,7 @@ Reliable and debug-friendly Ethereum client
 <br/>
 
 ## Goals
+
 - Be a thin, debuggable and battle tested wrapper on top of `go-ethereum`
 - Decode all transaction inputs/outputs/logs for all ABIs you are working with, automatically
 - Simple synchronous API
@@ -18,10 +20,12 @@ Reliable and debug-friendly Ethereum client
 - Well tested: should provide a suite of e2e tests that can be run on testnets to check integration
 
 ## Examples
+
 Check [examples](./examples) folder
 
-Lib is providing a small amount of helpers for decoding handling that you can use with vanilla `go-ethereum` generated wrappers
-```
+Lib provides a small amount of helpers for decoding handling that you can use with vanilla `go-ethereum` generated wrappers
+
+```go
 // Decode waits for transaction and decode all the data/errors
 Decode(tx *types.Transaction, txErr error) (*DecodedTransaction, error)
 
@@ -34,7 +38,8 @@ NewCallOpts(o ...CallOpt) *bind.CallOpts
 ```
 
 By default, we are using the `root` key `0`, but you can also use `keys` from `keyfile.toml`
-```
+
+```go
 // NewCallKeyOpts returns a new sequential call options wrapper from the key N
 NewCallKeyOpts(keyNum int, o ...CallOpt) *bind.CallOpts
 
@@ -43,67 +48,84 @@ NewTXKeyOpts(keyNum int, o ...TransactOpt) *bind.TransactOpts
 ```
 
 Start `Geth` in a separate terminal, then run the examples
-```
+
+```sh
 make GethSync
 cd examples
 go test -v
 ```
 
 ## Setup
+
 We are using [nix](https://nixos.org/)
 
 Enter the shell
-```
+
+```sh
 nix develop
 ```
 
 ## Building contracts
+
 We have `go-ethereum` and [foundry](https://github.com/foundry-rs/foundry) tools inside `nix` shell
-```
+
+```sh
 make build
 ```
 
 ## Testing
+
 To run tests on a local network, first start it
-```
+
+```sh
 make AnvilSync
 ```
+
 Or use latest `Geth`
-```
+
+```sh
 make GethSync
 ```
 
 You can use default `hardhat` key `ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80` to run tests
 
 Run the [decode](./client_decode_test.go) tests
-```
+
+```sh
 make network=Anvil root_private_key=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 test
 make network=Geth root_private_key=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 test
 ```
+
 Check other params in [seth.toml](./seth.toml), select any network and use your key for testnets
 
 User facing API tests are [here](./client_api_test.go)
-```
+
+```sh
 make network=Anvil root_private_key=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 test_api
 make network=Geth root_private_key=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 test_api
 ```
 
 CLI tests
-```
+
+```sh
 make network=Anvil root_private_key=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 test_cli
 make network=Geth root_private_key=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 test_cli
 ```
 
 Tracing tests
-```
+
+```sh
 make network=Anvil root_private_key=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 test_trace
 make network=Geth root_private_key=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 test_trace
 ```
 
 # Config
-### env vars
+
+### Env Vars
+
 Some crucial data is stored in env vars, create `.envrc` and use `source .envrc`, or use `direnv`
-```
+
+```sh
 export SETH_LOG_LEVEL=info # global logger level
 export SETH_CONFIG_PATH=seth.toml # path to the toml config
 export SETH_KEYFILE_PATH=keyfile.toml # keyfile path for using multiple keys
@@ -115,30 +137,37 @@ alias seth="SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go" # useful alias f
 ```
 
 Alternatively if you don't have a network defined in the TOML you can still use the CLI by providing these 2 key env vars:
-```
+
+```sh
 export SETH_URL=https://rpc.fuji.testnet.anyswap.exchange
 export SETH_CHAIN_ID=43113
 
 go run cmd/seth/seth.go ... # your command
 ```
-In that case you should still pass network name with `-n` flag, especially when using CLI with 1password as network name is used when generating item name. 
+
+In that case you should still pass network name with `-n` flag, especially when using CLI with 1password as network name is used when generating item name.
 
 If `SETH_KEYFILE_PATH` is not set then client will create X ephemeral keys (60 by default, configurable) and won't return any funds.
 Use `SETH_KEYFILE_PATH` for testnets/mainnets and `ephemeral` mode only when testing against simulated network.
 
 ### seth.toml
+
 Set up your ABI directory (relative to `seth.toml`)
-```
+
+```toml
 abi_dir = "contracts/abi"
 ```
 
 Setup your BIN directory (relative to `seth.toml`)
-```
+
+```toml
 bin_dir = "contracts/bin"
 ```
 
 Decide whether you want to read `keyfile` or use `ephemeral` keys. In the first case you have two options:
-* read it from the filesystem
+
+- read it from the filesystem
+
 ```toml
 # If empty Seth will not try to load any keyfiles. You can either set it to 'file' to load keyfiles from
 # a file (providing path to it in 'keyfile_path') or to 'base64_env' to load it from Base64-ed environment variable
@@ -148,11 +177,15 @@ keyfile_source = "file"
 # If keyfile_source is set to 'file' this should be a path to a file with keyfiles
 keyfile_path = "keyfile.toml"
 ```
-* read it from environment variable `SETH_KEYFILE_BASE64` (keyfile needs to be base64-ed)
+
+- read it from environment variable `SETH_KEYFILE_BASE64` (keyfile needs to be base64-ed)
+
 ```toml
 keyfile_source = "base64_env"
 ```
+
 If you want to use ephemeral keys, you can set the number of keys to be generated:
+
 ```toml
 # Set number of ephemeral keys to be generated (0 for no ephemeral keys). Each key will receive a proportion of native tokens from root private key's balance with the value equal to `(root_balance / ephemeral_keys_number) - transfer_fee * ephemeral_keys_number`. Using ephemeral keys together with keyfile will result in an error.
 ephemeral_addresses_number = 10
@@ -161,21 +194,27 @@ ephemeral_addresses_number = 10
 You cannot use both `keyfile` and `ephemeral` keys at the same time. Trying to do so will cause configuration error.
 
 You can enable auto-tracing for all transactions meeting configured level, which means that every time you use `Decode()` we will decode the transaction and also trace all calls made within the transaction, together with all inputs, outputs, logs and events. Three tracing levels are available:
-* `all` - trace all transactions
-* `reverted` - trace only reverted transactions (that's default setting used if you don't set `tracing_level`)
-* `none` - don't trace any transactions
+
+- `all` - trace all transactions
+- `reverted` - trace only reverted transactions (that's default setting used if you don't set `tracing_level`)
+- `none` - don't trace any transactions
+
 Example:
-```
+
+```toml
 tracing_level = "reverted"
 ```
 
 Additionally, you can decide where tracing/decoding data goes to. There are three options:
-* `console` - we will print all tracing data to the console
-* `json` - we will save tracing data for each transaction to a JSON file
-* `dot` - we will save tracing data for each transaction to a DOT file (graph)
-```
+
+- `console` - we will print all tracing data to the console
+- `json` - we will save tracing data for each transaction to a JSON file
+- `dot` - we will save tracing data for each transaction to a DOT file (graph)
+
+```toml
 trace_outputs = ["console", "json", "dot"]
 ```
+
 For info on viewing DOT files please check the [DOT graphs](#dot-graphs) section below.
 
 Example:
@@ -183,13 +222,16 @@ Example:
 These two options should be used with care, when `tracing_level` is set to `all` as they might generate a lot of data.
 
 If you want to check if the RPC is healthy on start, you can enable it with:
-```
+
+```toml
 check_rpc_health_on_start = false
 ```
+
 It will execute a simple check of transferring 10k wei from root key to root key and check if the transaction was successful.
 
 You can add more networks like this:
-```
+
+```toml
 [[Networks]]
 name = "Fuji"
 transaction_timeout = "30s"
@@ -211,44 +253,54 @@ gas_price_estimation_blocks = 1000
 # priority of the transaction, can be "fast", "standard" or "slow" (the higher the priority, the higher adjustment factor and buffer will be used for gas estimation) [default: "standard"]
 gas_price_estimation_tx_priority = "slow"
 ```
+
 If you don't we will use the default settings for `Default` network.
 
 ChainID is not needed, as it's fetched from the node.
 
 If you want to save addresses of deployed contracts, you can enable it with:
-```
+
+```toml
 save_deployed_contracts_map = true
 ```
 
 If you want to re-use previously deployed contracts you can indicate file name in `seth.toml`:
-```
+
+```toml
 contract_map_file = "deployed_contracts_mumbai.toml"
 ```
+
 Both features only work for live networks. Otherwise, they are ignored, and nothing is saved/read from for simulated networks.
 
 ## CLI
+
 You can either define the network you want to interact with in your TOML config and then refer it in the CLI command, or you can pass all network parameters via env vars. Most of the examples below show how to use the former approach.
 
 ### Multiple keys manipulation (keyfile.toml)
+
 To use multiple keys in your tests you can create a `keyfile.toml` using CLI
 
 Set up the alias, see `.envrc` configuration above
-```
+
+```sh
 export SETH_LOG_LEVEL=info # global logger level
 alias seth="SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go"
 ```
 
 When you run any of the commands from `keys` namespace by default Seth will try to interact with 1password. To do that you need to meet a couple of requirements:
+
 1. 1password desktop [app](https://1password.com/product/mac/) installed.
 2. 1password CLI tool called [op](https://developer.1password.com/docs/cli/get-started/)
 
 Now... if you are working with a vault you have access to via your desktop app, it will ask you to authenticate via the desktop app every time you need to access the vault and no further configuration is required. If it's a vault you don't have access to via the desktop app you will need to set service account token in your env vars:
-```bash
+
+```sh
 export OP_SERVICE_ACCOUNT_TOKEN=...
 ```
 
 Once you have it setup you can run `op vaults list` to get ids of all vaults you are assigned to. The output will look more or less like this:
-```bash
+
+```sh
 ID                            NAME
 4rdre3lw7mqyz4nbrqcygdzwri    Vault 1
 r4qs5dh3zwofum2jse7g53cgrm    Vault 2
@@ -257,44 +309,56 @@ r4qs5dh3zwofum2jse7g53cgrm    Vault 2
 Once you have decided, which vault you want to use you need to export its id in `SETH_ONE_PASS_VAULT` variable. We will use `Vault 1`'s ids in the following examples.
 
 Create a new `keyfile` with 10 new accounts funded from the root key
-```
+
+```sh
 SETH_ONE_PASS_VAULT=4rdre3lw7mqyz4nbrqcygdzwri SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile_geth.toml seth -n Geth keys fund -a 10 [-b 2] [--local]
 ```
+
 This will create a new Secure Note in 1password called GETH_KEYFILE with file attachment containing 10 new keys. Item name is always `<NETWORK_NAME_>_KEYFILE`. It's crucial that you always pass network name with `-n` flag, as it's used in item name. If it's missing we will use `DEFAULT` network name and it will be impossible to distinguish between keyfiles from different networks.
 `SETH_KEYFILE_PATH` is still required, even when using 1password, because if creating the keyfile in 1password fails, we will save it to the file, so that no funds are lost.
 Also remember that you don't need to define your network in TOML file as long as you pass the RPC URL with `-u` flag.
 
 Run the tests, then return funds back, when needed
-```
+
+```sh
 SETH_ONE_PASS_VAULT=4rdre3lw7mqyz4nbrqcygdzwri SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile_geth.toml seth -n Geth keys return [--local]
 ```
+
 Update the balances
-```
+
+```sh
 SETH_ONE_PASS_VAULT=4rdre3lw7mqyz4nbrqcygdzwri  SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile_geth.toml seth -n Geth keys update [--local]
 ```
+
 Remove the `keyfile`
-```
+
+```sh
 SETH_ONE_PASS_VAULT=4rdre3lw7mqyz4nbrqcygdzwri SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile_geth.toml seth -n Geth keys remove [--local]
 ```
 
 If you don't want to use 1password you can still use local keyfile by providing `--local` flag.
 
 ### Manual gas price estimation
+
 In order to adjust gas price for a transaction, you can use `seth gas` command
-```
+
+```sh
 seth -n Fuji gas -b 10000 -tp 0.99
 ```
+
 This will analyze last 10k blocks and give you 25/50/75/99th/Max percentiles for base fees and tip fees
 
 `-tp 0.99` requests the 99th tip percentile across all the transaction in one block and calculates 25/50/75/99th/Max across all blocks
 
-### Block stats
+### Block Stats
+
 If you need to get some insights into network stats and create a realistic load/chaos profile with simulators (`anvil` as an example), you can use `stats` CLI command
 
 #### Define your network in `seth.toml`
 
 Edit your `seth.toml`
-```
+
+```toml
 [[networks]]
 name = "MyCustomNetwork"
 urls_secret = ["..."]
@@ -304,29 +368,35 @@ rpc_requests_per_second_limit = 5
 ```
 
 Then check the stats for the last N blocks
-```bash
+
+```sh
 seth -n MyCustomNetwork stats -s -10
 ```
 
 To check stats for the interval (A, B)
-```bash
+
+```sh
 seth -n MyCustomNetwork stats -s A -e B
 ```
 
 #### Pass all network parameters via env vars
+
 If you don't have a network defined in the TOML you can still use the CLI by providing the RPC url via cmd arg.
 
 Then check the stats for the last N blocks
-```bash
+
+```sh
 seth -u "https://my-rpc.network.io" stats -s -10
 ```
 
 To check stats for the interval (A, B)
-```bash
+
+```sh
 seth -u "https://my-rpc.network.io" stats -s A -e B
 ```
 
-Results can help you to understand if network is stable, what is avg block time, gas price, block utilization and transactions per second
+Results can help you to understand if network is stable, what is avg block time, gas price, block utilization and transactions per second.
+
 ```toml
 # Stats
 perc_95_tps = 8.0
@@ -350,28 +420,36 @@ max_tps = 8.0
 ```
 
 ### Single transaction tracing
+
 You can trace a single transaction using `seth trace` command. Example with `seth` alias mentioned before:
-```
+
+```sh
 seth -u "https://my-rpc.network.io" trace -t 0x4c21294bf4c0a19de16e0fca74e1ea1687ba96c3cab64f6fca5640fb7b84df65
 ```
+
 or if you want to use a predefined-network:
-```
+
+```sh
 seth -n=Geth trace -t 0x4c21294bf4c0a19de16e0fca74e1ea1687ba96c3cab64f6fca5640fb7b84df65
 ```
 
-### Bulk tracing
+### Bulk Tracing
+
 You can trace multiple transactions at once using `seth trace` command for a predefined network named `Geth`. Example:
-```
+
+```sh
 seth -n=Geth trace -f reverted_transactions.json
 ```
 
 or by passing all the RPC parameter with a flag:
-```
+
+```sh
 seth -u "https://my-rpc.network.io" trace -f reverted_transactions.json
 ```
 
 You need to pass a file with a list of transaction hashes to trace. The file should be a JSON array of transaction hashes, like this:
-```
+
+```json
 [
   "0x...",
   "0x...",
@@ -383,6 +461,7 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 (Note that currently Seth automatically creates `reverted_transactions_<network>_<date>.json` with all reverted transactions, so you can use this file as input for the `trace` command.)
 
 ## Features
+
 - [x] Decode named inputs
 - [x] Decode named outputs
 - [x] Decode anonymous outputs
@@ -412,7 +491,7 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 
 You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
 
-### Automatic gas estimator
+### Automatic Gas Estimator
 
 This section explains how to configure and understand the automatic gas estimator, which is crucial for executing transactions on Ethereum-based networks. Here’s what you need to know:
 
@@ -439,12 +518,14 @@ Gas estimation varies based on whether the network is a private Ethereum Network
 For real networks, the estimation process differs for legacy transactions and those compliant with EIP-1559:
 
 ##### Legacy Transactions
+
 1. **Initial Price**: Query the network node for the current suggested gas price.
 2. **Priority Adjustment**: Modify the initial price based on `gas_price_estimation_tx_priority`. Higher priority increases the price to ensure faster inclusion in a block.
 3. **Congestion Analysis**: Examine the last X blocks (as specified by `gas_price_estimation_blocks`) to determine network congestion, calculating the usage rate of gas in each block and giving recent blocks more weight.
 4. **Buffering**: Add a buffer to the adjusted gas price to increase transaction reliability during high congestion.
 
 ##### EIP-1559 Transactions
+
 1. **Tip Fee Query**: Ask the node for the current recommended tip fee.
 2. **Fee History Analysis**: Gather the base fee and tip history from recent blocks to establish a fee baseline.
 3. **Fee Selection**: Use the greater of the node's suggested tip or the historical average tip for upcoming calculations.
@@ -455,41 +536,47 @@ For real networks, the estimation process differs for legacy transactions and th
 Understanding and setting these parameters correctly ensures that your transactions are processed efficiently and cost-effectively on the network.
 
 Finally, `gas_price_estimation_tx_priority` is also used, when deciding, which percentile to use for base fee and tip for historical fee data. Here's how that looks:
+
 ```go
-		case Priority_Fast:
-			baseFee = stats.GasPrice.Perc99
-			historicalGasTipCap = stats.TipCap.Perc99
-		case Priority_Standard:
-			baseFee = stats.GasPrice.Perc50
-			historicalGasTipCap = stats.TipCap.Perc50
-		case Priority_Slow:
-			baseFee = stats.GasPrice.Perc25
-			historicalGasTipCap = stats.TipCap.Perc25
+case Priority_Fast:
+    baseFee = stats.GasPrice.Perc99
+    historicalGasTipCap = stats.TipCap.Perc99
+case Priority_Standard:
+    baseFee = stats.GasPrice.Perc50
+    historicalGasTipCap = stats.TipCap.Perc50
+case Priority_Slow:
+    baseFee = stats.GasPrice.Perc25
+    historicalGasTipCap = stats.TipCap.Perc25
 ```
 
 ##### Adjustment factor
+
 All values are multiplied by the adjustment factor, which is calculated based on `gas_price_estimation_tx_priority`:
+
 ```go
-	case Priority_Fast:
-		return 1.2
-	case Priority_Standard:
-		return 1.0
-	case Priority_Slow:
-		return 0.8
+case Priority_Fast:
+    return 1.2
+case Priority_Standard:
+    return 1.0
+case Priority_Slow:
+    return 0.8
 ```
+
 For fast transactions we will increase gas price by 20%, for standard we will use the value as is and for slow we will decrease it by 20%.
 
 ##### Buffer percents
+
 We further adjust the gas price by adding a buffer to it, based on congestion rate:
+
 ```go
-	case Congestion_Low:
-		return 1.10, nil
-	case Congestion_Medium:
-		return 1.20, nil
-	case Congestion_High:
-		return 1.30, nil
-	case Congestion_VeryHigh:
-		return 1.40, nil
+case Congestion_Low:
+    return 1.10, nil
+case Congestion_Medium:
+    return 1.20, nil
+case Congestion_High:
+    return 1.30, nil
+case Congestion_VeryHigh:
+    return 1.40, nil
 ```
 
 For low congestion rate we will increase gas price by 10%, for medium by 20%, for high by 30% and for very high by 40%.
@@ -501,29 +588,36 @@ It's important to know that in order to use congestion metrics we need to fetch 
 For both transaction types if any of the steps fails, we fallback to hardcoded values.
 
 ### DOT graphs
+
 There are multiple ways of visualising DOT graphs:
-* `xdot` application [recommended]
-* VSCode Extensions
-* online viewers
+
+- `xdot` application [recommended]
+- VSCode Extensions
+- online viewers
 
 ### xdot
+
 To install simply run `homebrew install xdot` and then run `xdot <path_to_dot_file>`. This tool seems to be the best for the job, since the viewer is interactive and supports tooltips, which in our case contain extra tracing information.
 
 ### VSCode Extensions
+
 There are multiple extensions that can be used to view DOT files in VSCode. We recommend using [Graphviz Preview](https://marketplace.visualstudio.com/items?itemName=EFanZh.graphviz-preview). The downside is that it doesn't support tooltips.
 
 ### Goland
+
 We were unable to find any (working) plugins for DOT graph visualization. If you do know any, please let us know.
 
 ### Online viewers
-There's at least a dozen of them available, but none of them support tooltips and most can't handle our multi-line labels. These two are known to work, though:
-* [Devtools/daily](https://www.devtoolsdaily.com/graphviz/)
-* [Sketchviz](https://sketchviz.com/)
 
+There's at least a dozen of them available, but none of them support tooltips and most can't handle our multi-line labels. These two are known to work, though:
+
+- [Devtools/daily](https://www.devtoolsdaily.com/graphviz/)
+- [Sketchviz](https://sketchviz.com/)
 
 ### Experimental features
 
 In order to enable an experimental feature you need to pass it's name in config. It's a global config, you cannot enable it per-network. Example:
+
 ```toml
 # other settings before...
 tracing_level = "reverted"
@@ -532,5 +626,6 @@ experiments_enabled = ["slow_funds_return", "eip_1559_fee_equalizer"]
 ```
 
 Here's what they do:
-* `slow_funds_return` will work only in `core` and when enabled it changes tx priority to `slow` and increases transaction timeout to 30 minutes.
-* `eip_1559_fee_equalizer` in case of EIP-1559 transactions if it detects that historical base fee and suggested/historical tip are more than 3 orders of magnitude apart, it will use the higher value for both (this helps in cases where base fee is almost 0 and transaction is never processed).
+
+- `slow_funds_return` will work only in `core` and when enabled it changes tx priority to `slow` and increases transaction timeout to 30 minutes.
+- `eip_1559_fee_equalizer` in case of EIP-1559 transactions if it detects that historical base fee and suggested/historical tip are more than 3 orders of magnitude apart, it will use the higher value for both (this helps in cases where base fee is almost 0 and transaction is never processed).

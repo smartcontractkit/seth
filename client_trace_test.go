@@ -1593,7 +1593,7 @@ func TestTraceContractTracingSaveToJson(t *testing.T) {
 	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
 	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
 
-	fileName := fmt.Sprintf("traces/%s.json", tx.Hash)
+	fileName := filepath.Join(c.Cfg.ArtifactsDir, "traces", fmt.Sprintf("%s.json", tx.Hash))
 	t.Cleanup(func() {
 		_ = os.Remove(fileName)
 	})
@@ -1685,7 +1685,7 @@ func TestTraceContractTracingSaveToDot(t *testing.T) {
 	decodedTx, decodeErr := c.Decode(linkToken.TransferAndCall(c.NewTXOpts(), TestEnv.DebugContractAddress, amount, req))
 	require.NoError(t, decodeErr, "transaction should not have reverted")
 
-	fileName := fmt.Sprintf("dot_graphs/%s.dot", decodedTx.Hash)
+	fileName := filepath.Join(c.Cfg.ArtifactsDir, "dot_graphs", fmt.Sprintf("%s.dot", decodedTx.Hash))
 	t.Cleanup(func() {
 		_ = os.Remove(fileName)
 	})

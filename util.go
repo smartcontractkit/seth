@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -362,14 +363,14 @@ func saveAsJson(v any, dirName, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := fmt.Sprintf("%s/%s", pwd, dirName)
+	dir := filepath.Join(pwd, dirName)
 	if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
-		err := os.Mkdir(dir, os.ModePerm)
+		err := os.MkdirAll(dir, os.ModePerm)
 		if err != nil {
 			return "", err
 		}
 	}
-	confPath := fmt.Sprintf("%s/%s.json", dir, name)
+	confPath := filepath.Join(dir, fmt.Sprintf("%s.json", name))
 	f, _ := json.MarshalIndent(v, "", "   ")
 	err = os.WriteFile(confPath, f, 0600)
 
