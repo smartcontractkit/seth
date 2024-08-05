@@ -1685,7 +1685,7 @@ func TestTraceContractTracingSaveToDot(t *testing.T) {
 	decodedTx, decodeErr := c.Decode(linkToken.TransferAndCall(c.NewTXOpts(), TestEnv.DebugContractAddress, amount, req))
 	require.NoError(t, decodeErr, "transaction should not have reverted")
 
-	fileName := fmt.Sprintf("dot_graphs/%s.dot", decodedTx.Hash)
+	fileName := filepath.Join(c.Cfg.ArtifactsDir, "dot_graphs", fmt.Sprintf("%s.dot", decodedTx.Hash))
 	t.Cleanup(func() {
 		_ = os.Remove(fileName)
 	})
