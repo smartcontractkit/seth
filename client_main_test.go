@@ -122,7 +122,7 @@ func newClientWithContractMapFromEnv(t *testing.T) *seth.Client {
 	c.ContractAddressToNameMap = contractMap
 
 	// now let's recreate the Tracer, so that it has the same contract map
-	tracer, err := seth.NewTracer(c.Cfg.Network.URLs[0], c.Cfg.RPCHeaders, c.ContractStore, c.ABIFinder, c.Cfg, contractMap, c.Addresses)
+	tracer, err := seth.NewTracer(c.ContractStore, c.ABIFinder, c.Cfg, contractMap, c.Addresses)
 	require.NoError(t, err, "failed to create tracer")
 
 	c.Tracer = tracer
@@ -154,7 +154,7 @@ func NewDebugContractSetup() (
 	contractMap := seth.NewEmptyContractMap()
 
 	abiFinder := seth.NewABIFinder(contractMap, cs)
-	tracer, err := seth.NewTracer(cfg.Network.URLs[0], cfg.RPCHeaders, cs, &abiFinder, cfg, contractMap, addrs)
+	tracer, err := seth.NewTracer(cs, &abiFinder, cfg, contractMap, addrs)
 	if err != nil {
 		return nil, nil, common.Address{}, common.Address{}, nil, err
 	}

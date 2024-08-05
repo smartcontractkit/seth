@@ -360,9 +360,9 @@ func RunCLI(args []string) error {
 						}
 						ctx, cancel := context.WithTimeout(context.Background(), cfg.Network.DialTimeout.Duration())
 						defer cancel()
-						rpcClient, err := rpc.DialOptions(ctx, cfg.Network.URLs[0], rpc.WithHeaders(cfg.RPCHeaders))
+						rpcClient, err := rpc.DialOptions(ctx, cfg.FirstNetworkURL(), rpc.WithHeaders(cfg.RPCHeaders))
 						if err != nil {
-							return fmt.Errorf("failed to connect RPC client to '%s' due to: %w", cfg.Network.URLs[0], err)
+							return fmt.Errorf("failed to connect RPC client to '%s' due to: %w", cfg.FirstNetworkURL(), err)
 						}
 						client := ethclient.NewClient(rpcClient)
 						defer client.Close()

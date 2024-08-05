@@ -173,6 +173,11 @@ func ReadConfig() (*Config, error) {
 	return cfg, nil
 }
 
+// FirstNetworkURL returns first network URL
+func (c *Config) FirstNetworkURL() string {
+	return c.Network.URLs[0]
+}
+
 // ParseKeys parses private keys from the config
 func (c *Config) ParseKeys() ([]common.Address, []*ecdsa.PrivateKey, error) {
 	addresses := make([]common.Address, 0)

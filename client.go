@@ -135,7 +135,7 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 	if len(cfg.Network.URLs) == 0 {
 		return nil, fmt.Errorf("at least one url should be present in config in 'secret_urls = []'")
 	}
-	tr, err := NewTracer(cfg.Network.URLs[0], cfg.RPCHeaders, cs, &abiFinder, cfg, contractAddressToNameMap, addrs)
+	tr, err := NewTracer(cs, &abiFinder, cfg, contractAddressToNameMap, addrs)
 	if err != nil {
 		return nil, errors.Wrap(err, ErrCreateTracer)
 	}
@@ -249,14 +249,14 @@ func NewClientRaw(
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Network.DialTimeout.Duration())
 	defer cancel()
 	rpcClient, err := rpc.DialOptions(ctx,
-		cfg.Network.URLs[0],
+		cfg.FirstNetworkURL(),
 		rpc.WithHeaders(cfg.RPCHeaders),
 		rpc.WithHTTPClient(&http.Client{
 			Transport: NewLoggingTransport(),
 		}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect RPC client to '%s' due to: %w", cfg.Network.URLs[0], err)
+		return nil, fmt.Errorf("failed to connect RPC client to '%s' due to: %w", cfg.FirstNetworkURL(), err)
 	}
 	client := ethclient.NewClient(rpcClient)
 
@@ -275,7 +275,7 @@ func NewClientRaw(
 		Client:      client,
 		Addresses:   addrs,
 		PrivateKeys: pkeys,
-		URL:         cfg.Network.URLs[0],
+		URL:         cfg.FirstNetworkURL(),
 		ChainID:     int64(cID),
 		Context:     ctx,
 		CancelFunc:  cancelFunc,
@@ -334,7 +334,7 @@ func NewClientRaw(
 	L.Info().
 		Str("NetworkName", cfg.Network.Name).
 		Interface("Addresses", addrs).
-		Str("RPC", cfg.Network.URLs[0]).
+		Str("RPC", cfg.FirstNetworkURL()).
 		Str("ChainID", cfg.Network.ChainID).
 		Int64("Ephemeral keys", *cfg.EphemeralAddrs).
 		Msg("Created new client")
@@ -378,7 +378,7 @@ func NewClientRaw(
 			abiFinder := NewABIFinder(c.ContractAddressToNameMap, c.ContractStore)
 			c.ABIFinder = &abiFinder
 		}
-		tr, err := NewTracer(cfg.Network.URLs[0], cfg.RPCHeaders, c.ContractStore, c.ABIFinder, cfg, c.ContractAddressToNameMap, addrs)
+		tr, err := NewTracer(c.ContractStore, c.ABIFinder, cfg, c.ContractAddressToNameMap, addrs)
 		if err != nil {
 			return nil, errors.Wrap(err, ErrCreateTracer)
 		}
