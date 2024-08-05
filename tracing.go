@@ -1,6 +1,7 @@
 package seth
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -92,10 +93,12 @@ type Call struct {
 	Calls   []Call     `json:"calls"`
 }
 
-func NewTracer(url string, cs *ContractStore, abiFinder *ABIFinder, cfg *Config, contractAddressToNameMap ContractMap, addresses []common.Address) (*Tracer, error) {
-	c, err := rpc.Dial(url)
+func NewTracer(cs *ContractStore, abiFinder *ABIFinder, cfg *Config, contractAddressToNameMap ContractMap, addresses []common.Address) (*Tracer, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Network.DialTimeout.Duration())
+	defer cancel()
+	c, err := rpc.DialOptions(ctx, cfg.FirstNetworkURL(), rpc.WithHeaders(cfg.RPCHeaders))
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to '%s' due to: %w", url, err)
+		return nil, fmt.Errorf("failed to connect to '%s' due to: %w", cfg.FirstNetworkURL(), err)
 	}
 	return &Tracer{
 		Cfg:                      cfg,

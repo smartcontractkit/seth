@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,6 +37,7 @@ const (
 	ONE_PASS_VAULT_ENV_VAR = "SETH_ONE_PASS_VAULT"
 
 	DefaultNetworkName = "Default"
+	DefaultDialTimeout = 1 * time.Minute
 )
 
 type KeyFileSource string
@@ -49,6 +51,7 @@ type Config struct {
 	// internal fields
 	RevertedTransactionsFile string
 	ephemeral                bool
+	RPCHeaders               http.Header
 
 	// external fields
 	KeyFileSource                 KeyFileSource     `toml:"keyfile_source"`
@@ -87,6 +90,7 @@ type Network struct {
 	GasTipCap                    int64     `toml:"gas_tip_cap"`
 	GasLimit                     uint64    `toml:"gas_limit"`
 	TxnTimeout                   *Duration `toml:"transaction_timeout"`
+	DialTimeout                  *Duration `toml:"dial_timeout"`
 	TransferGasFee               int64     `toml:"transfer_gas_fee"`
 	PrivateKeys                  []string  `toml:"private_keys_secret"`
 	GasPriceEstimationEnabled    bool      `toml:"gas_price_estimation_enabled"`
@@ -162,8 +166,16 @@ func ReadConfig() (*Config, error) {
 	} else {
 		cfg.Network.PrivateKeys = append(cfg.Network.PrivateKeys, rootPrivateKey)
 	}
+	if cfg.Network.DialTimeout == nil {
+		cfg.Network.DialTimeout = &Duration{D: DefaultDialTimeout}
+	}
 	L.Trace().Interface("Config", cfg).Msg("Parsed seth config")
 	return cfg, nil
+}
+
+// FirstNetworkURL returns first network URL
+func (c *Config) FirstNetworkURL() string {
+	return c.Network.URLs[0]
 }
 
 // ParseKeys parses private keys from the config

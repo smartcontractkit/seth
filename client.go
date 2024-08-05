@@ -5,7 +5,9 @@ import (
 	"crypto/ecdsa"
 	verr "errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rpc"
 	"math/big"
+	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -133,7 +135,7 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 	if len(cfg.Network.URLs) == 0 {
 		return nil, fmt.Errorf("at least one url should be present in config in 'secret_urls = []'")
 	}
-	tr, err := NewTracer(cfg.Network.URLs[0], cs, &abiFinder, cfg, contractAddressToNameMap, addrs)
+	tr, err := NewTracer(cs, &abiFinder, cfg, contractAddressToNameMap, addrs)
 	if err != nil {
 		return nil, errors.Wrap(err, ErrCreateTracer)
 	}
@@ -215,6 +217,10 @@ func ValidateConfig(cfg *Config) error {
 		return fmt.Errorf("KeyFileSource is set to 'file' but the path to the key file is not set")
 	}
 
+	if cfg.Network.DialTimeout == nil {
+		cfg.Network.DialTimeout = &Duration{D: DefaultDialTimeout}
+	}
+
 	return nil
 }
 
@@ -240,11 +246,19 @@ func NewClientRaw(
 	if len(cfg.Network.URLs) > 1 {
 		L.Warn().Msg("Multiple RPC URLs provided, only the first one will be used")
 	}
-
-	client, err := ethclient.Dial(cfg.Network.URLs[0])
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Network.DialTimeout.Duration())
+	defer cancel()
+	rpcClient, err := rpc.DialOptions(ctx,
+		cfg.FirstNetworkURL(),
+		rpc.WithHeaders(cfg.RPCHeaders),
+		rpc.WithHTTPClient(&http.Client{
+			Transport: NewLoggingTransport(),
+		}),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to '%s' due to: %w", cfg.Network.URLs[0], err)
+		return nil, fmt.Errorf("failed to connect RPC client to '%s' due to: %w", cfg.FirstNetworkURL(), err)
 	}
+	client := ethclient.NewClient(rpcClient)
 
 	chainId, err := client.ChainID(context.Background())
 	if err != nil {
@@ -255,16 +269,16 @@ func NewClientRaw(
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancelFunc := context.WithCancel(context.Background())
 	c := &Client{
 		Cfg:         cfg,
 		Client:      client,
 		Addresses:   addrs,
 		PrivateKeys: pkeys,
-		URL:         cfg.Network.URLs[0],
+		URL:         cfg.FirstNetworkURL(),
 		ChainID:     int64(cID),
 		Context:     ctx,
-		CancelFunc:  cancel,
+		CancelFunc:  cancelFunc,
 	}
 	for _, o := range opts {
 		o(c)
@@ -320,7 +334,7 @@ func NewClientRaw(
 	L.Info().
 		Str("NetworkName", cfg.Network.Name).
 		Interface("Addresses", addrs).
-		Str("RPC", cfg.Network.URLs[0]).
+		Str("RPC", cfg.FirstNetworkURL()).
 		Str("ChainID", cfg.Network.ChainID).
 		Int64("Ephemeral keys", *cfg.EphemeralAddrs).
 		Msg("Created new client")
@@ -364,7 +378,7 @@ func NewClientRaw(
 			abiFinder := NewABIFinder(c.ContractAddressToNameMap, c.ContractStore)
 			c.ABIFinder = &abiFinder
 		}
-		tr, err := NewTracer(cfg.Network.URLs[0], c.ContractStore, c.ABIFinder, cfg, c.ContractAddressToNameMap, addrs)
+		tr, err := NewTracer(c.ContractStore, c.ABIFinder, cfg, c.ContractAddressToNameMap, addrs)
 		if err != nil {
 			return nil, errors.Wrap(err, ErrCreateTracer)
 		}
