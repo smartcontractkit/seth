@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -36,8 +37,40 @@ type Tracer struct {
 	Addresses                []common.Address
 	ContractStore            *ContractStore
 	ContractAddressToNameMap ContractMap
-	DecodedCalls             map[string][]*DecodedCall
+	decodedCalls             map[string][]*DecodedCall
 	ABIFinder                *ABIFinder
+	tracesMutex              *sync.RWMutex
+	decodedMutex             *sync.RWMutex
+}
+
+func (t *Tracer) getTrace(txHash string) *Trace {
+	t.tracesMutex.Lock()
+	defer t.tracesMutex.Unlock()
+	return t.traces[txHash]
+}
+
+func (t *Tracer) addTrace(txHash string, trace *Trace) {
+	t.tracesMutex.Lock()
+	defer t.tracesMutex.Unlock()
+	t.traces[txHash] = trace
+}
+
+func (t *Tracer) GetDecodedCalls(txHash string) []*DecodedCall {
+	t.decodedMutex.Lock()
+	defer t.decodedMutex.Unlock()
+	return t.decodedCalls[txHash]
+}
+
+func (t *Tracer) GetAllDecodedCalls() map[string][]*DecodedCall {
+	t.decodedMutex.Lock()
+	defer t.decodedMutex.Unlock()
+	return t.decodedCalls
+}
+
+func (t *Tracer) AddDecodedCalls(txHash string, calls []*DecodedCall) {
+	t.decodedMutex.Lock()
+	defer t.decodedMutex.Unlock()
+	t.decodedCalls[txHash] = calls
 }
 
 type Trace struct {
@@ -107,19 +140,21 @@ func NewTracer(cs *ContractStore, abiFinder *ABIFinder, cfg *Config, contractAdd
 		Addresses:                addresses,
 		ContractStore:            cs,
 		ContractAddressToNameMap: contractAddressToNameMap,
-		DecodedCalls:             make(map[string][]*DecodedCall),
+		decodedCalls:             make(map[string][]*DecodedCall),
 		ABIFinder:                abiFinder,
+		tracesMutex:              &sync.RWMutex{},
+		decodedMutex:             &sync.RWMutex{},
 	}, nil
 }
 
 func (t *Tracer) TraceGethTX(txHash string, revertErr error) error {
 	fourByte, err := t.trace4Byte(txHash)
 	if err != nil {
-		L.Warn().Err(err).Msg("Failed to trace 4byte signatures. Some tracing data might be missing")
+		L.Debug().Err(err).Msg("Failed to trace 4byte signatures. Some tracing data might be missing")
 	}
 	opCodesTrace, err := t.traceOpCodesTracer(txHash)
 	if err != nil {
-		L.Warn().Err(err).Msg("Failed to trace opcodes. Some tracing data will be missing")
+		L.Debug().Err(err).Msg("Failed to trace opcodes. Some tracing data will be missing")
 	}
 
 	callTrace, err := t.traceCallTracer(txHash)
@@ -127,14 +162,14 @@ func (t *Tracer) TraceGethTX(txHash string, revertErr error) error {
 		return err
 	}
 
-	t.traces[txHash] = &Trace{
+	t.addTrace(txHash, &Trace{
 		TxHash:       txHash,
 		FourByte:     fourByte,
 		CallTrace:    callTrace,
 		OpCodesTrace: opCodesTrace,
-	}
+	})
 
-	decodedCalls, err := t.DecodeTrace(L, *t.traces[txHash])
+	decodedCalls, err := t.DecodeTrace(L, *t.getTrace(txHash))
 	if err != nil {
 		return err
 	}
@@ -152,8 +187,8 @@ func (t *Tracer) TraceGethTX(txHash string, revertErr error) error {
 }
 
 func (t *Tracer) PrintTXTrace(txHash string) error {
-	trace, ok := t.traces[txHash]
-	if !ok {
+	trace := t.getTrace(txHash)
+	if trace == nil {
 		return errors.New(ErrNoTrace)
 	}
 	l := L.With().Str("Transaction", txHash).Logger()
@@ -216,7 +251,7 @@ func (t *Tracer) DecodeTrace(l zerolog.Logger, trace Trace) ([]*DecodedCall, err
 
 	// we can still decode the calls without 4byte signatures
 	if len(trace.FourByte) == 0 {
-		L.Warn().Msg(ErrNoFourByteFound)
+		L.Debug().Msg(ErrNoFourByteFound)
 	}
 
 	methods := make([]string, 0, len(trace.CallTrace.Calls)+1)
@@ -328,7 +363,7 @@ func (t *Tracer) DecodeTrace(l zerolog.Logger, trace Trace) ([]*DecodedCall, err
 	missingCalls := t.checkForMissingCalls(trace)
 	decodedCalls = append(decodedCalls, missingCalls...)
 
-	t.DecodedCalls[trace.TxHash] = decodedCalls
+	t.AddDecodedCalls(trace.TxHash, decodedCalls)
 	return decodedCalls, nil
 }
 
@@ -363,7 +398,7 @@ func (t *Tracer) decodeCall(byteSignature []byte, rawCall Call) (*DecodedCall, e
 	if rawCall.Value != "" && rawCall.Value != "0x0" {
 		decimalValue, err := strconv.ParseInt(strings.TrimPrefix(rawCall.Value, "0x"), 16, 64)
 		if err != nil {
-			L.Warn().
+			L.Debug().
 				Err(err).
 				Str("Value", rawCall.Value).
 				Msg("Failed to parse value")
@@ -375,7 +410,7 @@ func (t *Tracer) decodeCall(byteSignature []byte, rawCall Call) (*DecodedCall, e
 	if rawCall.Gas != "" && rawCall.Gas != "0x0" {
 		decimalValue, err := strconv.ParseInt(strings.TrimPrefix(rawCall.Gas, "0x"), 16, 64)
 		if err != nil {
-			L.Warn().
+			L.Debug().
 				Err(err).
 				Str("Gas", rawCall.Gas).
 				Msg("Failed to parse value")
@@ -387,7 +422,7 @@ func (t *Tracer) decodeCall(byteSignature []byte, rawCall Call) (*DecodedCall, e
 	if rawCall.GasUsed != "" && rawCall.GasUsed != "0x0" {
 		decimalValue, err := strconv.ParseInt(strings.TrimPrefix(rawCall.GasUsed, "0x"), 16, 64)
 		if err != nil {
-			L.Warn().
+			L.Debug().
 				Err(err).
 				Str("GasUsed", rawCall.GasUsed).
 				Msg("Failed to parse value")
@@ -417,7 +452,7 @@ func (t *Tracer) decodeCall(byteSignature []byte, rawCall Call) (*DecodedCall, e
 
 	txInput, err = decodeTxInputs(L, common.Hex2Bytes(strings.TrimPrefix(rawCall.Input, "0x")), abiResult.Method)
 	if err != nil {
-		L.Warn().Err(err).Msg("Failed to decode inputs")
+		L.Debug().Err(err).Msg("Failed to decode inputs")
 	} else {
 		defaultCall.Input = txInput
 	}
@@ -429,7 +464,7 @@ func (t *Tracer) decodeCall(byteSignature []byte, rawCall Call) (*DecodedCall, e
 		}
 		txOutput, err = decodeTxOutputs(L, output, abiResult.Method)
 		if err != nil {
-			L.Warn().Err(err).Msg("Failed to decode outputs")
+			L.Debug().Err(err).Msg("Failed to decode outputs")
 		} else {
 			defaultCall.Output = txOutput
 		}
@@ -438,7 +473,7 @@ func (t *Tracer) decodeCall(byteSignature []byte, rawCall Call) (*DecodedCall, e
 
 	txEvents, err = t.decodeContractLogs(L, rawCall.Logs, abiResult.ABI)
 	if err != nil {
-		L.Warn().Err(err).Msg("Failed to decode logs")
+		L.Debug().Err(err).Msg("Failed to decode logs")
 	} else {
 		defaultCall.Events = txEvents
 	}
@@ -567,7 +602,7 @@ func (t *Tracer) checkForMissingCalls(trace Trace) []*DecodedCall {
 }
 
 func (t *Tracer) SaveDecodedCallsAsJson(dirname string) error {
-	for txHash, calls := range t.DecodedCalls {
+	for txHash, calls := range t.GetAllDecodedCalls() {
 		_, err := saveAsJson(calls, dirname, txHash)
 		if err != nil {
 			return err

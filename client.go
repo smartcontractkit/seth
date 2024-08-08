@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	verr "errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/rpc"
 	"math/big"
 	"net/http"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/avast/retry-go"
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -429,7 +429,7 @@ func (m *Client) checkRPCHealth() error {
 }
 
 // Decode waits for transaction to be minted, then decodes transaction inputs, outputs, logs and events and
-// depending on 'tracing_level' it either returns immediatelly or if the level matches it traces all calls.
+// depending on 'tracing_level' it either returns immediately or if the level matches it traces all calls.
 // If 'tracing_to_json' is saved we also save to JSON all that information.
 // If transaction was reverted the error return will be revert error, not decoding error (that one if any will be logged).
 // It means it can return both error and decoded transaction!
@@ -536,7 +536,7 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 		}
 
 		if m.Cfg.hasOutput(TraceOutput_JSON) {
-			path, saveErr := saveAsJson(m.Tracer.DecodedCalls[decoded.Hash], filepath.Join(m.Cfg.ArtifactsDir, "traces"), decoded.Hash)
+			path, saveErr := saveAsJson(m.Tracer.GetDecodedCalls(decoded.Hash), filepath.Join(m.Cfg.ArtifactsDir, "traces"), decoded.Hash)
 			if saveErr != nil {
 				L.Warn().
 					Err(saveErr).
@@ -1180,7 +1180,7 @@ func (m *Client) DeployContractFromContractStore(auth *bind.TransactOpts, name s
 	name = strings.TrimSuffix(name, ".abi")
 	name = strings.TrimSuffix(name, ".bin")
 
-	abi, ok := m.ContractStore.ABIs[name+".abi"]
+	contractAbi, ok := m.ContractStore.ABIs[name+".abi"]
 	if !ok {
 		return DeploymentData{}, errors.New("ABI not found")
 	}
@@ -1190,7 +1190,7 @@ func (m *Client) DeployContractFromContractStore(auth *bind.TransactOpts, name s
 		return DeploymentData{}, errors.New("BIN not found")
 	}
 
-	data, err := m.DeployContract(auth, name, abi, bytecode, params...)
+	data, err := m.DeployContract(auth, name, contractAbi, bytecode, params...)
 	if err != nil {
 		return DeploymentData{}, err
 	}

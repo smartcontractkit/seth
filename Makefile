@@ -29,35 +29,32 @@ GethSync:
 
 .PHONY: test
 test:
-	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestSmoke
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 -race `go list ./... | grep -v examples` -run TestSmoke
 
 .PHONY: kill_node
 kill_node:
 	pkill -f geth || pkill -f anvil || true
 
+# this is the only one without -race flag, because zerolog is not thread safe and fails the run
 .PHONY: test_api
 test_api:
 	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestAPI
 
 .PHONY: test_trace
 test_trace:
-	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestTrace
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 -race `go list ./... | grep -v examples` -run TestTrace
 
 .PHONY: test_cli
 test_cli:
-	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestCLI
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 -race `go list ./... | grep -v examples` -run TestCLI
 
 .PHONY: test_others
 test_others:
-	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run "TestContractMap|TestGasEstimator|TestRPCHealtCheck|TestUtil"
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 -race `go list ./... | grep -v examples` -run "TestContractMap|TestGasEstimator|TestRPCHealtCheck|TestUtil|TestContract"
 
 .PHONY: test_op
 test_op:
-	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) OP_SERVICE_ACCOUNT_TOKEN=$(op_service_account_token) SETH_ONE_PASS_VAULT=$(seth_op_vault) go test -v -count 1 `go list ./... | grep -v examples` -run "TestOnePass"
-
-.PHONY: test_race
-test_race:
-	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -race -count 1 `go list ./... | grep -v examples` -run TestSmoke
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) OP_SERVICE_ACCOUNT_TOKEN=$(op_service_account_token) SETH_ONE_PASS_VAULT=$(seth_op_vault) go test -v -count 1 -race `go list ./... | grep -v examples` -run "TestOnePass"
 
 .PHONY: test+cover
 test_cover:

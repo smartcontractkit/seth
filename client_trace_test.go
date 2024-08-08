@@ -48,11 +48,11 @@ func TestTraceContractTracingSameMethodSignatures_UploadedViaSeth(t *testing.T) 
 	tx, err := c.Decode(TestEnv.DebugContract.Trace(c.NewTXOpts(), big.NewInt(x), big.NewInt(y)))
 	require.NoError(t, err, FailedToDecode)
 
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
-	require.Equal(t, 2, len(c.Tracer.DecodedCalls[tx.Hash]), "expected 2 decoded calls for this transaction")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 2, len(c.Tracer.GetDecodedCalls(tx.Hash)), "expected 2 decoded calls for this transaction")
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
 
 	firstExpectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -81,7 +81,7 @@ func TestTraceContractTracingSameMethodSignatures_UploadedViaSeth(t *testing.T) 
 		Comment: "",
 	}
 
-	require.EqualValues(t, firstExpectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "first decoded call does not match")
+	require.EqualValues(t, firstExpectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "first decoded call does not match")
 
 	secondExpectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(TestEnv.DebugContractAddress.Hex()),
@@ -100,10 +100,10 @@ func TestTraceContractTracingSameMethodSignatures_UploadedViaSeth(t *testing.T) 
 		Comment: "",
 	}
 
-	actualSecondEvents := c.Tracer.DecodedCalls[tx.Hash][1].Events
-	c.Tracer.DecodedCalls[tx.Hash][1].Events = nil
+	actualSecondEvents := c.Tracer.GetDecodedCalls(tx.Hash)[1].Events
+	c.Tracer.GetDecodedCalls(tx.Hash)[1].Events = nil
 
-	require.EqualValues(t, secondExpectedCall, c.Tracer.DecodedCalls[tx.Hash][1], "second decoded call does not match")
+	require.EqualValues(t, secondExpectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[1], "second decoded call does not match")
 	require.Equal(t, 1, len(actualSecondEvents), "second decoded call events count does not match")
 	require.Equal(t, 3, len(actualSecondEvents[0].Topics), "second decoded event topics count does not match")
 
@@ -153,10 +153,10 @@ func TestTraceContractTracingSameMethodSignatures_UploadedManually(t *testing.T)
 	sameSigTx, txErr := c.Decode(TestEnv.DebugContract.Trace(c.NewTXOpts(), big.NewInt(x), big.NewInt(y)))
 	require.NoError(t, txErr, FailedToDecode)
 
-	require.NotNil(t, c.Tracer.DecodedCalls[diffSigTx.Hash], "expected decoded calls to contain the diffSig transaction hash")
-	require.Equal(t, 2, len(c.Tracer.DecodedCalls[diffSigTx.Hash]), "expected 2 decoded calls for diffSig transaction")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(diffSigTx.Hash), "expected decoded calls to contain the diffSig transaction hash")
+	require.Equal(t, 2, len(c.Tracer.GetDecodedCalls(diffSigTx.Hash)), "expected 2 decoded calls for diffSig transaction")
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
 
 	firstDiffSigCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -184,7 +184,7 @@ func TestTraceContractTracingSameMethodSignatures_UploadedManually(t *testing.T)
 		Comment: "",
 	}
 
-	require.EqualValues(t, firstDiffSigCall, c.Tracer.DecodedCalls[diffSigTx.Hash][0], "first diffSig decoded call does not match")
+	require.EqualValues(t, firstDiffSigCall, c.Tracer.GetDecodedCalls(diffSigTx.Hash)[0], "first diffSig decoded call does not match")
 
 	secondDiffSigCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(TestEnv.DebugContractAddress.Hex()),
@@ -203,12 +203,12 @@ func TestTraceContractTracingSameMethodSignatures_UploadedManually(t *testing.T)
 		Comment: "",
 	}
 
-	c.Tracer.DecodedCalls[diffSigTx.Hash][1].Events = nil
-	require.EqualValues(t, secondDiffSigCall, c.Tracer.DecodedCalls[diffSigTx.Hash][1], "second diffSig decoded call does not match")
+	c.Tracer.GetDecodedCalls(diffSigTx.Hash)[1].Events = nil
+	require.EqualValues(t, secondDiffSigCall, c.Tracer.GetDecodedCalls(diffSigTx.Hash)[1], "second diffSig decoded call does not match")
 
-	require.Equal(t, 2, len(c.Tracer.DecodedCalls), "expected 2 decoded transactons")
-	require.NotNil(t, c.Tracer.DecodedCalls[sameSigTx.Hash], "expected decoded calls to contain the sameSig transaction hash")
-	require.Equal(t, 2, len(c.Tracer.DecodedCalls[sameSigTx.Hash]), "expected 2 decoded calls for sameSig transaction")
+	require.Equal(t, 2, len(c.Tracer.GetAllDecodedCalls()), "expected 2 decoded transactons")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(sameSigTx.Hash), "expected decoded calls to contain the sameSig transaction hash")
+	require.Equal(t, 2, len(c.Tracer.GetDecodedCalls(sameSigTx.Hash)), "expected 2 decoded calls for sameSig transaction")
 
 	firstSameSigCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -237,7 +237,7 @@ func TestTraceContractTracingSameMethodSignatures_UploadedManually(t *testing.T)
 		Comment: "",
 	}
 
-	require.EqualValues(t, firstSameSigCall, c.Tracer.DecodedCalls[sameSigTx.Hash][0], "first sameSig decoded call does not match")
+	require.EqualValues(t, firstSameSigCall, c.Tracer.GetDecodedCalls(sameSigTx.Hash)[0], "first sameSig decoded call does not match")
 
 	secondSameSigCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(TestEnv.DebugContractAddress.Hex()),
@@ -255,10 +255,10 @@ func TestTraceContractTracingSameMethodSignatures_UploadedManually(t *testing.T)
 		},
 	}
 
-	actualSecondEvents := c.Tracer.DecodedCalls[sameSigTx.Hash][1].Events
-	c.Tracer.DecodedCalls[sameSigTx.Hash][1].Events = nil
+	actualSecondEvents := c.Tracer.GetDecodedCalls(sameSigTx.Hash)[1].Events
+	c.Tracer.GetDecodedCalls(sameSigTx.Hash)[1].Events = nil
 
-	require.EqualValues(t, secondSameSigCall, c.Tracer.DecodedCalls[sameSigTx.Hash][1], "second sameSig decoded call does not match")
+	require.EqualValues(t, secondSameSigCall, c.Tracer.GetDecodedCalls(sameSigTx.Hash)[1], "second sameSig decoded call does not match")
 	require.Equal(t, 1, len(actualSecondEvents), "second sameSig decoded call events count does not match")
 	require.Equal(t, 3, len(actualSecondEvents[0].Topics), "second sameSig decoded event topics count does not match")
 
@@ -291,9 +291,9 @@ func TestTraceContractTracingSameMethodSignaturesWarningInComment_UploadedManual
 	sameSigTx, err := c.Decode(TestEnv.DebugContract.Trace(c.NewTXOpts(), big.NewInt(2), big.NewInt(2)))
 	require.NoError(t, err, "failed to send transaction")
 
-	require.NotNil(t, c.Tracer.DecodedCalls[sameSigTx.Hash], "expected decoded calls to contain the transaction hash")
-	require.Equal(t, 2, len(c.Tracer.DecodedCalls[sameSigTx.Hash]), "expected 2 decoded calls for transaction")
-	require.Equal(t, "potentially inaccurate - method present in 1 other contracts", c.Tracer.DecodedCalls[sameSigTx.Hash][1].Comment, "expected comment to be set")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(sameSigTx.Hash), "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 2, len(c.Tracer.GetDecodedCalls(sameSigTx.Hash)), "expected 2 decoded calls for transaction")
+	require.Equal(t, "potentially inaccurate - method present in 1 other contracts", c.Tracer.GetDecodedCalls(sameSigTx.Hash)[1].Comment, "expected comment to be set")
 }
 
 func TestTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
@@ -313,11 +313,11 @@ func TestTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
 	tx, txErr := c.Decode(TestEnv.DebugContract.TraceSubWithCallback(c.NewTXOpts(), big.NewInt(x), big.NewInt(y)))
 	require.NoError(t, txErr, FailedToDecode)
 
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
-	require.Equal(t, 3, len(c.Tracer.DecodedCalls[tx.Hash]), "expected 2 decoded calls for test transaction")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 3, len(c.Tracer.GetDecodedCalls(tx.Hash)), "expected 2 decoded calls for test transaction")
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
 
 	firstExpectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -346,14 +346,14 @@ func TestTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
 		Comment: "",
 	}
 
-	require.EqualValues(t, firstExpectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "first decoded call does not match")
+	require.EqualValues(t, firstExpectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "first decoded call does not match")
 
-	require.Equal(t, 2, len(c.Tracer.DecodedCalls[tx.Hash][1].Events), "second decoded call events count does not match")
-	require.Equal(t, 3, len(c.Tracer.DecodedCalls[tx.Hash][1].Events[0].Topics), "second decoded first event topics count does not match")
+	require.Equal(t, 2, len(c.Tracer.GetDecodedCalls(tx.Hash)[1].Events), "second decoded call events count does not match")
+	require.Equal(t, 3, len(c.Tracer.GetDecodedCalls(tx.Hash)[1].Events[0].Topics), "second decoded first event topics count does not match")
 
-	separatedTopcis := c.Tracer.DecodedCalls[tx.Hash][1].Events[0].Topics
+	separatedTopcis := c.Tracer.GetDecodedCalls(tx.Hash)[1].Events[0].Topics
 	separatedTopcis = separatedTopcis[0:2]
-	c.Tracer.DecodedCalls[tx.Hash][1].Events[0].Topics = nil
+	c.Tracer.GetDecodedCalls(tx.Hash)[1].Events[0].Topics = nil
 
 	secondExpectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(TestEnv.DebugContractAddress.Hex()),
@@ -388,7 +388,7 @@ func TestTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
 		Comment: "",
 	}
 
-	require.EqualValues(t, secondExpectedCall, c.Tracer.DecodedCalls[tx.Hash][1], "second decoded call does not match")
+	require.EqualValues(t, secondExpectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[1], "second decoded call does not match")
 
 	expectedTopics := []string{
 		"0x33b47a1cd66813164ec00800d74296f57415217c22505ee380594a712936a0b5",
@@ -425,7 +425,7 @@ func TestTraceContractTracingWithCallback_UploadedViaSeth(t *testing.T) {
 			},
 		},
 	}
-	require.EqualValues(t, thirdExpectedCall, c.Tracer.DecodedCalls[tx.Hash][2], "third decoded call does not match")
+	require.EqualValues(t, thirdExpectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[2], "third decoded call does not match")
 }
 
 // Here we show that partial tracing works even if we don't have the ABI for the contract.
@@ -447,11 +447,11 @@ func TestTraceContractTracingUnknownAbi(t *testing.T) {
 	tx, txErr := c.Decode(TestEnv.DebugContract.TraceDifferent(c.NewTXOpts(), big.NewInt(x), big.NewInt(y)))
 	require.NoError(t, txErr, FailedToDecode)
 
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
-	require.Equal(t, 2, len(c.Tracer.DecodedCalls[tx.Hash]), "expected 2 decoded calls for test transaction")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 2, len(c.Tracer.GetDecodedCalls(tx.Hash)), "expected 2 decoded calls for test transaction")
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
 
 	firstExpectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -469,7 +469,7 @@ func TestTraceContractTracingUnknownAbi(t *testing.T) {
 		Comment: seth.CommentMissingABI,
 	}
 
-	require.EqualValues(t, firstExpectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "first decoded call does not match")
+	require.EqualValues(t, firstExpectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "first decoded call does not match")
 
 	secondExpectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(TestEnv.DebugContractAddress.Hex()),
@@ -488,8 +488,8 @@ func TestTraceContractTracingUnknownAbi(t *testing.T) {
 		Comment: "",
 	}
 
-	c.Tracer.DecodedCalls[tx.Hash][1].Events = nil
-	require.EqualValues(t, secondExpectedCall, c.Tracer.DecodedCalls[tx.Hash][1], "second decoded call does not match")
+	c.Tracer.GetDecodedCalls(tx.Hash)[1].Events = nil
+	require.EqualValues(t, secondExpectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[1], "second decoded call does not match")
 }
 
 func TestTraceContractTracingNamedInputsAndOutputs(t *testing.T) {
@@ -504,8 +504,8 @@ func TestTraceContractTracingNamedInputsAndOutputs(t *testing.T) {
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitNamedInputsOutputs(c.NewTXOpts(), x, testString))
 	require.NoError(t, txErr, FailedToDecode)
 
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -522,8 +522,8 @@ func TestTraceContractTracingNamedInputsAndOutputs(t *testing.T) {
 		Comment: "",
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingNamedInputsAnonymousOutputs(t *testing.T) {
@@ -537,8 +537,8 @@ func TestTraceContractTracingNamedInputsAnonymousOutputs(t *testing.T) {
 	var testString = "string"
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitInputsOutputs(c.NewTXOpts(), x, testString))
 	require.NoError(t, txErr, "failed to send transaction")
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -554,8 +554,8 @@ func TestTraceContractTracingNamedInputsAnonymousOutputs(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 // Shows that when output mixes named and unnamed parameters, we can still decode the transaction,
@@ -572,8 +572,8 @@ func TestTraceContractTracingIntInputsWithoutLength(t *testing.T) {
 	z := big.NewInt(26)
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitInts(c.NewTXOpts(), x, y, z))
 	require.NoError(t, txErr, "failed to send transaction")
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -589,8 +589,8 @@ func TestTraceContractTracingIntInputsWithoutLength(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingAddressInputAndOutput(t *testing.T) {
@@ -604,8 +604,8 @@ func TestTraceContractTracingAddressInputAndOutput(t *testing.T) {
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitAddress(c.NewTXOpts(), address))
 	require.NoError(t, txErr, "failed to send transaction")
 
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -621,8 +621,8 @@ func TestTraceContractTracingAddressInputAndOutput(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingBytes32InputAndOutput(t *testing.T) {
@@ -638,8 +638,8 @@ func TestTraceContractTracingBytes32InputAndOutput(t *testing.T) {
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitBytes32(c.NewTXOpts(), bytes32))
 	require.NoError(t, txErr, FailedToDecode)
 
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -655,8 +655,8 @@ func TestTraceContractTracingBytes32InputAndOutput(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingUint256ArrayInputAndOutput(t *testing.T) {
@@ -669,8 +669,8 @@ func TestTraceContractTracingUint256ArrayInputAndOutput(t *testing.T) {
 	uint256Array := []*big.Int{big.NewInt(1), big.NewInt(19271), big.NewInt(261), big.NewInt(271911), big.NewInt(821762721)}
 	tx, txErr := c.Decode(TestEnv.DebugContract.ProcessUintArray(c.NewTXOpts(), uint256Array))
 	require.NoError(t, txErr, FailedToDecode)
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	var output []*big.Int
 	for _, x := range uint256Array {
@@ -691,8 +691,8 @@ func TestTraceContractTracingUint256ArrayInputAndOutput(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingAddressArrayInputAndOutput(t *testing.T) {
@@ -705,8 +705,8 @@ func TestTraceContractTracingAddressArrayInputAndOutput(t *testing.T) {
 	addressArray := []common.Address{c.Addresses[0], TestEnv.DebugSubContractAddress}
 	tx, txErr := c.Decode(TestEnv.DebugContract.ProcessAddressArray(c.NewTXOpts(), addressArray))
 	require.NoError(t, txErr, FailedToDecode)
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -722,8 +722,8 @@ func TestTraceContractTracingAddressArrayInputAndOutput(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingStructWithDynamicFieldsInputAndOutput(t *testing.T) {
@@ -739,8 +739,8 @@ func TestTraceContractTracingStructWithDynamicFieldsInputAndOutput(t *testing.T)
 	}
 	tx, txErr := c.Decode(TestEnv.DebugContract.ProcessDynamicData(c.NewTXOpts(), data))
 	require.NoError(t, txErr, FailedToDecode)
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expected := struct {
 		Name   string     `json:"name"`
@@ -764,8 +764,8 @@ func TestTraceContractTracingStructWithDynamicFieldsInputAndOutput(t *testing.T)
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingStructArrayWithDynamicFieldsInputAndOutput(t *testing.T) {
@@ -782,8 +782,8 @@ func TestTraceContractTracingStructArrayWithDynamicFieldsInputAndOutput(t *testi
 	dataArray := [3]network_debug_contract.NetworkDebugContractData{data, data, data}
 	tx, txErr := c.Decode(TestEnv.DebugContract.ProcessFixedDataArray(c.NewTXOpts(), dataArray))
 	require.NoError(t, txErr, FailedToDecode)
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	input := [3]struct {
 		Name   string     `json:"name"`
@@ -831,8 +831,8 @@ func TestTraceContractTracingStructArrayWithDynamicFieldsInputAndOutput(t *testi
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingNestedStructsWithDynamicFieldsInputAndOutput(t *testing.T) {
@@ -851,8 +851,8 @@ func TestTraceContractTracingNestedStructsWithDynamicFieldsInputAndOutput(t *tes
 	}
 	tx, txErr := c.Decode(TestEnv.DebugContract.ProcessNestedData(c.NewTXOpts(), data))
 	require.NoError(t, txErr, "failed to send transaction")
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	input := struct {
 		Data struct {
@@ -886,8 +886,8 @@ func TestTraceContractTracingNestedStructsWithDynamicFieldsInputAndOutput(t *tes
 		Comment: "",
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingNestedStructsWithDynamicFieldsInputAndStructOutput(t *testing.T) {
@@ -903,8 +903,8 @@ func TestTraceContractTracingNestedStructsWithDynamicFieldsInputAndStructOutput(
 	}
 	tx, txErr := c.Decode(TestEnv.DebugContract.ProcessNestedData0(c.NewTXOpts(), data))
 	require.NoError(t, txErr, "failed to send transaction")
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	input := struct {
 		Name   string     `json:"name"`
@@ -947,8 +947,8 @@ func TestTraceContractTracingNestedStructsWithDynamicFieldsInputAndStructOutput(
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingPayable(t *testing.T) {
@@ -961,8 +961,8 @@ func TestTraceContractTracingPayable(t *testing.T) {
 	var value int64 = 1000
 	tx, txErr := c.Decode(TestEnv.DebugContract.Pay(c.NewTXOpts(seth.WithValue(big.NewInt(value)))))
 	require.NoError(t, txErr, FailedToDecode)
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -978,8 +978,8 @@ func TestTraceContractTracingPayable(t *testing.T) {
 		Value: value,
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingFallback(t *testing.T) {
@@ -993,8 +993,8 @@ func TestTraceContractTracingFallback(t *testing.T) {
 
 	tx, txErr := c.Decode(TestEnv.DebugContractRaw.RawTransact(c.NewTXOpts(), []byte("iDontExist")))
 	require.NoError(t, txErr, FailedToDecode)
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1009,8 +1009,8 @@ func TestTraceContractTracingFallback(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingReceive(t *testing.T) {
@@ -1024,8 +1024,8 @@ func TestTraceContractTracingReceive(t *testing.T) {
 	value := big.NewInt(29121)
 	tx, txErr := c.Decode(TestEnv.DebugContract.Receive(c.NewTXOpts(seth.WithValue(value))))
 	require.NoError(t, txErr, FailedToDecode)
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1040,8 +1040,8 @@ func TestTraceContractTracingReceive(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingEnumInputAndOutput(t *testing.T) {
@@ -1054,8 +1054,8 @@ func TestTraceContractTracingEnumInputAndOutput(t *testing.T) {
 	var status uint8 = 1 // Active
 	tx, txErr := c.Decode(TestEnv.DebugContract.SetStatus(c.NewTXOpts(), status))
 	require.NoError(t, txErr, FailedToDecode)
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1083,8 +1083,8 @@ func TestTraceContractTracingEnumInputAndOutput(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingNonIndexedEventParameter(t *testing.T) {
@@ -1096,8 +1096,8 @@ func TestTraceContractTracingNonIndexedEventParameter(t *testing.T) {
 
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitNoIndexEventString(c.NewTXOpts()))
 	require.NoError(t, txErr, "failed to send transaction")
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1124,8 +1124,8 @@ func TestTraceContractTracingNonIndexedEventParameter(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingEventThreeIndexedParameters(t *testing.T) {
@@ -1137,8 +1137,8 @@ func TestTraceContractTracingEventThreeIndexedParameters(t *testing.T) {
 
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitThreeIndexEvent(c.NewTXOpts()))
 	require.NoError(t, txErr, FailedToDecode)
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1168,8 +1168,8 @@ func TestTraceContractTracingEventThreeIndexedParameters(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingEventFourMixedParameters(t *testing.T) {
@@ -1181,8 +1181,8 @@ func TestTraceContractTracingEventFourMixedParameters(t *testing.T) {
 
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitFourParamMixedEvent(c.NewTXOpts()))
 	require.NoError(t, txErr, FailedToDecode)
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1212,8 +1212,8 @@ func TestTraceContractTracingEventFourMixedParameters(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractAll(t *testing.T) {
@@ -1233,8 +1233,8 @@ func TestTraceContractAll(t *testing.T) {
 	require.NoError(t, txErr, "transaction should not have reverted")
 	_, decodeErr = c.Decode(okTx, txErr)
 	require.NoError(t, decodeErr, "transaction decoding should not err")
-	require.Equal(t, 2, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
+	require.Equal(t, 2, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1250,7 +1250,7 @@ func TestTraceContractAll(t *testing.T) {
 		},
 	}
 
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[revertedTx.Hash().Hex()][0], "reverted decoded call does not match")
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(revertedTx.Hash().Hex())[0], "reverted decoded call does not match")
 
 	expectedCall = &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1266,7 +1266,7 @@ func TestTraceContractAll(t *testing.T) {
 		},
 	}
 
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[okTx.Hash().Hex()][0], "successful decoded call does not match")
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(okTx.Hash().Hex())[0], "successful decoded call does not match")
 }
 
 func TestTraceContractOnlyReverted(t *testing.T) {
@@ -1287,7 +1287,7 @@ func TestTraceContractOnlyReverted(t *testing.T) {
 	_, decodeErr = c.Decode(okTx, txErr)
 	require.NoError(t, decodeErr, "transaction decoding should not err")
 
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1303,8 +1303,8 @@ func TestTraceContractOnlyReverted(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[revertedTx.Hash().Hex()][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(revertedTx.Hash().Hex())[0], "decoded call does not match")
 }
 
 func TestTraceContractNone(t *testing.T) {
@@ -1325,7 +1325,7 @@ func TestTraceContractNone(t *testing.T) {
 	_, decodeErr = c.Decode(okTx, txErr)
 	require.NoError(t, decodeErr, "transaction decoding should not err")
 
-	require.Empty(t, c.Tracer.DecodedCalls, "expected 1 decoded transacton")
+	require.Empty(t, c.Tracer.GetAllDecodedCalls(), "expected 1 decoded transaction")
 }
 
 func TestTraceContractRevertedErrNoValues(t *testing.T) {
@@ -1340,7 +1340,7 @@ func TestTraceContractRevertedErrNoValues(t *testing.T) {
 	_, decodeErr := c.Decode(tx, txErr)
 	require.Error(t, decodeErr, "transaction should have reverted")
 	require.Equal(t, "error type: CustomErrNoValues, error values: []", decodeErr.Error(), "expected error message to contain the reverted error type and values")
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1356,8 +1356,8 @@ func TestTraceContractRevertedErrNoValues(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash().Hex())[0], "decoded call does not match")
 }
 
 func TestTraceCallRevertFunctionInTheContract(t *testing.T) {
@@ -1372,7 +1372,7 @@ func TestTraceCallRevertFunctionInTheContract(t *testing.T) {
 	_, decodeErr := c.Decode(tx, txErr)
 	require.Error(t, decodeErr, "transaction should have reverted")
 	require.Equal(t, "error type: CustomErr, error values: [12 21]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1388,8 +1388,8 @@ func TestTraceCallRevertFunctionInTheContract(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash().Hex())[0], "decoded call does not match")
 }
 
 func TestTraceCallRevertFunctionInSubContract(t *testing.T) {
@@ -1406,7 +1406,7 @@ func TestTraceCallRevertFunctionInSubContract(t *testing.T) {
 	_, decodeErr := c.Decode(tx, txErr)
 	require.Error(t, decodeErr, "transaction should have reverted")
 	require.Equal(t, "error type: CustomErr, error values: [1001 2]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transaction")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transaction")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1423,8 +1423,8 @@ func TestTraceCallRevertFunctionInSubContract(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash().Hex())[0], "decoded call does not match")
 }
 
 func TestTraceCallRevertInCallback(t *testing.T) {
@@ -1492,7 +1492,7 @@ func TestTraceeRevertReasonNonRootSender(t *testing.T) {
 	_, decodeErr := c.Decode(tx, txErr)
 	require.Error(t, decodeErr, "transaction should have reverted")
 	require.Equal(t, "error type: CustomErr, error values: [1001 2]", decodeErr.Error(), "expected error message to contain the reverted error type and values")
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transaction")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transaction")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[1].Hex()),
@@ -1509,8 +1509,8 @@ func TestTraceeRevertReasonNonRootSender(t *testing.T) {
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash().Hex()][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash().Hex())[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing.T) {
@@ -1541,8 +1541,8 @@ func TestTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing
 	z := big.NewInt(26)
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitInts(c.NewTXOpts(), x, y, z))
 	require.NoError(t, txErr, "failed to send transaction")
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	expectedCall := &seth.DecodedCall{
 		FromAddress: strings.ToLower(c.Addresses[0].Hex()),
@@ -1558,8 +1558,8 @@ func TestTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing
 		},
 	}
 
-	removeGasDataFromDecodedCalls(c.Tracer.DecodedCalls)
-	require.EqualValues(t, expectedCall, c.Tracer.DecodedCalls[tx.Hash][0], "decoded call does not match")
+	removeGasDataFromDecodedCalls(c.Tracer.GetAllDecodedCalls())
+	require.EqualValues(t, expectedCall, c.Tracer.GetDecodedCalls(tx.Hash)[0], "decoded call does not match")
 }
 
 func TestTraceContractTracingSaveToJson(t *testing.T) {
@@ -1590,8 +1590,8 @@ func TestTraceContractTracingSaveToJson(t *testing.T) {
 	z := big.NewInt(26)
 	tx, txErr := c.Decode(TestEnv.DebugContract.EmitInts(c.NewTXOpts(), x, y, z))
 	require.NoError(t, txErr, "failed to send transaction")
-	require.Equal(t, 1, len(c.Tracer.DecodedCalls), "expected 1 decoded transacton")
-	require.NotNil(t, c.Tracer.DecodedCalls[tx.Hash], "expected decoded calls to contain the transaction hash")
+	require.Equal(t, 1, len(c.Tracer.GetAllDecodedCalls()), "expected 1 decoded transacton")
+	require.NotNil(t, c.Tracer.GetDecodedCalls(tx.Hash), "expected decoded calls to contain the transaction hash")
 
 	fileName := filepath.Join(c.Cfg.ArtifactsDir, "traces", fmt.Sprintf("%s.json", tx.Hash))
 	t.Cleanup(func() {
@@ -1753,35 +1753,35 @@ func TestTraceVariousCallTypesAndNestingLevels(t *testing.T) {
 	amount := big.NewInt(10)
 	decodedTx, decodeErr := c.Decode(linkToken.TransferAndCall(c.NewTXOpts(), TestEnv.DebugContractAddress, amount, req))
 	require.NoError(t, decodeErr, "transaction should not have reverted")
-	require.Equal(t, 3, len(c.Tracer.DecodedCalls), "expected 3 decoded transaction")
-	require.Equal(t, 9, len(c.Tracer.DecodedCalls[decodedTx.Hash]), "expected 9 decoded transaction for tx: "+decodedTx.Hash)
+	require.Equal(t, 3, len(c.Tracer.GetAllDecodedCalls()), "expected 3 decoded transaction")
+	require.Equal(t, 9, len(c.Tracer.GetDecodedCalls(decodedTx.Hash)), "expected 9 decoded transaction for tx: "+decodedTx.Hash)
 
-	require.Equal(t, "CALL", c.Tracer.DecodedCalls[decodedTx.Hash][0].CallType, "expected call type to be CALL")
-	require.Equal(t, 0, c.Tracer.DecodedCalls[decodedTx.Hash][0].NestingLevel, "expected nesting level to be 0")
+	require.Equal(t, "CALL", c.Tracer.GetDecodedCalls(decodedTx.Hash)[0].CallType, "expected call type to be CALL")
+	require.Equal(t, 0, c.Tracer.GetDecodedCalls(decodedTx.Hash)[0].NestingLevel, "expected nesting level to be 0")
 
-	require.Equal(t, "CALL", c.Tracer.DecodedCalls[decodedTx.Hash][1].CallType, "expected call type to be CALL")
-	require.Equal(t, 1, c.Tracer.DecodedCalls[decodedTx.Hash][1].NestingLevel, "expected nesting level to be 1")
+	require.Equal(t, "CALL", c.Tracer.GetDecodedCalls(decodedTx.Hash)[1].CallType, "expected call type to be CALL")
+	require.Equal(t, 1, c.Tracer.GetDecodedCalls(decodedTx.Hash)[1].NestingLevel, "expected nesting level to be 1")
 
-	require.Equal(t, "DELEGATECALL", c.Tracer.DecodedCalls[decodedTx.Hash][2].CallType, "expected call type to be DELEGATECALL")
-	require.Equal(t, 2, c.Tracer.DecodedCalls[decodedTx.Hash][2].NestingLevel, "expected nesting level to be 2")
+	require.Equal(t, "DELEGATECALL", c.Tracer.GetDecodedCalls(decodedTx.Hash)[2].CallType, "expected call type to be DELEGATECALL")
+	require.Equal(t, 2, c.Tracer.GetDecodedCalls(decodedTx.Hash)[2].NestingLevel, "expected nesting level to be 2")
 
-	require.Equal(t, "CALL", c.Tracer.DecodedCalls[decodedTx.Hash][3].CallType, "expected call type to be CALL")
-	require.Equal(t, 3, c.Tracer.DecodedCalls[decodedTx.Hash][3].NestingLevel, "expected nesting level to be 3")
+	require.Equal(t, "CALL", c.Tracer.GetDecodedCalls(decodedTx.Hash)[3].CallType, "expected call type to be CALL")
+	require.Equal(t, 3, c.Tracer.GetDecodedCalls(decodedTx.Hash)[3].NestingLevel, "expected nesting level to be 3")
 
-	require.Equal(t, "STATICCALL", c.Tracer.DecodedCalls[decodedTx.Hash][4].CallType, "expected call type to be STATICCALL")
-	require.Equal(t, 2, c.Tracer.DecodedCalls[decodedTx.Hash][4].NestingLevel, "expected nesting level to be 2")
+	require.Equal(t, "STATICCALL", c.Tracer.GetDecodedCalls(decodedTx.Hash)[4].CallType, "expected call type to be STATICCALL")
+	require.Equal(t, 2, c.Tracer.GetDecodedCalls(decodedTx.Hash)[4].NestingLevel, "expected nesting level to be 2")
 
-	require.Equal(t, "STATICCALL", c.Tracer.DecodedCalls[decodedTx.Hash][5].CallType, "expected call type to be STATICCALL")
-	require.Equal(t, 3, c.Tracer.DecodedCalls[decodedTx.Hash][5].NestingLevel, "expected nesting level to be 3")
+	require.Equal(t, "STATICCALL", c.Tracer.GetDecodedCalls(decodedTx.Hash)[5].CallType, "expected call type to be STATICCALL")
+	require.Equal(t, 3, c.Tracer.GetDecodedCalls(decodedTx.Hash)[5].NestingLevel, "expected nesting level to be 3")
 
-	require.Equal(t, "CALL", c.Tracer.DecodedCalls[decodedTx.Hash][6].CallType, "expected call type to be CALL")
-	require.Equal(t, 2, c.Tracer.DecodedCalls[decodedTx.Hash][6].NestingLevel, "expected nesting level to be 2")
+	require.Equal(t, "CALL", c.Tracer.GetDecodedCalls(decodedTx.Hash)[6].CallType, "expected call type to be CALL")
+	require.Equal(t, 2, c.Tracer.GetDecodedCalls(decodedTx.Hash)[6].NestingLevel, "expected nesting level to be 2")
 
-	require.Equal(t, "CALL", c.Tracer.DecodedCalls[decodedTx.Hash][7].CallType, "expected call type to be CALL")
-	require.Equal(t, 3, c.Tracer.DecodedCalls[decodedTx.Hash][7].NestingLevel, "expected nesting level to be 3")
+	require.Equal(t, "CALL", c.Tracer.GetDecodedCalls(decodedTx.Hash)[7].CallType, "expected call type to be CALL")
+	require.Equal(t, 3, c.Tracer.GetDecodedCalls(decodedTx.Hash)[7].NestingLevel, "expected nesting level to be 3")
 
-	require.Equal(t, "CALL", c.Tracer.DecodedCalls[decodedTx.Hash][8].CallType, "expected call type to be CALL")
-	require.Equal(t, 4, c.Tracer.DecodedCalls[decodedTx.Hash][8].NestingLevel, "expected nesting level to be 4")
+	require.Equal(t, "CALL", c.Tracer.GetDecodedCalls(decodedTx.Hash)[8].CallType, "expected call type to be CALL")
+	require.Equal(t, 4, c.Tracer.GetDecodedCalls(decodedTx.Hash)[8].NestingLevel, "expected nesting level to be 4")
 }
 
 func removeGasDataFromDecodedCalls(decodedCall map[string][]*seth.DecodedCall) {

@@ -59,6 +59,8 @@ func NewNonceManager(cfg *Config, addrs []common.Address, privKeys []*ecdsa.Priv
 // UpdateNonces syncs nonces for addresses
 func (m *NonceManager) UpdateNonces() error {
 	L.Debug().Interface("Addrs", m.Addresses).Msg("Updating nonces for addresses")
+	m.Lock()
+	defer m.Unlock()
 	for addr := range m.Nonces {
 		nonce, err := m.Client.Client.NonceAt(context.Background(), addr, nil)
 		if err != nil {
@@ -93,6 +95,8 @@ func (m *NonceManager) anySyncedKey() int {
 	defer cancel()
 	select {
 	case <-ctx.Done():
+		m.Lock()
+		defer m.Unlock()
 		L.Error().Msg(ErrKeySyncTimeout)
 		m.Client.Errors = append(m.Client.Errors, errors.New(ErrKeySync))
 		return TimeoutKeyNum //so that it's pretty uniqe number of invalid key
