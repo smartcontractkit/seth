@@ -15,7 +15,7 @@ type cacheItem struct {
 // LFUHeaderCache is a Least Frequently Used header cache
 type LFUHeaderCache struct {
 	capacity uint64
-	mu       sync.Mutex
+	mu       *sync.RWMutex
 	cache    map[int64]*cacheItem //key is block number
 }
 
@@ -24,6 +24,7 @@ func NewLFUBlockCache(capacity uint64) *LFUHeaderCache {
 	return &LFUHeaderCache{
 		capacity: capacity,
 		cache:    make(map[int64]*cacheItem),
+		mu:       &sync.RWMutex{},
 	}
 }
 

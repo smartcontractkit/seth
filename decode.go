@@ -163,6 +163,8 @@ func (m *Client) decodeTransaction(l zerolog.Logger, tx *types.Transaction, rece
 		return defaultTxn, errors.Wrap(err, ErrDecodeInput)
 	}
 
+	var txIndex uint = 0
+
 	if receipt != nil {
 		l.Trace().Interface("Receipt", receipt).Msg("TX receipt")
 		logsValues := make([]types.Log, 0)
@@ -173,6 +175,7 @@ func (m *Client) decodeTransaction(l zerolog.Logger, tx *types.Transaction, rece
 		if err != nil {
 			return defaultTxn, err
 		}
+		txIndex = receipt.TransactionIndex
 	}
 	ptx := &DecodedTransaction{
 		CommonData: CommonData{
@@ -180,7 +183,7 @@ func (m *Client) decodeTransaction(l zerolog.Logger, tx *types.Transaction, rece
 			Method:    abiResult.Method.Sig,
 			Input:     txInput,
 		},
-		Index:       receipt.TransactionIndex,
+		Index:       txIndex,
 		Receipt:     receipt,
 		Transaction: tx,
 		Protected:   tx.Protected(),

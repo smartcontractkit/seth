@@ -12,8 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
-	"github.com/smartcontractkit/seth"
 	"github.com/urfave/cli/v2"
+
+	"github.com/smartcontractkit/seth"
 )
 
 const (
