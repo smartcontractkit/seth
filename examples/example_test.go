@@ -3,14 +3,13 @@ package seth_test
 import (
 	"fmt"
 	"math/big"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/seth"
-	sethcmd "github.com/smartcontractkit/seth/cmd"
 	network_debug_contract "github.com/smartcontractkit/seth/contracts/bind/debug"
+	"github.com/smartcontractkit/seth/test_utils"
 )
 
 func commonEnvVars(t *testing.T) {
@@ -44,13 +43,6 @@ func setup(t *testing.T) *network_debug_contract.NetworkDebugContract {
 	return deployDebugContracts(t)
 }
 
-func commonMultiKeySetup(t *testing.T) {
-	_ = os.Remove("keyfile_test_example.toml")
-	t.Setenv(seth.KEYFILE_PATH_ENV_VAR, "keyfile_test_example.toml")
-	err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "fund", "-a", "2", "--local"})
-	require.NoError(t, err)
-}
-
 func TestSmokeExampleWait(t *testing.T) {
 	contract := setup(t)
 	c, err := seth.NewClient()
@@ -74,14 +66,14 @@ func TestSmokeExampleWait(t *testing.T) {
 }
 
 func TestSmokeExampleMultiKey(t *testing.T) {
-	// example of using a static keyfile with multiple keys
-	// see commonMultiKeySetup for env vars
+	// example of using client with multiple keys that are provided in the config
+	// in this example we just generate and fund them inside NewClientWithAddresses() function
+	// to simulate a case, when they were provided as part of the network config, instead of being
+	// generated as ephemeral keys by Seth
 	contract := setup(t)
-	commonMultiKeySetup(t)
-	c, err := seth.NewClient()
-	require.NoError(t, err)
+	c := test_utils.NewClientWithAddresses(t, 10)
 	t.Cleanup(func() {
-		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "return", "--local"})
+		err := seth.ReturnFunds(c, c.Addresses[0].Hex())
 		require.NoError(t, err)
 	})
 
@@ -117,8 +109,7 @@ func TestSmokeExampleMultiKey(t *testing.T) {
 
 func TestSmokeExampleMultiKeyEphemeral(t *testing.T) {
 	// example of using ephemeral keys
-	// suitable for testing simulated networks where network is created every time
-	// ephemeral mode is used if SETH_KEYFILE_PATH is empty
+	// suitable for testing ephemeral networks where network is created every time
 	contract := setup(t)
 	c, err := seth.NewClient()
 	require.NoError(t, err)

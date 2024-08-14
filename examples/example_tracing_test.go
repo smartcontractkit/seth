@@ -2,7 +2,6 @@ package seth_test
 
 import (
 	"math/big"
-	"os"
 	"testing"
 
 	"github.com/smartcontractkit/seth"
@@ -12,10 +11,6 @@ import (
 // All you need to do is enable automated tracing and then wrap you contract call with `c.Decode`.
 // This will automatically trace the transaction and decode it for you
 func TestDecodeExample(t *testing.T) {
-	_ = os.Setenv(seth.KEYFILE_PATH_ENV_VAR, "keyfile_test.toml")
-	t.Cleanup(func() {
-		os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
-	})
 	contract := setup(t)
 	c, err := seth.NewClient()
 	require.NoError(t, err, "failed to initalise seth")

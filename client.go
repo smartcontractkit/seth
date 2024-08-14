@@ -100,10 +100,6 @@ func NewClientWithConfig(cfg *Config) (*Client, error) {
 			return nil, err
 		}
 		cfg.Network.PrivateKeys = append(cfg.Network.PrivateKeys, pkeys...)
-	} else {
-		if err := readKeyFileConfig(cfg); err != nil {
-			return nil, err
-		}
 	}
 	addrs, pkeys, err := cfg.ParseKeys()
 	if err != nil {
@@ -201,20 +197,6 @@ func ValidateConfig(cfg *Config) error {
 		default:
 			return errors.New("trace output must be one of: console, json, dot")
 		}
-	}
-
-	if cfg.KeyFileSource != "" && cfg.EphemeralAddrs != nil && *cfg.EphemeralAddrs != 0 {
-		return fmt.Errorf("KeyFileSource is set to '%s' and ephemeral addresses are enabled, please disable ephemeral addresses or the keyfile usage. You cannot use both modes at the same time", cfg.KeyFileSource)
-	}
-
-	switch cfg.KeyFileSource {
-	case "", KeyFileSourceFile, KeyFileSourceBase64EnvVar:
-	default:
-		return fmt.Errorf("KeyFileSource must be either empty (disabled) or one of: '%s', '%s'", KeyFileSourceFile, KeyFileSourceBase64EnvVar)
-	}
-
-	if cfg.KeyFileSource == KeyFileSourceFile && cfg.KeyFilePath == "" {
-		return fmt.Errorf("KeyFileSource is set to 'file' but the path to the key file is not set")
 	}
 
 	if cfg.Network.DialTimeout == nil {
