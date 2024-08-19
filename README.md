@@ -9,6 +9,27 @@ Reliable and debug-friendly Ethereum client
 [![Integration tests (testnets)](https://github.com/smartcontractkit/seth/actions/workflows/test_decode_testnet.yml/badge.svg)](https://github.com/smartcontractkit/seth/actions/workflows/test_decode_testnet.yml)
 <br/>
 
+# Content
+1. [Goals](#goals)
+2. [Features](#features)
+2. [Examples](#examples)
+3. [Setup](#setup)
+   4. [Building test contracts](#building-test-contracts)
+   5. [Testing](#testing)
+6. [Configuration](#cofngi)
+   6. [Simplified configuration](#simplified-configuration)
+   7. [Supported env vars](#supported-env-vars)
+   8. [TOML configuration](#toml-configuration)
+9. [Automated gas price estimation](#automatic-gas-estimator)
+10. [DOT Graphs of transactions](#dot-graphs)
+11. [Using multiple private keys](#using-multiple-keys)
+12. [Experimental features](#experimental-features)
+13. [CLI](#cli)
+    14. [Manual gas price estimation](#manual-gas-price-estimation)
+    15. [Block Stats](#block-stats)
+    15. [Single transaction tracing](#single-transaction-tracing)
+    16. [Bulk transaction tracing](#bulk-transaction-tracing)
+
 ## Goals
 
 - Be a thin, debuggable and battle tested wrapper on top of `go-ethereum`
@@ -18,6 +39,36 @@ Reliable and debug-friendly Ethereum client
 - Do not wrap `bind` generated contracts, small set of additional debug API
 - Resilient: should execute transactions even if there is a gas spike or an RPC outage (failover)
 - Well tested: should provide a suite of e2e tests that can be run on testnets to check integration
+
+## Features
+
+- [x] Decode named inputs
+- [x] Decode named outputs
+- [x] Decode anonymous outputs
+- [x] Decode logs
+- [x] Decode indexed logs
+- [x] Decode old string reverts
+- [x] Decode new typed reverts
+- [x] EIP-1559 support
+- [x] Multi-keys client support
+- [x] CLI to manipulate test keys
+- [x] Simple manual gas price estimation
+- [ ] Fail over client logic
+- [ ] Decode collided event hashes
+- [x] Tracing support (4byte)
+- [x] Tracing support (callTracer)
+- [ ] Tracing support (prestate)
+- [x] Tracing decoding
+- [x] Tracing tests
+- [ ] More tests for corner cases of decoding/tracing
+- [x] Saving of deployed contracts mapping (`address -> ABI_name`) for live networks
+- [x] Reading of deployed contracts mappings for live networks
+- [x] Automatic gas estimator (experimental)
+- [x] Block stats CLI
+- [x] Check if address has a pending nonce (transaction) and panic if it does
+- [x] DOT graph output for tracing
+
+You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
 
 ## Examples
 
@@ -65,7 +116,7 @@ Enter the shell
 nix develop
 ```
 
-## Building contracts
+## Building test contracts
 
 We have `go-ethereum` and [foundry](https://github.com/foundry-rs/foundry) tools inside `nix` shell
 
@@ -121,7 +172,27 @@ make network=Geth root_private_key=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5
 
 # Config
 
-### Env Vars
+### Simplified configuration
+
+If you do not want to set all the parameters, you can use a simplified progammatical configuration. Here's an example:
+
+```go
+cfg := seth.DefaultConfig("ws://localhost:8546", []string{"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"})
+client, err := seth.NewClientWithConfig(cfg)
+if err != nil {
+log.Fatal(err)
+}
+```
+
+This config uses what we consider reasonable defaults, such as:
+* 5 minute transaction confirmation timeout
+* 1 minute RPC node dial timeout
+* enabled EIP-1559 dynamic fees and automatic gas prices estimation (with 200 blocks history; will auto-disable itself if RPC doesn't support EIP-1559)
+* tracing only of reverted transaction to console and DOT graphs
+* checking of RPC node health on client creation
+* no ephemeral keys
+
+### Supported env vars
 
 Some crucial data is stored in env vars, create `.envrc` and use `source .envrc`, or use `direnv`
 
@@ -145,7 +216,7 @@ go run cmd/seth/seth.go ... # your command
 
 In that case you should still pass network name with `-n` flag.
 
-### seth.toml
+### TOML configuration
 
 Set up your ABI directory (relative to `seth.toml`)
 
@@ -244,162 +315,6 @@ contract_map_file = "deployed_contracts_mumbai.toml"
 ```
 
 Both features only work for live networks. Otherwise, they are ignored, and nothing is saved/read from for simulated networks.
-
-## CLI
-
-You can either define the network you want to interact with in your TOML config and then refer it in the CLI command, or you can pass all network parameters via env vars. Most of the examples below show how to use the former approach.
-
-### Manual gas price estimation
-
-In order to adjust gas price for a transaction, you can use `seth gas` command
-
-```sh
-seth -n Fuji gas -b 10000 -tp 0.99
-```
-
-This will analyze last 10k blocks and give you 25/50/75/99th/Max percentiles for base fees and tip fees
-
-`-tp 0.99` requests the 99th tip percentile across all the transaction in one block and calculates 25/50/75/99th/Max across all blocks
-
-### Block Stats
-
-If you need to get some insights into network stats and create a realistic load/chaos profile with simulators (`anvil` as an example), you can use `stats` CLI command
-
-#### Define your network in `seth.toml`
-
-Edit your `seth.toml`
-
-```toml
-[[networks]]
-name = "MyCustomNetwork"
-urls_secret = ["..."]
-
-[block_stats]
-rpc_requests_per_second_limit = 5
-```
-
-Then check the stats for the last N blocks
-
-```sh
-seth -n MyCustomNetwork stats -s -10
-```
-
-To check stats for the interval (A, B)
-
-```sh
-seth -n MyCustomNetwork stats -s A -e B
-```
-
-#### Pass all network parameters via env vars
-
-If you don't have a network defined in the TOML you can still use the CLI by providing the RPC url via cmd arg.
-
-Then check the stats for the last N blocks
-
-```sh
-seth -u "https://my-rpc.network.io" stats -s -10
-```
-
-To check stats for the interval (A, B)
-
-```sh
-seth -u "https://my-rpc.network.io" stats -s A -e B
-```
-
-Results can help you to understand if network is stable, what is avg block time, gas price, block utilization and transactions per second.
-
-```toml
-# Stats
-perc_95_tps = 8.0
-perc_95_block_duration = '3s'
-perc_95_block_gas_used = 1305450
-perc_95_block_gas_limit = 15000000
-perc_95_block_base_fee = 25000000000
-avg_tps = 2.433333333333333
-avg_block_duration = '2s' 
-avg_block_gas_used = 493233
-avg_block_gas_limit = 15000000
-avg_block_base_fee = 25000000000
-
-# Recommended performance/chaos test parameters
-duration = '2m0s'
-block_gas_base_fee_initial_value = 25000000000
-block_gas_base_fee_bump_percentage = '100.00% (no bump required)'
-block_gas_usage_percentage = '3.28822000% gas used (no congestion)'
-avg_tps = 3.0
-max_tps = 8.0
-```
-
-### Single transaction tracing
-
-You can trace a single transaction using `seth trace` command. Example with `seth` alias mentioned before:
-
-```sh
-seth -u "https://my-rpc.network.io" trace -t 0x4c21294bf4c0a19de16e0fca74e1ea1687ba96c3cab64f6fca5640fb7b84df65
-```
-
-or if you want to use a predefined-network:
-
-```sh
-seth -n=Geth trace -t 0x4c21294bf4c0a19de16e0fca74e1ea1687ba96c3cab64f6fca5640fb7b84df65
-```
-
-### Bulk Tracing
-
-You can trace multiple transactions at once using `seth trace` command for a predefined network named `Geth`. Example:
-
-```sh
-seth -n=Geth trace -f reverted_transactions.json
-```
-
-or by passing all the RPC parameter with a flag:
-
-```sh
-seth -u "https://my-rpc.network.io" trace -f reverted_transactions.json
-```
-
-You need to pass a file with a list of transaction hashes to trace. The file should be a JSON array of transaction hashes, like this:
-
-```json
-[
-  "0x...",
-  "0x...",
-  "0x...",
-  ...
-]
-```
-
-(Note that currently Seth automatically creates `reverted_transactions_<network>_<date>.json` with all reverted transactions, so you can use this file as input for the `trace` command.)
-
-## Features
-
-- [x] Decode named inputs
-- [x] Decode named outputs
-- [x] Decode anonymous outputs
-- [x] Decode logs
-- [x] Decode indexed logs
-- [x] Decode old string reverts
-- [x] Decode new typed reverts
-- [x] EIP-1559 support
-- [x] Multi-keys client support
-- [x] CLI to manipulate test keys
-- [x] Simple manual gas price estimation
-- [ ] Fail over client logic
-- [ ] Decode collided event hashes
-- [x] Tracing support (4byte)
-- [x] Tracing support (callTracer)
-- [ ] Tracing support (prestate)
-- [x] Tracing decoding
-- [x] Tracing tests
-- [ ] More tests for corner cases of decoding/tracing
-- [x] Saving of deployed contracts mapping (`address -> ABI_name`) for live networks
-- [x] Reading of deployed contracts mappings for live networks
-- [x] Automatic gas estimator (experimental)
-- [x] Block stats CLI
-- [x] Check if address has a pending nonce (transaction) and panic if it does
-- [x] DOT graph output for tracing
-
-You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
 
 ### Automatic Gas Estimator
 
@@ -594,3 +509,129 @@ Here's what they do:
 
 - `slow_funds_return` will work only in `core` and when enabled it changes tx priority to `slow` and increases transaction timeout to 30 minutes.
 - `eip_1559_fee_equalizer` in case of EIP-1559 transactions if it detects that historical base fee and suggested/historical tip are more than 3 orders of magnitude apart, it will use the higher value for both (this helps in cases where base fee is almost 0 and transaction is never processed).
+
+## CLI
+
+You can either define the network you want to interact with in your TOML config and then refer it in the CLI command, or you can pass all network parameters via env vars. Most of the examples below show how to use the former approach.
+
+### Manual gas price estimation
+
+In order to adjust gas price for a transaction, you can use `seth gas` command
+
+```sh
+seth -n Fuji gas -b 10000 -tp 0.99
+```
+
+This will analyze last 10k blocks and give you 25/50/75/99th/Max percentiles for base fees and tip fees
+
+`-tp 0.99` requests the 99th tip percentile across all the transaction in one block and calculates 25/50/75/99th/Max across all blocks
+
+### Block Stats
+
+If you need to get some insights into network stats and create a realistic load/chaos profile with simulators (`anvil` as an example), you can use `stats` CLI command
+
+#### Define your network in `seth.toml`
+
+Edit your `seth.toml`
+
+```toml
+[[networks]]
+name = "MyCustomNetwork"
+urls_secret = ["..."]
+
+[block_stats]
+rpc_requests_per_second_limit = 5
+```
+
+Then check the stats for the last N blocks
+
+```sh
+seth -n MyCustomNetwork stats -s -10
+```
+
+To check stats for the interval (A, B)
+
+```sh
+seth -n MyCustomNetwork stats -s A -e B
+```
+
+#### Pass all network parameters via env vars
+
+If you don't have a network defined in the TOML you can still use the CLI by providing the RPC url via cmd arg.
+
+Then check the stats for the last N blocks
+
+```sh
+seth -u "https://my-rpc.network.io" stats -s -10
+```
+
+To check stats for the interval (A, B)
+
+```sh
+seth -u "https://my-rpc.network.io" stats -s A -e B
+```
+
+Results can help you to understand if network is stable, what is avg block time, gas price, block utilization and transactions per second.
+
+```toml
+# Stats
+perc_95_tps = 8.0
+perc_95_block_duration = '3s'
+perc_95_block_gas_used = 1305450
+perc_95_block_gas_limit = 15000000
+perc_95_block_base_fee = 25000000000
+avg_tps = 2.433333333333333
+avg_block_duration = '2s' 
+avg_block_gas_used = 493233
+avg_block_gas_limit = 15000000
+avg_block_base_fee = 25000000000
+
+# Recommended performance/chaos test parameters
+duration = '2m0s'
+block_gas_base_fee_initial_value = 25000000000
+block_gas_base_fee_bump_percentage = '100.00% (no bump required)'
+block_gas_usage_percentage = '3.28822000% gas used (no congestion)'
+avg_tps = 3.0
+max_tps = 8.0
+```
+
+### Single transaction tracing
+
+You can trace a single transaction using `seth trace` command. Example with `seth` alias mentioned before:
+
+```sh
+seth -u "https://my-rpc.network.io" trace -t 0x4c21294bf4c0a19de16e0fca74e1ea1687ba96c3cab64f6fca5640fb7b84df65
+```
+
+or if you want to use a predefined-network:
+
+```sh
+seth -n=Geth trace -t 0x4c21294bf4c0a19de16e0fca74e1ea1687ba96c3cab64f6fca5640fb7b84df65
+```
+
+### Bulk transaction tracing
+
+You can trace multiple transactions at once using `seth trace` command for a predefined network named `Geth`. Example:
+
+```sh
+seth -n=Geth trace -f reverted_transactions.json
+```
+
+or by passing all the RPC parameter with a flag:
+
+```sh
+seth -u "https://my-rpc.network.io" trace -f reverted_transactions.json
+```
+
+You need to pass a file with a list of transaction hashes to trace. The file should be a JSON array of transaction hashes, like this:
+
+```json
+[
+  "0x...",
+  "0x...",
+  "0x...",
+  ...
+]
+```
+
+(Note that currently Seth automatically creates `reverted_transactions_<network>_<date>.json` with all reverted transactions, so you can use this file as input for the `trace` command.)

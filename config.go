@@ -19,6 +19,9 @@ const (
 	ErrReadSethConfig      = "failed to read TOML config for seth"
 	ErrUnmarshalSethConfig = "failed to unmarshal TOML config for seth"
 	ErrEmptyRootPrivateKey = "no root private key were set, set %s=..."
+	ErrNoPrivateKeysPassed = "you must pass at least one private key (root key)"
+	ErrInvalidPrivateKey   = "invalid private key"
+	ErrEmptyRPCURL         = "RPC URL cannot be empty"
 
 	GETH  = "Geth"
 	ANVIL = "Anvil"
@@ -31,6 +34,11 @@ const (
 
 	DefaultNetworkName = "Default"
 	DefaultDialTimeout = 1 * time.Minute
+
+	DefaultTransferGasFee = 21_000
+	DefaultGasPrice       = 1_000_000_000   // 1 Gwei
+	DefaultGasFeeCap      = 100_000_000_000 // 100 Gwei
+	DefaultGasTipCap      = 50_000_000_000  // 50 Gwei
 )
 
 type Config struct {
@@ -85,6 +93,63 @@ type Network struct {
 
 	// derivative vars
 	ChainID string
+}
+
+// DefaultConfig returns a reasonable default config with the specified RPC URL and private keys. It doesn't validate the inputs in any way, but you should pass at least 1 private key.
+// It assumes that network is EIP-1559 compatible (if it's not, the client will later automatically update its configuration to reflect it).
+func DefaultConfig(rpcUrl string, privateKeys []string) *Config {
+	network := &Network{
+		Name:                         DefaultNetworkName,
+		URLs:                         []string{rpcUrl},
+		PrivateKeys:                  privateKeys,
+		EIP1559DynamicFees:           true,
+		TxnTimeout:                   MustMakeDuration(5 * time.Minute),
+		TransferGasFee:               DefaultTransferGasFee,
+		GasPriceEstimationEnabled:    true,
+		GasPriceEstimationBlocks:     200,
+		GasPriceEstimationTxPriority: Priority_Standard,
+		GasPrice:                     DefaultGasPrice,
+		GasFeeCap:                    DefaultGasFeeCap,
+		GasTipCap:                    DefaultGasTipCap,
+	}
+
+	return &Config{
+		ArtifactsDir:                  "seth_artifacts",
+		EphemeralAddrs:                &ZeroInt64,
+		RootKeyFundsBuffer:            &ZeroInt64,
+		SaveDeployedContractsMap:      false,
+		Network:                       network,
+		Networks:                      []*Network{network},
+		NonceManager:                  &NonceManagerCfg{KeySyncRateLimitSec: 10, KeySyncRetries: 3, KeySyncTimeout: MustMakeDuration(60 * time.Second), KeySyncRetryDelay: MustMakeDuration(5 * time.Second)},
+		TracingLevel:                  TracingLevel_Reverted,
+		TraceOutputs:                  []string{TraceOutput_Console, TraceOutput_DOT},
+		PendingNonceProtectionEnabled: false,
+		ExperimentsEnabled:            []string{},
+		CheckRpcHealthOnStart:         true,
+		BlockStatsConfig:              &BlockStatsConfig{RPCRateLimit: 10},
+	}
+}
+
+// ValidatedDefaultConfig returns a reasonable default config with the specified RPC URL and private keys. It validates whether
+// at least 1 private key has been passed and whether each private key is valid ECDSA key. It doesn't validate the URL, because
+// "net/url" validation will accept almost anything as a valid URL.
+func ValidatedDefaultConfig(rpcUrl string, privateKeys []string) (*Config, error) {
+	if len(privateKeys) == 0 {
+		return nil, errors.New(ErrNoPrivateKeysPassed)
+	}
+
+	for _, maybePk := range privateKeys {
+		_, err := crypto.HexToECDSA(maybePk)
+		if err != nil {
+			return nil, errors.Wrap(err, ErrInvalidPrivateKey)
+		}
+	}
+
+	if rpcUrl == "" {
+		return nil, errors.New(ErrEmptyRPCURL)
+	}
+
+	return DefaultConfig(rpcUrl, privateKeys), nil
 }
 
 // ReadConfig reads the TOML config file from location specified by env var "SETH_CONFIG_PATH" and returns a Config struct
