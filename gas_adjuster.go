@@ -66,7 +66,7 @@ func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy 
 		if err != nil {
 			return nil, err
 		}
-		// ignore the error here as at this points is very improbable that block is nil and there's no error
+		// ignore the error here as at this point it is very improbable that block is nil and there's no error
 		_ = m.HeaderCache.Set(header)
 		return header, nil
 	}
@@ -88,17 +88,14 @@ func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy 
 	var headers []*types.Header
 	headers = append(headers, lastBlock)
 
-	channelSize := blocksNumber
-	if blocksNumber > 20 {
-		channelSize = 20
-	}
-
 	var wg sync.WaitGroup
-	dataCh := make(chan *types.Header, channelSize)
+	dataCh := make(chan *types.Header)
 
 	go func() {
 		for header := range dataCh {
 			headers = append(headers, header)
+			// placed here, because we want to wait for all headers to be received and added to slice before continuing
+			wg.Done()
 		}
 	}()
 
@@ -111,7 +108,6 @@ func (m *Client) CalculateNetworkCongestionMetric(blocksNumber uint64, strategy 
 
 		wg.Add(1)
 		go func(bn *big.Int) {
-			defer wg.Done()
 			header, err := getHeaderData(bn)
 			if err != nil {
 				L.Error().Err(err).Msgf("Failed to get block %d header", bn.Int64())

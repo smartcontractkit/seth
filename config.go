@@ -98,36 +98,7 @@ type Network struct {
 // DefaultConfig returns a reasonable default config with the specified RPC URL and private keys. It doesn't validate the inputs in any way, but you should pass at least 1 private key.
 // It assumes that network is EIP-1559 compatible (if it's not, the client will later automatically update its configuration to reflect it).
 func DefaultConfig(rpcUrl string, privateKeys []string) *Config {
-	network := &Network{
-		Name:                         DefaultNetworkName,
-		URLs:                         []string{rpcUrl},
-		PrivateKeys:                  privateKeys,
-		EIP1559DynamicFees:           true,
-		TxnTimeout:                   MustMakeDuration(5 * time.Minute),
-		TransferGasFee:               DefaultTransferGasFee,
-		GasPriceEstimationEnabled:    true,
-		GasPriceEstimationBlocks:     200,
-		GasPriceEstimationTxPriority: Priority_Standard,
-		GasPrice:                     DefaultGasPrice,
-		GasFeeCap:                    DefaultGasFeeCap,
-		GasTipCap:                    DefaultGasTipCap,
-	}
-
-	return &Config{
-		ArtifactsDir:                  "seth_artifacts",
-		EphemeralAddrs:                &ZeroInt64,
-		RootKeyFundsBuffer:            &ZeroInt64,
-		SaveDeployedContractsMap:      false,
-		Network:                       network,
-		Networks:                      []*Network{network},
-		NonceManager:                  &NonceManagerCfg{KeySyncRateLimitSec: 10, KeySyncRetries: 3, KeySyncTimeout: MustMakeDuration(60 * time.Second), KeySyncRetryDelay: MustMakeDuration(5 * time.Second)},
-		TracingLevel:                  TracingLevel_Reverted,
-		TraceOutputs:                  []string{TraceOutput_Console, TraceOutput_DOT},
-		PendingNonceProtectionEnabled: false,
-		ExperimentsEnabled:            []string{},
-		CheckRpcHealthOnStart:         true,
-		BlockStatsConfig:              &BlockStatsConfig{RPCRateLimit: 10},
-	}
+	return NewConfigBuilder().WithRpcUrl(rpcUrl).WithPrivateKeys(privateKeys).Build()
 }
 
 // ValidatedDefaultConfig returns a reasonable default config with the specified RPC URL and private keys. It validates whether

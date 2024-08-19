@@ -16,8 +16,9 @@ Reliable and debug-friendly Ethereum client
 3. [Setup](#setup)
    4. [Building test contracts](#building-test-contracts)
    5. [Testing](#testing)
-6. [Configuration](#cofngi)
+6. [Configuration](#config)
    6. [Simplified configuration](#simplified-configuration)
+   7. [ConfigBuilder](#configbuilder)
    7. [Supported env vars](#supported-env-vars)
    8. [TOML configuration](#toml-configuration)
 9. [Automated gas price estimation](#automatic-gas-estimator)
@@ -180,7 +181,7 @@ If you do not want to set all the parameters, you can use a simplified progammat
 cfg := seth.DefaultConfig("ws://localhost:8546", []string{"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"})
 client, err := seth.NewClientWithConfig(cfg)
 if err != nil {
-log.Fatal(err)
+    log.Fatal(err)
 }
 ```
 
@@ -191,6 +192,43 @@ This config uses what we consider reasonable defaults, such as:
 * tracing only of reverted transaction to console and DOT graphs
 * checking of RPC node health on client creation
 * no ephemeral keys
+
+### ConfigBuilder
+You can also use a `ConfigBuilder` to build a config programmatically. Here's an extensive example:
+
+```go
+cfg := builder.
+    // network
+    WithNetworkName("my network").
+    WithRpcUrl("ws://localhost:8546").
+    WithPrivateKeys([]string{"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"}).
+    WithRpcDialTimeout(10*time.Second).
+    WithTransactionTimeouts(1*time.Minute).
+    // addresses
+    WithEphemeralAddresses(10, 10).
+    // tracing
+    WithTracing(seth.TracingLevel_All, []string{seth.TraceOutput_Console}).
+    // protections
+    WithProtections(true, true).
+    // artifacts folder
+    WithArtifactsFolder("some_folder").
+    // nonce manager
+    WithNonceManager(10, 3, 60, 5).
+    // EIP-1559 and gas estimations
+    WithEIP1559DynamicFees(true).
+    WithDynamicGasPrices(120_000_000_000, 44_000_000_000).
+    WithGasPriceEstimations(false, 10, seth.Priority_Fast).
+    Build()
+
+client, err := seth.NewClientWithConfig(cfg)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+By default, it uses the same values as simplified configuration, but you can override them by calling the appropriate methods. Builder includes only options
+that we thought to be most useful, it's not a 1:1 mapping of all fields in the `Config` struct. Therefore, if you need to set some more advanced options, you should create the `Config` struct directly,
+use TOML config or manually set the fields on the `Config` struct returned by the builder.
 
 ### Supported env vars
 
