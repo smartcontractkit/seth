@@ -37,7 +37,7 @@ NewTXOpts(o ...TransactOpt) *bind.TransactOpts
 NewCallOpts(o ...CallOpt) *bind.CallOpts
 ```
 
-By default, we are using the `root` key `0`, but you can also use `keys` from `keyfile.toml`
+By default, we are using the `root` key `0`, but you can also use any of the private keys passed as part of `Network` configuration in `seth.toml` or ephemeral keys.
 
 ```go
 // NewCallKeyOpts returns a new sequential call options wrapper from the key N
@@ -128,12 +128,10 @@ Some crucial data is stored in env vars, create `.envrc` and use `source .envrc`
 ```sh
 export SETH_LOG_LEVEL=info # global logger level
 export SETH_CONFIG_PATH=seth.toml # path to the toml config
-export SETH_KEYFILE_PATH=keyfile.toml # keyfile path for using multiple keys
 export SETH_NETWORK=Geth # selected network
 export SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 # root private key
-export SETH_ONE_PASS_VAULT=712jkhjdyf71289hdjfs7d # id of 1password vault in which we store secrets
 
-alias seth="SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go" # useful alias for keyfile CLI
+alias seth="SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go" # useful alias for CLI
 ```
 
 Alternatively if you don't have a network defined in the TOML you can still use the CLI by providing these 2 key env vars:
@@ -145,10 +143,7 @@ export SETH_CHAIN_ID=43113
 go run cmd/seth/seth.go ... # your command
 ```
 
-In that case you should still pass network name with `-n` flag, especially when using CLI with 1password as network name is used when generating item name.
-
-If `SETH_KEYFILE_PATH` is not set then client will create X ephemeral keys (60 by default, configurable) and won't return any funds.
-Use `SETH_KEYFILE_PATH` for testnets/mainnets and `ephemeral` mode only when testing against simulated network.
+In that case you should still pass network name with `-n` flag.
 
 ### seth.toml
 
@@ -164,34 +159,12 @@ Setup your BIN directory (relative to `seth.toml`)
 bin_dir = "contracts/bin"
 ```
 
-Decide whether you want to read `keyfile` or use `ephemeral` keys. In the first case you have two options:
-
-- read it from the filesystem
+Decide whether you want to generate any `ephemeral` keys:
 
 ```toml
-# If empty Seth will not try to load any keyfiles. You can either set it to 'file' to load keyfiles from
-# a file (providing path to it in 'keyfile_path') or to 'base64_env' to load it from Base64-ed environment variable
-# 'SETH_KEYFILE_BASE64'
-keyfile_source = "file"
-
-# If keyfile_source is set to 'file' this should be a path to a file with keyfiles
-keyfile_path = "keyfile.toml"
-```
-
-- read it from environment variable `SETH_KEYFILE_BASE64` (keyfile needs to be base64-ed)
-
-```toml
-keyfile_source = "base64_env"
-```
-
-If you want to use ephemeral keys, you can set the number of keys to be generated:
-
-```toml
-# Set number of ephemeral keys to be generated (0 for no ephemeral keys). Each key will receive a proportion of native tokens from root private key's balance with the value equal to `(root_balance / ephemeral_keys_number) - transfer_fee * ephemeral_keys_number`. Using ephemeral keys together with keyfile will result in an error.
+# Set number of ephemeral keys to be generated (0 for no ephemeral keys). Each key will receive a proportion of native tokens from root private key's balance with the value equal to `(root_balance / ephemeral_keys_number) - transfer_fee * ephemeral_keys_number`.
 ephemeral_addresses_number = 10
 ```
-
-You cannot use both `keyfile` and `ephemeral` keys at the same time. Trying to do so will cause configuration error.
 
 You can enable auto-tracing for all transactions meeting configured level, which means that every time you use `Decode()` we will decode the transaction and also trace all calls made within the transaction, together with all inputs, outputs, logs and events. Three tracing levels are available:
 
@@ -275,68 +248,6 @@ Both features only work for live networks. Otherwise, they are ignored, and noth
 ## CLI
 
 You can either define the network you want to interact with in your TOML config and then refer it in the CLI command, or you can pass all network parameters via env vars. Most of the examples below show how to use the former approach.
-
-### Multiple keys manipulation (keyfile.toml)
-
-To use multiple keys in your tests you can create a `keyfile.toml` using CLI
-
-Set up the alias, see `.envrc` configuration above
-
-```sh
-export SETH_LOG_LEVEL=info # global logger level
-alias seth="SETH_CONFIG_PATH=seth.toml go run cmd/seth/seth.go"
-```
-
-When you run any of the commands from `keys` namespace by default Seth will try to interact with 1password. To do that you need to meet a couple of requirements:
-
-1. 1password desktop [app](https://1password.com/product/mac/) installed.
-2. 1password CLI tool called [op](https://developer.1password.com/docs/cli/get-started/)
-
-Now... if you are working with a vault you have access to via your desktop app, it will ask you to authenticate via the desktop app every time you need to access the vault and no further configuration is required. If it's a vault you don't have access to via the desktop app you will need to set service account token in your env vars:
-
-```sh
-export OP_SERVICE_ACCOUNT_TOKEN=...
-```
-
-Once you have it setup you can run `op vaults list` to get ids of all vaults you are assigned to. The output will look more or less like this:
-
-```sh
-ID                            NAME
-4rdre3lw7mqyz4nbrqcygdzwri    Vault 1
-r4qs5dh3zwofum2jse7g53cgrm    Vault 2
-```
-
-Once you have decided, which vault you want to use you need to export its id in `SETH_ONE_PASS_VAULT` variable. We will use `Vault 1`'s ids in the following examples.
-
-Create a new `keyfile` with 10 new accounts funded from the root key
-
-```sh
-SETH_ONE_PASS_VAULT=4rdre3lw7mqyz4nbrqcygdzwri SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile_geth.toml seth -n Geth keys fund -a 10 [-b 2] [--local]
-```
-
-This will create a new Secure Note in 1password called GETH_KEYFILE with file attachment containing 10 new keys. Item name is always `<NETWORK_NAME_>_KEYFILE`. It's crucial that you always pass network name with `-n` flag, as it's used in item name. If it's missing we will use `DEFAULT` network name and it will be impossible to distinguish between keyfiles from different networks.
-`SETH_KEYFILE_PATH` is still required, even when using 1password, because if creating the keyfile in 1password fails, we will save it to the file, so that no funds are lost.
-Also remember that you don't need to define your network in TOML file as long as you pass the RPC URL with `-u` flag.
-
-Run the tests, then return funds back, when needed
-
-```sh
-SETH_ONE_PASS_VAULT=4rdre3lw7mqyz4nbrqcygdzwri SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile_geth.toml seth -n Geth keys return [--local]
-```
-
-Update the balances
-
-```sh
-SETH_ONE_PASS_VAULT=4rdre3lw7mqyz4nbrqcygdzwri  SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile_geth.toml seth -n Geth keys update [--local]
-```
-
-Remove the `keyfile`
-
-```sh
-SETH_ONE_PASS_VAULT=4rdre3lw7mqyz4nbrqcygdzwri SETH_ROOT_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SETH_KEYFILE_PATH=keyfile_geth.toml seth -n Geth keys remove [--local]
-```
-
-If you don't want to use 1password you can still use local keyfile by providing `--local` flag.
 
 ### Manual gas price estimation
 
@@ -486,7 +397,6 @@ You need to pass a file with a list of transaction hashes to trace. The file sho
 - [x] Automatic gas estimator (experimental)
 - [x] Block stats CLI
 - [x] Check if address has a pending nonce (transaction) and panic if it does
-- [x] 1password integration for keyfiles
 - [x] DOT graph output for tracing
 
 You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
@@ -614,9 +524,64 @@ There's at least a dozen of them available, but none of them support tooltips an
 - [Devtools/daily](https://www.devtoolsdaily.com/graphviz/)
 - [Sketchviz](https://sketchviz.com/)
 
+### Using multiple keys
+If you want to use existing multiple keys (instead of ephemeral ones) you can pass them as part of the network configuration. In that case it's recommended to **not** read them from TOML file. If you need to read them for the filesystem/os it's best if you use environment variables.
+Once you've read them in a safe manner you should programmatically add them to Seth's Config struct (which safe parts can be read from TOML file). You can either add them directly to `Network`, if it's already set up, or you can add them to `Networks` slice to the network you intend to use.
+
+For example you could start by reading the TOML configuration first:
+```go
+cfg, err := seth.ReadCfg()
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+Then read the private keys in a safe manner. For example from a secure vault or environment variables:
+```go
+var privateKeys []string
+var err error
+privateKeys, err = some_utils.ReadPrivateKeysFromEnv()
+if err != nil {
+    log.Fatal(err)
+}
+```
+and then add them to the `Network` you plan to use. Let's assume it's called `Sepolia`:
+```go
+for i, network := range cfg.Networks {
+    if network.Name == "Sepolia" {
+        cfg.Networks[i].PrivateKeys = privateKeys
+    }
+}
+```
+
+Or if you aren't using `[[Networks]]` in your TOML config and have just a single `Network`:
+```go
+cfg.Network.PrivateKeys = privateKeys
+```
+
+Or... you can use the convenience function `AddPksToNetwork()` to have them added to both the `Network` and `Networks` slice:
+```go
+updatedCount := cfg.AddPksToNetwork(privateKeys, "Sepolia")
+if updatedCount == 0 {
+    log.Fatal("Network Sepolia not found in the config")
+}
+```
+
+Finally, proceed to create a new Seth instance:
+```go
+seth, err := seth.NewClientWithConfig(cfg)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+A working example can be found [here](examples/example_test.go) as `TestSmokeExampleMultiKeyFromEnv` test.
+
+Currently, there's no safe way to pass multiple keys to CLI. In that case TOML is the only way to go, but you should be mindful that if you commit the TOML file with keys in it, you should assume they are compromised and all funds on them are lost.
+
 ### Experimental features
 
-In order to enable an experimental feature you need to pass it's name in config. It's a global config, you cannot enable it per-network. Example:
+In order to enable an experimental feature you need to pass its name in config. It's a global config, you cannot enable it per-network. Example:
 
 ```toml
 # other settings before...

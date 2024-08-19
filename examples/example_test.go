@@ -3,6 +3,8 @@ package seth_test
 import (
 	"fmt"
 	"math/big"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -72,6 +74,60 @@ func TestSmokeExampleMultiKey(t *testing.T) {
 	// generated as ephemeral keys by Seth
 	contract := setup(t)
 	c := test_utils.NewClientWithAddresses(t, 10)
+	t.Cleanup(func() {
+		err := seth.ReturnFunds(c, c.Addresses[0].Hex())
+		require.NoError(t, err)
+	})
+
+	// you can use multiple keys to really execute transactions in parallel
+	tx1, err1 := c.Decode(contract.Set(
+		c.NewTXKeyOpts(1),
+		big.NewInt(1),
+	))
+	require.NoError(t, err1)
+	tx2, err2 := c.Decode(contract.Set(
+		c.NewTXKeyOpts(2),
+		big.NewInt(1),
+	))
+	require.NoError(t, err2)
+	// original data
+	_ = tx1.Transaction
+	_ = tx1.Receipt
+	// decoded data
+	_ = tx1.Input
+	_ = tx1.Output
+	_ = tx1.Events
+	// original data
+	_ = tx2.Transaction
+	_ = tx2.Receipt
+	// decoded data
+	_ = tx2.Input
+	_ = tx2.Output
+	_ = tx2.Events
+	res, err := contract.Get(c.NewCallOpts())
+	require.NoError(t, err)
+	fmt.Printf("Result: %d", res.Int64())
+}
+
+func TestSmokeExampleMultiKeyFromEnv(t *testing.T) {
+	// example of creating client with multiple keys that are read from environment variable called `SETH_KEYS` (you need to set it yourself)
+	// we assume here that you will be using `Geth` network
+	contract := setup(t)
+	cfg, err := seth.ReadConfig()
+	require.NoError(t, err)
+
+	keys := os.Getenv("SETH_KEYS")
+	require.NotEmpty(t, keys, "SETH_KEYS env var is empty")
+	var pks []string
+	pks = append(pks, strings.Split(keys, ",")...)
+	require.GreaterOrEqual(t, len(pks), 1, "SETH_KEYS env var should contain at least 1 key")
+
+	addedCount := cfg.AddPksToNetwork(pks, "Geth")
+	require.GreaterOrEqual(t, 1, addedCount, "at least 1 network should be updated")
+
+	c, err := seth.NewClientWithConfig(cfg)
+	require.NoError(t, err)
+
 	t.Cleanup(func() {
 		err := seth.ReturnFunds(c, c.Addresses[0].Hex())
 		require.NoError(t, err)

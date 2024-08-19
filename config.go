@@ -224,6 +224,7 @@ const (
 	Experiment_Eip1559FeeEqualier = "eip_1559_fee_equalizer"
 )
 
+// IsExperimentEnabled returns true if the experiment is enabled
 func (c *Config) IsExperimentEnabled(experiment string) bool {
 	for _, e := range c.ExperimentsEnabled {
 		if e == experiment {
@@ -231,6 +232,28 @@ func (c *Config) IsExperimentEnabled(experiment string) bool {
 		}
 	}
 	return false
+}
+
+// AddPksToNetwork adds private keys to the network with the specified name and returns number of networks updated.
+// Be mindful, that if the network is both the selected network and in the list of networks, it will be updated twice (and 2 will be returned).
+// If it's only in the list of networks, it will be updated once (1 will be returned). Conversely, if it's only the selected network, it will be updated once (1 will be returned).
+func (c *Config) AddPksToNetwork(pks []string, name string) int {
+	addedCount := 0
+
+	if c.Network != nil && strings.EqualFold(c.Network.Name, name) {
+		c.Network.PrivateKeys = pks
+		addedCount++
+	}
+
+	for _, n := range c.Networks {
+		if strings.EqualFold(n.Name, name) {
+			addedCount++
+			n.PrivateKeys = pks
+			break
+		}
+	}
+
+	return addedCount
 }
 
 // GetMaxConcurrency returns the maximum number of concurrent transactions. Root key is excluded from the count.

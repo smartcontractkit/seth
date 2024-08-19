@@ -35,7 +35,7 @@ type FundingDetails struct {
 	NetworkTransferFee int64
 }
 
-// NewEphemeralKeys creates a new ephemeral keyfile, can be used for simulated networks
+// NewEphemeralKeys creates desired number of ephemeral keys, should be used only with ephemeral networks. Remember that they are not persisted anywhere, so you shouldn't use that option with live networks.
 func NewEphemeralKeys(addrs int64) ([]string, error) {
 	privKeys := make([]string, 0)
 	for i := 0; i < int(addrs); i++ {

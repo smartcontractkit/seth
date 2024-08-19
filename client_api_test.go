@@ -19,7 +19,10 @@ func TestAPI(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
-		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		err := c.NonceManager.UpdateNonces()
+		require.NoError(t, err, "failed to update nonces")
+		err = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		require.NoError(t, err, "failed to return funds")
 	})
 
 	type test struct {
@@ -101,7 +104,10 @@ func TestAPINonces(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
-		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		err := c.NonceManager.UpdateNonces()
+		require.NoError(t, err, "failed to update nonces")
+		err = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		require.NoError(t, err, "failed to return funds")
 	})
 
 	type test struct {
@@ -141,7 +147,10 @@ func TestAPISeqErrors(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
-		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		err := c.NonceManager.UpdateNonces()
+		require.NoError(t, err, "failed to update nonces")
+		err = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		require.NoError(t, err, "failed to return funds")
 	})
 
 	type test struct {
@@ -177,10 +186,6 @@ func TestAPIConfig(t *testing.T) {
 		name string
 	}
 
-	t.Cleanup(func() {
-		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
-	})
-
 	tests := []test{
 		{
 			name: "can run without ABI",
@@ -209,7 +214,10 @@ func TestAPIKeys(t *testing.T) {
 	c := test_utils.NewClientWithAddresses(t, keyCount)
 
 	t.Cleanup(func() {
-		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		err := c.NonceManager.UpdateNonces()
+		require.NoError(t, err, "failed to update nonces")
+		err = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		require.NoError(t, err, "failed to return funds")
 	})
 
 	tests := []test{
@@ -272,10 +280,13 @@ func TestAPISyncKeysPool(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(seth.LogLevelEnvVar, "trace")
-			c := newClientWithEphemeralAddresses(t)
+			c := test_utils.NewClientWithAddresses(t, tc.keys)
 
 			t.Cleanup(func() {
-				_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+				err := c.NonceManager.UpdateNonces()
+				require.NoError(t, err, "failed to update nonces")
+				err = seth.ReturnFunds(c, c.Addresses[0].Hex())
+				require.NoError(t, err, "failed to return funds")
 			})
 
 			if tc.shouldFail {
@@ -319,7 +330,10 @@ func TestManualAPIReconnect(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
-		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		err := c.NonceManager.UpdateNonces()
+		require.NoError(t, err, "failed to update nonces")
+		err = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		require.NoError(t, err, "failed to return funds")
 	})
 
 	type test struct {

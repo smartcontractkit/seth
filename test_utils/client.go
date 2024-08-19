@@ -54,9 +54,10 @@ func NewClientWithAddresses(t *testing.T, addressCount int) *seth.Client {
 	require.NoError(t, err, "failed to transfer funds to subkeys")
 
 	// Add root private key to the list of private keys
-	privateKeys = append(privateKeys, cfg.Network.PrivateKeys[0])
+	pksToUse := []string{cfg.Network.PrivateKeys[0]}
+	pksToUse = append(pksToUse, privateKeys...)
 	// Set funded private keys in config and create a new Seth client to simulate a situation, in which PKs were passed in config to a new client
-	cfg.Network.PrivateKeys = privateKeys
+	cfg.Network.PrivateKeys = pksToUse
 
 	newClient, err := seth.NewClientWithConfig(cfg)
 	require.NoError(t, err, "failed to initialize new Seth with private keys")

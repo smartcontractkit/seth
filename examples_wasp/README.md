@@ -1,7 +1,7 @@
 ## Running multi-key load test with Seth and WASP
 To effectively simulate transaction workloads from multiple keys, you can utilize a "rotating wallet." Refer to the [example](client_wasp_test.go) code provided for guidance.
 
-There are 2 modes: Ephemeral and a static keyfile mode
+There are 2 modes: Ephemeral and a static private keys mode.
 
 ### Ephemeral mode
 We generate 60 ephemeral keys and run the test, set `ephemeral_addresses_number` in `seth.toml`
@@ -44,4 +44,45 @@ key_sync_timeout = "30s"
 key_sync_retry_delay = "1s"
 # total number of retries until we throw an error
 key_sync_retries = 30
+```
+
+### Static private keys mode
+In that mode you should pass static keys that you already have as part of `Network` configuration. It's strongly recommended to do that programmatically, not via config file, since accidentally committing private keys to the repository will compromise the funds.
+It would be better to read the TOML configuration first:
+```go
+cfg, err := seth.ReadCfg()
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+Then read the private keys in a safe manner. For example from a secure vault or environment variables:
+```go
+var privateKeys []string
+var err error
+privateKeys, err = some_utils.ReadPrivateKeysFromEnv()
+if err != nil {
+log.Fatal(err)
+}
+```
+and then add them to the `Network` you plan to use. Let's assume it's called `Sepolia`:
+```go
+for i, network := range cfg.Networks {
+    if network.Name == "Sepolia" {
+        cfg.Networks[i].PrivateKeys = privateKeys
+    }
+}
+```
+
+Or if you aren't using `[[Networks]]` in your TOML config and have just a single `Network`:
+```go
+cfg.Network.PrivateKeys = privateKeys
+```
+
+Finally, proceed to create a new Seth instance:
+```go
+seth, err := seth.NewClientWithConfig(cfg)
+if err != nil {
+    log.Fatal(err)
+}
 ```
