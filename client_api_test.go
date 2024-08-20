@@ -3,8 +3,6 @@ package seth_test
 import (
 	"context"
 	"math/big"
-	"os"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -12,16 +10,19 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"github.com/smartcontractkit/seth"
-	sethcmd "github.com/smartcontractkit/seth/cmd"
 	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/seth/test_utils"
 )
 
 func TestAPI(t *testing.T) {
-	_ = os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
-		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		err := c.NonceManager.UpdateNonces()
+		require.NoError(t, err, "failed to update nonces")
+		err = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		require.NoError(t, err, "failed to return funds")
 	})
 
 	type test struct {
@@ -100,11 +101,13 @@ func TestAPI(t *testing.T) {
 }
 
 func TestAPINonces(t *testing.T) {
-	_ = os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
-		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		err := c.NonceManager.UpdateNonces()
+		require.NoError(t, err, "failed to update nonces")
+		err = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		require.NoError(t, err, "failed to return funds")
 	})
 
 	type test struct {
@@ -144,7 +147,10 @@ func TestAPISeqErrors(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
-		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		err := c.NonceManager.UpdateNonces()
+		require.NoError(t, err, "failed to update nonces")
+		err = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		require.NoError(t, err, "failed to return funds")
 	})
 
 	type test struct {
@@ -204,18 +210,15 @@ func TestAPIKeys(t *testing.T) {
 		name string
 	}
 
-	keyFilePath := "keyfile_test_api.toml"
-	_ = os.Remove(keyFilePath)
-	_ = os.Setenv(seth.KEYFILE_PATH_ENV_VAR, keyFilePath)
+	keyCount := 60
+	c := test_utils.NewClientWithAddresses(t, keyCount)
 
-	err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "fund", "-a", "60", "--local"})
-	require.NoError(t, err)
 	t.Cleanup(func() {
-		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "return", "--local"})
-		require.NoError(t, err)
-		_ = os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
+		err := c.NonceManager.UpdateNonces()
+		require.NoError(t, err, "failed to update nonces")
+		err = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		require.NoError(t, err, "failed to return funds")
 	})
-	c := newClientWithKeyfile(t, keyFilePath)
 
 	tests := []test{
 		{
@@ -254,7 +257,6 @@ func TestAPISyncKeysPool(t *testing.T) {
 		keys       int
 		batchGroup int
 		runs       int
-		ephemeral  bool
 		shouldFail bool
 	}
 
@@ -273,43 +275,19 @@ func TestAPISyncKeysPool(t *testing.T) {
 			batchGroup: 15,
 			runs:       10,
 		},
-		{
-			name:       "should work without keyfile in ephemeral mode too",
-			counterIdx: 2,
-			keys:       60,
-			batchGroup: 15,
-			runs:       10,
-			ephemeral:  true,
-		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			keyfilePath := "keyfile_test_api.toml"
-			_ = os.Remove(keyfilePath)
 			t.Setenv(seth.LogLevelEnvVar, "trace")
-			if !tc.ephemeral {
-				t.Setenv(seth.KEYFILE_PATH_ENV_VAR, keyfilePath)
-				err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "fund", "-a", strconv.Itoa(tc.keys), "--local"})
-				require.NoError(t, err)
-				t.Cleanup(func() {
-					err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "return", "--local"})
-					require.NoError(t, err)
-					_ = os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
-				})
-			}
+			c := test_utils.NewClientWithAddresses(t, tc.keys)
 
-			var c *seth.Client
-			if tc.ephemeral {
-				_ = os.Unsetenv(seth.KEYFILE_PATH_ENV_VAR)
-				c = newClientWithEphemeralAddresses(t)
-
-				t.Cleanup(func() {
-					_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
-				})
-			} else {
-				c = newClientWithKeyfile(t, keyfilePath)
-			}
+			t.Cleanup(func() {
+				err := c.NonceManager.UpdateNonces()
+				require.NoError(t, err, "failed to update nonces")
+				err = seth.ReturnFunds(c, c.Addresses[0].Hex())
+				require.NoError(t, err, "failed to return funds")
+			})
 
 			if tc.shouldFail {
 				c.NonceManager.SyncedKeys = make(chan *seth.KeyNonce)
@@ -352,7 +330,10 @@ func TestManualAPIReconnect(t *testing.T) {
 	c := newClientWithEphemeralAddresses(t)
 
 	t.Cleanup(func() {
-		_ = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		err := c.NonceManager.UpdateNonces()
+		require.NoError(t, err, "failed to update nonces")
+		err = seth.ReturnFunds(c, c.Addresses[0].Hex())
+		require.NoError(t, err, "failed to return funds")
 	})
 
 	type test struct {

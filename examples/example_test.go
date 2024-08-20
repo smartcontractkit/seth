@@ -1,16 +1,18 @@
 package seth_test
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/seth"
-	sethcmd "github.com/smartcontractkit/seth/cmd"
 	network_debug_contract "github.com/smartcontractkit/seth/contracts/bind/debug"
+	"github.com/smartcontractkit/seth/test_utils"
 )
 
 func commonEnvVars(t *testing.T) {
@@ -44,13 +46,6 @@ func setup(t *testing.T) *network_debug_contract.NetworkDebugContract {
 	return deployDebugContracts(t)
 }
 
-func commonMultiKeySetup(t *testing.T) {
-	_ = os.Remove("keyfile_test_example.toml")
-	t.Setenv(seth.KEYFILE_PATH_ENV_VAR, "keyfile_test_example.toml")
-	err := sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "fund", "-a", "2", "--local"})
-	require.NoError(t, err)
-}
-
 func TestSmokeExampleWait(t *testing.T) {
 	contract := setup(t)
 	c, err := seth.NewClient()
@@ -74,14 +69,86 @@ func TestSmokeExampleWait(t *testing.T) {
 }
 
 func TestSmokeExampleMultiKey(t *testing.T) {
-	// example of using a static keyfile with multiple keys
-	// see commonMultiKeySetup for env vars
+	// example of using client with multiple keys that are provided in the config
+	// in this example we just generate and fund them inside NewClientWithAddresses() function
+	// to simulate a case, when they were provided as part of the network config, instead of being
+	// generated as ephemeral keys by Seth
 	contract := setup(t)
-	commonMultiKeySetup(t)
-	c, err := seth.NewClient()
-	require.NoError(t, err)
+	c := test_utils.NewClientWithAddresses(t, 10)
 	t.Cleanup(func() {
-		err = sethcmd.RunCLI([]string{"seth", "-n", os.Getenv(seth.NETWORK_ENV_VAR), "keys", "return", "--local"})
+		err := seth.ReturnFunds(c, c.Addresses[0].Hex())
+		require.NoError(t, err)
+	})
+
+	// you can use multiple keys to really execute transactions in parallel
+	tx1, err1 := c.Decode(contract.Set(
+		c.NewTXKeyOpts(1),
+		big.NewInt(1),
+	))
+	require.NoError(t, err1)
+	tx2, err2 := c.Decode(contract.Set(
+		c.NewTXKeyOpts(2),
+		big.NewInt(1),
+	))
+	require.NoError(t, err2)
+	// original data
+	_ = tx1.Transaction
+	_ = tx1.Receipt
+	// decoded data
+	_ = tx1.Input
+	_ = tx1.Output
+	_ = tx1.Events
+	// original data
+	_ = tx2.Transaction
+	_ = tx2.Receipt
+	// decoded data
+	_ = tx2.Input
+	_ = tx2.Output
+	_ = tx2.Events
+	res, err := contract.Get(c.NewCallOpts())
+	require.NoError(t, err)
+	fmt.Printf("Result: %d", res.Int64())
+}
+
+func TestSmokeExampleMultiKeyFromEnv(t *testing.T) {
+	// example of creating client with multiple keys that are read from environment variable called `SETH_KEYS`
+	// we assume here that you will be using `Geth` network
+	contract := setup(t)
+	cfg, err := seth.ReadConfig()
+	require.NoError(t, err)
+
+	_, pk1, err := seth.NewAddress()
+	require.NoError(t, err, "failed to generate new address")
+
+	_, pk2, err := seth.NewAddress()
+	require.NoError(t, err, "failed to generate new address")
+
+	err = os.Setenv("SETH_KEYS", pk1+","+pk2)
+	require.NoError(t, err, "failed to set env var")
+
+	keys := os.Getenv("SETH_KEYS")
+	require.NotEmpty(t, keys, "SETH_KEYS env var is empty")
+	var pks []string
+	pks = append(pks, strings.Split(keys, ",")...)
+	require.GreaterOrEqual(t, len(pks), 1, "SETH_KEYS env var should contain at least 1 key")
+
+	updated := cfg.AppendPksToNetwork(pks, "Geth")
+	require.True(t, updated, "network should have been updated")
+
+	c, err := seth.NewClientWithConfig(cfg)
+	require.NoError(t, err)
+
+	// required as our keys have no funds
+	err = c.TransferETHFromKey(context.Background(), 0, c.Addresses[1].Hex(), big.NewInt(10_000_000_000_000_000), big.NewInt(100_000_000))
+	require.NoError(t, err, "failed to transfer funds to pk1")
+
+	err = c.TransferETHFromKey(context.Background(), 0, c.Addresses[2].Hex(), big.NewInt(10_000_000_000_000_000), big.NewInt(100_000_000))
+	require.NoError(t, err, "failed to transfer funds to pk2")
+
+	t.Cleanup(func() {
+		err = c.NonceManager.UpdateNonces()
+		require.NoError(t, err)
+		err = seth.ReturnFunds(c, c.Addresses[0].Hex())
 		require.NoError(t, err)
 	})
 
@@ -117,8 +184,7 @@ func TestSmokeExampleMultiKey(t *testing.T) {
 
 func TestSmokeExampleMultiKeyEphemeral(t *testing.T) {
 	// example of using ephemeral keys
-	// suitable for testing simulated networks where network is created every time
-	// ephemeral mode is used if SETH_KEYFILE_PATH is empty
+	// suitable for testing ephemeral networks where network is created every time
 	contract := setup(t)
 	c, err := seth.NewClient()
 	require.NoError(t, err)

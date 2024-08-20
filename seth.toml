@@ -3,14 +3,6 @@ abi_dir = "contracts/abi"
 # contract bytecodes are optional, but necessary if we want to deploy them via Contract Store
 bin_dir = "contracts/bin"
 
-# If empty Seth will not try to load any keyfiles. You can either set it to 'file' to load keyfiles from
-# a file (providing path to it in 'keyfile_path') or to 'base64_env' to load it from Base64-ed environment variable
-# 'SETH_KEYFILE_BASE64'
-keyfile_source = ""
-
-# If keyfile_source is set to 'file' this should be a path to a file with keyfiles
-keyfile_path = "keyfile.toml"
-
 # Uncomment if you want to load (address -> ABI_name) mapping from a file
 # It will also save any new contract deployment (address -> ABI_name) mapping there.
 # This functionality is not used for simulated networks.

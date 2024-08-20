@@ -17,36 +17,14 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
 	network_debug_contract "github.com/smartcontractkit/seth/contracts/bind/debug"
 	network_sub_debug_contract "github.com/smartcontractkit/seth/contracts/bind/sub"
 )
 
 const (
-	ErrEmptyKeyFile               = "keyfile is empty"
 	ErrInsufficientRootKeyBalance = "insufficient root key balance: %s"
 )
-
-// KeyFile is a struct that holds all test keys data
-type KeyFile struct {
-	Keys []*KeyData `toml:"keys"`
-}
-
-// KeyData data for test keys
-type KeyData struct {
-	PrivateKey string `toml:"private_key"`
-	Address    string `toml:"address"`
-	Funds      string `toml:"funds"`
-}
-
-// FundKeyFileCmdOpts funding params for CLI
-type FundKeyFileCmdOpts struct {
-	Addrs         int64
-	RootKeyBuffer int64
-	LocalKeyfile  bool
-	VaultId       string
-}
 
 // FundingDetails funding details about shares we put into test keys
 type FundingDetails struct {
@@ -57,7 +35,7 @@ type FundingDetails struct {
 	NetworkTransferFee int64
 }
 
-// NewEphemeralKeys creates a new ephemeral keyfile, can be used for simulated networks
+// NewEphemeralKeys creates desired number of ephemeral keys, should be used only with ephemeral networks. Remember that they are not persisted anywhere, so you shouldn't use that option with live networks.
 func NewEphemeralKeys(addrs int64) ([]string, error) {
 	privKeys := make([]string, 0)
 	for i := 0; i < int(addrs); i++ {
@@ -134,80 +112,6 @@ func (m *Client) CalculateSubKeyFunding(addrs, gasPrice, rooKeyBuffer int64) (*F
 	return bd, nil
 }
 
-type KeyfileStatus = bool
-
-const (
-	NewKeyfile      KeyfileStatus = true
-	ExistingKeyfile KeyfileStatus = false
-)
-
-func (m *Client) CreateOrUnmarshalKeyFile(opts *FundKeyFileCmdOpts) (*KeyFile, KeyfileStatus, error) {
-	if opts.LocalKeyfile {
-		if _, err := os.Stat(m.Cfg.KeyFilePath); os.IsNotExist(err) {
-			L.Info().
-				Str("Path", m.Cfg.KeyFilePath).
-				Interface("Opts", opts).
-				Msg("Creating a new key file")
-			if _, err := os.Create(m.Cfg.KeyFilePath); err != nil {
-				return nil, NewKeyfile, err
-			}
-
-			kf := NewKeyFile()
-			for i := 0; i < int(opts.Addrs); i++ {
-				addr, pKey, err := NewAddress()
-				if err != nil {
-					return nil, false, err
-				}
-				kf.Keys = append(kf.Keys, &KeyData{PrivateKey: pKey, Address: addr})
-			}
-			return kf, NewKeyfile, nil
-		} else {
-			L.Info().
-				Str("Path", m.Cfg.KeyFilePath).
-				Interface("Opts", opts).
-				Msg("Loading keyfile. Ignoring addresses-related opts")
-			var kf *KeyFile
-
-			d, err := os.ReadFile(m.Cfg.KeyFilePath)
-			if err != nil {
-				return nil, false, err
-			}
-			if err := toml.Unmarshal(d, &kf); err != nil {
-				return nil, false, err
-			}
-
-			if kf == nil || len(kf.Keys) == 0 {
-				return nil, false, errors.New(ErrEmptyKeyFile)
-			}
-			return kf, ExistingKeyfile, nil
-		}
-	} else {
-		existsIn1Pass, err := ExistsIn1Pass(m, opts.VaultId)
-		if err != nil {
-			L.Error().Err(err).Msg("error trying to check if keyfile exists in 1Password")
-			return nil, false, err
-		}
-
-		if existsIn1Pass {
-			keyfile, err := LoadFrom1Pass(m, opts.VaultId)
-			if err != nil {
-				return &KeyFile{}, false, err
-			}
-			return &keyfile, ExistingKeyfile, nil
-		}
-
-		kf := NewKeyFile()
-		for i := 0; i < int(opts.Addrs); i++ {
-			addr, pKey, err := NewAddress()
-			if err != nil {
-				return nil, false, err
-			}
-			kf.Keys = append(kf.Keys, &KeyData{PrivateKey: pKey, Address: addr})
-		}
-		return kf, NewKeyfile, nil
-	}
-}
-
 func (m *Client) DeployDebugSubContract() (*network_sub_debug_contract.NetworkDebugSubContract, common.Address, error) {
 	address, tx, instance, err := network_sub_debug_contract.DeployNetworkDebugSubContract(m.NewTXOpts(), m.Client)
 	if err != nil {
@@ -244,10 +148,6 @@ func (m *Client) DeployDebugContract(subDbgAddr common.Address) (*network_debug_
 		Str("TXHash", tx.Hash().Hex()).
 		Msg("Debug contract deployed")
 	return instance, address, nil
-}
-
-func NewKeyFile() *KeyFile {
-	return &KeyFile{Keys: make([]*KeyData, 0)}
 }
 
 // Duration is a non-negative time duration.

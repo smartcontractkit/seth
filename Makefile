@@ -50,11 +50,7 @@ test_cli:
 
 .PHONY: test_others
 test_others:
-	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 -race `go list ./... | grep -v examples` -run "TestContractMap|TestGasEstimator|TestRPCHealtCheck|TestUtil|TestContract"
-
-.PHONY: test_op
-test_op:
-	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) OP_SERVICE_ACCOUNT_TOKEN=$(op_service_account_token) SETH_ONE_PASS_VAULT=$(seth_op_vault) go test -v -count 1 -race `go list ./... | grep -v examples` -run "TestOnePass"
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 -race `go list ./... | grep -v examples` -run "TestContractMap|TestGasEstimator|TestRPCHealtCheck|TestUtil|TestContract|TestConfig"
 
 .PHONY: test+cover
 test_cover:

@@ -26,7 +26,6 @@ import (
 
 func init() {
 	_ = os.Setenv("SETH_CONFIG_PATH", "seth.toml")
-	_ = os.Setenv(seth.KEYFILE_PATH_ENV_VAR, "keyfile_test.toml")
 }
 
 var (
@@ -57,19 +56,6 @@ func newClientWithEphemeralAddresses(t *testing.T) *seth.Client {
 
 	var sixty int64 = 60
 	cfg.EphemeralAddrs = &sixty
-
-	c, err := seth.NewClientWithConfig(cfg)
-	require.NoError(t, err, "failed to initialize seth")
-
-	return c
-}
-
-func newClientWithKeyfile(t *testing.T, keyFilePath string) *seth.Client {
-	cfg, err := seth.ReadConfig()
-	require.NoError(t, err, "failed to read config")
-
-	cfg.KeyFileSource = seth.KeyFileSourceFile
-	cfg.KeyFilePath = keyFilePath
 
 	c, err := seth.NewClientWithConfig(cfg)
 	require.NoError(t, err, "failed to initialize seth")
@@ -184,45 +170,48 @@ func NewDebugContractSetup() (
 }
 
 func TestMain(m *testing.M) {
-	var err error
-	client, debugContract, debugContractAddress, debugSubContractAddress, debugContractRaw, err := NewDebugContractSetup()
-	if err != nil {
-		panic(err)
+	if skip := os.Getenv("SKIP_MAIN_CONFIG"); skip == "" {
+		var err error
+		client, debugContract, debugContractAddress, debugSubContractAddress, debugContractRaw, err := NewDebugContractSetup()
+		if err != nil {
+			panic(err)
+		}
+
+		linkTokenAbi, err := link_token.LinkTokenMetaData.GetAbi()
+		if err != nil {
+			panic(err)
+		}
+		linkDeploymentData, err := client.DeployContract(client.NewTXOpts(), "LinkToken", *linkTokenAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
+		if err != nil {
+			panic(err)
+		}
+		linkToken, err := link_token.NewLinkToken(linkDeploymentData.Address, client.Client)
+		if err != nil {
+			panic(err)
+		}
+		linkAbi, err := link_token.LinkTokenMetaData.GetAbi()
+		if err != nil {
+			panic(err)
+		}
+		client.ContractStore.AddABI("LinkToken", *linkAbi)
+
+		contractMap := seth.NewEmptyContractMap()
+		for k, v := range client.ContractAddressToNameMap.GetContractMap() {
+			contractMap.AddContract(k, v)
+		}
+
+		TestEnv = TestEnvironment{
+			Client:                  client,
+			DebugContract:           debugContract,
+			LinkTokenContract:       linkToken,
+			DebugContractAddress:    debugContractAddress,
+			DebugSubContractAddress: debugSubContractAddress,
+			DebugContractRaw:        debugContractRaw,
+			ContractMap:             contractMap,
+		}
+	} else {
+		seth.L.Warn().Msg("Skipping main suite setup")
 	}
 
-	linkTokenAbi, err := link_token.LinkTokenMetaData.GetAbi()
-	if err != nil {
-		panic(err)
-	}
-	linkDeploymentData, err := client.DeployContract(client.NewTXOpts(), "LinkToken", *linkTokenAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
-	if err != nil {
-		panic(err)
-	}
-	linkToken, err := link_token.NewLinkToken(linkDeploymentData.Address, client.Client)
-	if err != nil {
-		panic(err)
-	}
-	linkAbi, err := link_token.LinkTokenMetaData.GetAbi()
-	if err != nil {
-		panic(err)
-	}
-	client.ContractStore.AddABI("LinkToken", *linkAbi)
-
-	contractMap := seth.NewEmptyContractMap()
-	for k, v := range client.ContractAddressToNameMap.GetContractMap() {
-		contractMap.AddContract(k, v)
-	}
-
-	TestEnv = TestEnvironment{
-		Client:                  client,
-		DebugContract:           debugContract,
-		LinkTokenContract:       linkToken,
-		DebugContractAddress:    debugContractAddress,
-		DebugSubContractAddress: debugSubContractAddress,
-		DebugContractRaw:        debugContractRaw,
-		ContractMap:             contractMap,
-	}
-
-	exitVal := m.Run()
-	os.Exit(exitVal)
+	os.Exit(m.Run())
 }

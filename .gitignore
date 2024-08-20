@@ -50,8 +50,6 @@ test.sh
 
 # Geth data
 geth_data/geth/**
-# KeyFile data
-keyfile*.toml
 
 /traces
 reverted_transactions*.json
