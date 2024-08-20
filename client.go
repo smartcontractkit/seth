@@ -609,8 +609,7 @@ func (m *Client) WaitMined(ctx context.Context, l zerolog.Logger, b bind.DeployB
 				Str("TX", tx.Hash().String()).
 				Msg("Transaction receipt found")
 			return receipt, nil
-		}
-		if errors.Is(err, ethereum.NotFound) {
+		} else if errors.Is(err, ethereum.NotFound) {
 			l.Debug().
 				Str("TX", tx.Hash().String()).
 				Msg("Awaiting transaction")
