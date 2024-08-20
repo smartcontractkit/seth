@@ -512,10 +512,10 @@ Or if you aren't using `[[Networks]]` in your TOML config and have just a single
 cfg.Network.PrivateKeys = privateKeys
 ```
 
-Or... you can use the convenience function `AddPksToNetwork()` to have them added to both the `Network` and `Networks` slice:
+Or... you can use the convenience function `AppendPksToNetwork()` to have them added to both the `Network` and `Networks` slice:
 ```go
-updatedCount := cfg.AddPksToNetwork(privateKeys, "Sepolia")
-if updatedCount == 0 {
+added := cfg.AppendPksToNetwork(privateKeys, "Sepolia")
+if !added {
     log.Fatal("Network Sepolia not found in the config")
 }
 ```

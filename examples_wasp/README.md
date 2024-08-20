@@ -79,6 +79,14 @@ Or if you aren't using `[[Networks]]` in your TOML config and have just a single
 cfg.Network.PrivateKeys = privateKeys
 ```
 
+Or... you can use the convenience function `AppendPksToNetwork()` to have them added to both the `Network` and `Networks` slice:
+```go
+added := cfg.AppendPksToNetwork(privateKeys, "Sepolia")
+if !added {
+    log.Fatal("Network Sepolia not found in the config")
+}
+```
+
 Finally, proceed to create a new Seth instance:
 ```go
 seth, err := seth.NewClientWithConfig(cfg)

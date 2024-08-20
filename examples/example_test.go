@@ -1,6 +1,7 @@
 package seth_test
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"os"
@@ -110,11 +111,20 @@ func TestSmokeExampleMultiKey(t *testing.T) {
 }
 
 func TestSmokeExampleMultiKeyFromEnv(t *testing.T) {
-	// example of creating client with multiple keys that are read from environment variable called `SETH_KEYS` (you need to set it yourself)
+	// example of creating client with multiple keys that are read from environment variable called `SETH_KEYS`
 	// we assume here that you will be using `Geth` network
 	contract := setup(t)
 	cfg, err := seth.ReadConfig()
 	require.NoError(t, err)
+
+	_, pk1, err := seth.NewAddress()
+	require.NoError(t, err, "failed to generate new address")
+
+	_, pk2, err := seth.NewAddress()
+	require.NoError(t, err, "failed to generate new address")
+
+	err = os.Setenv("SETH_KEYS", pk1+","+pk2)
+	require.NoError(t, err, "failed to set env var")
 
 	keys := os.Getenv("SETH_KEYS")
 	require.NotEmpty(t, keys, "SETH_KEYS env var is empty")
@@ -122,14 +132,23 @@ func TestSmokeExampleMultiKeyFromEnv(t *testing.T) {
 	pks = append(pks, strings.Split(keys, ",")...)
 	require.GreaterOrEqual(t, len(pks), 1, "SETH_KEYS env var should contain at least 1 key")
 
-	addedCount := cfg.AddPksToNetwork(pks, "Geth")
-	require.GreaterOrEqual(t, 1, addedCount, "at least 1 network should be updated")
+	updated := cfg.AppendPksToNetwork(pks, "Geth")
+	require.True(t, updated, "network should have been updated")
 
 	c, err := seth.NewClientWithConfig(cfg)
 	require.NoError(t, err)
 
+	// required as our keys have no funds
+	err = c.TransferETHFromKey(context.Background(), 0, c.Addresses[1].Hex(), big.NewInt(10_000_000_000_000_000), big.NewInt(100_000_000))
+	require.NoError(t, err, "failed to transfer funds to pk1")
+
+	err = c.TransferETHFromKey(context.Background(), 0, c.Addresses[2].Hex(), big.NewInt(10_000_000_000_000_000), big.NewInt(100_000_000))
+	require.NoError(t, err, "failed to transfer funds to pk2")
+
 	t.Cleanup(func() {
-		err := seth.ReturnFunds(c, c.Addresses[0].Hex())
+		err = c.NonceManager.UpdateNonces()
+		require.NoError(t, err)
+		err = seth.ReturnFunds(c, c.Addresses[0].Hex())
 		require.NoError(t, err)
 	})
 
