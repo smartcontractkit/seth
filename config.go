@@ -66,6 +66,7 @@ type Config struct {
 	ExperimentsEnabled            []string          `toml:"experiments_enabled"`
 	CheckRpcHealthOnStart         bool              `toml:"check_rpc_health_on_start"`
 	BlockStatsConfig              *BlockStatsConfig `toml:"block_stats"`
+	GasBumpRetries                uint              `toml:"gas_bump_retries"`
 }
 
 type NonceManagerCfg struct {

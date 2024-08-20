@@ -154,6 +154,14 @@ func (c *ConfigBuilder) WithTransferGasFee(gasFee int64) *ConfigBuilder {
 	return c
 }
 
+// WithGasBumpRetries sets the number of retries for gas bumping. If the transaction is not mined within this number of retries, it will be considered failed.
+// How aggressive the bumping is depends on gas_price_estimation_tx_priority value.
+// Default value is 0 retries (disabled).
+func (c *ConfigBuilder) WithGasBumpRetries(retries uint) *ConfigBuilder {
+	c.config.GasBumpRetries = retries
+	return c
+}
+
 // WithTransactionTimeout sets the timeout for transactions. If the transaction is not mined within this time, it will be considered failed.
 // Default value is 5 minutes.
 func (c *ConfigBuilder) WithTransactionTimeout(timeout time.Duration) *ConfigBuilder {

@@ -47,6 +47,12 @@ experiments_enabled = ["slow_funds_return", "eip_1559_fee_equalizer"]
 # to make sure transaction can be submited and mined
 check_rpc_health_on_start = false
 
+# when enabled we will bump gas price for transactions that are stuck in the mempool
+# how much we will bump it is controlled by gas_price_estimation_tx_priority (check readme.md for more details)
+# we will bump it until the transaction is mined or until we reach gas_bump_retries
+# we bump both contract deployment transactions and any other transaction as long as it's passed to Decode() function
+gas_bump_retries = 0
+
 [nonce_manager]
 key_sync_rate_limit_per_sec = 10
 key_sync_timeout = "20s"

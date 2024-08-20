@@ -27,14 +27,15 @@ import (
 )
 
 const (
-	ErrEmptyConfigPath      = "toml config path is empty, set SETH_CONFIG_PATH"
-	ErrCreateABIStore       = "failed to create ABI store"
-	ErrReadingKeys          = "failed to read keys"
-	ErrCreateNonceManager   = "failed to create nonce manager"
-	ErrCreateTracer         = "failed to create tracer"
-	ErrReadContractMap      = "failed to read deployed contract map"
-	ErrNoKeyLoaded          = "failed to load private key"
-	ErrRpcHealthCheckFailed = "RPC health check failed ¯\\_(ツ)_/¯"
+	ErrEmptyConfigPath          = "toml config path is empty, set SETH_CONFIG_PATH"
+	ErrCreateABIStore           = "failed to create ABI store"
+	ErrReadingKeys              = "failed to read keys"
+	ErrCreateNonceManager       = "failed to create nonce manager"
+	ErrCreateTracer             = "failed to create tracer"
+	ErrReadContractMap          = "failed to read deployed contract map"
+	ErrNoKeyLoaded              = "failed to load private key"
+	ErrRpcHealthCheckFailed     = "RPC health check failed ¯\\_(ツ)_/¯"
+	ErrContractDeploymentFailed = "contract deployment failed"
 
 	ContractMapFilePattern          = "deployed_contracts_%s_%s.toml"
 	RevertedTransactionsFilePattern = "reverted_transactions_%s_%s.json"
@@ -70,6 +71,7 @@ type Client struct {
 	ContractAddressToNameMap ContractMap
 	ABIFinder                *ABIFinder
 	HeaderCache              *LFUHeaderCache
+	GasBumpStrategyFn        GasBumpStrategyFn
 }
 
 // NewClientWithConfig creates a new seth client with all deps setup from config
@@ -388,7 +390,51 @@ func NewClientRaw(
 		}
 	}
 
+	if c.Cfg.GasBumpRetries != 0 {
+		c.GasBumpStrategyFn = getGasBumpStrategyFn(c.Cfg.Network.GasPriceEstimationTxPriority)
+	} else {
+		c.GasBumpStrategyFn = NoOpGasBumpStrategyFn
+	}
+
 	return c, nil
+}
+
+func getGasBumpStrategyFn(priority string) GasBumpStrategyFn {
+	switch priority {
+	case Priority_Degen:
+		// +100%
+		return func(gasPrice *big.Int) *big.Int {
+			return gasPrice.Mul(gasPrice, big.NewInt(2))
+		}
+	case Priority_Fast:
+		// +30%
+		return func(gasPrice *big.Int) *big.Int {
+			gasPriceFloat, _ := gasPrice.Float64()
+			newGasPriceFloat := big.NewFloat(0.0).Mul(big.NewFloat(gasPriceFloat), big.NewFloat(1.5))
+			newGasPrice, _ := newGasPriceFloat.Int64()
+			return big.NewInt(newGasPrice)
+		}
+	case Priority_Standard:
+		// 15%
+		return func(gasPrice *big.Int) *big.Int {
+			gasPriceFloat, _ := gasPrice.Float64()
+			newGasPriceFloat := big.NewFloat(0.0).Mul(big.NewFloat(gasPriceFloat), big.NewFloat(1.15))
+			newGasPrice, _ := newGasPriceFloat.Int64()
+			return big.NewInt(newGasPrice)
+		}
+	case Priority_Slow:
+		// 5%
+		return func(gasPrice *big.Int) *big.Int {
+			gasPriceFloat, _ := gasPrice.Float64()
+			newGasPriceFloat := big.NewFloat(0.0).Mul(big.NewFloat(gasPriceFloat), big.NewFloat(1.05))
+			newGasPrice, _ := newGasPriceFloat.Int64()
+			return big.NewInt(newGasPrice)
+		}
+	default:
+		return func(gasPrice *big.Int) *big.Int {
+			return gasPrice
+		}
+	}
 }
 
 func (m *Client) checkRPCHealth() error {
@@ -419,6 +465,8 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 	if len(m.Errors) > 0 {
 		return nil, verr.Join(m.Errors...)
 	}
+
+	// do not try to decode ABI error if contract deployment failed, because the error is not related to ABI
 	if txErr != nil {
 		//try to decode revert reason
 		reason, decodingErr := m.DecodeCustomABIErr(txErr)
@@ -439,7 +487,32 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 	}
 
 	l := L.With().Str("Transaction", tx.Hash().Hex()).Logger()
-	receipt, err := m.WaitMined(context.Background(), l, m.Client, tx)
+
+	var receipt *types.Receipt
+	err := retry.Do(
+		func() error {
+			var err error
+			ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
+			receipt, err = m.WaitMined(ctx, l, m.Client, tx)
+			cancel()
+
+			return err
+		}, retry.OnRetry(func(i uint, retryErr error) {
+			var bumpErr error
+			tx, bumpErr = bumpGasOnTimeout(m, tx)
+			if bumpErr != nil {
+				L.Debug().Str("Bump error", bumpErr.Error()).Str("Current error", retryErr.Error()).Uint("Attempt", i).Msg("Failed to bump gas for transaction. Retrying without bump")
+			} else {
+				L.Debug().Str("Current error", retryErr.Error()).Uint("Attempt", i).Msg("Waiting for transaction to be confirmed after gas bump")
+			}
+		}),
+		retry.DelayType(retry.FixedDelay),
+		retry.Attempts(m.Cfg.GasBumpRetries),
+		retry.RetryIf(func(err error) bool {
+			return m.Cfg.GasBumpRetries != 0 && errors.Is(err, context.DeadlineExceeded)
+		}),
+	)
+
 	if err != nil {
 		L.Trace().
 			Err(err).
@@ -1089,7 +1162,7 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 		m.ContractStore.AddABI(name, abi)
 	}
 
-	// I had this one failing sometimes, when transaction has been minted, but contract cannot be found yet at address
+	// retry is needed both for gas bumping and for waiting for deployment to finish (sometimes there's no code at address the first time we check)
 	if err := retry.Do(
 		func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
@@ -1097,11 +1170,14 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 			cancel()
 
 			// let's make sure that deployment transaction was successful, before retrying
-			if err != nil {
-				receipt, mineErr := bind.WaitMined(context.Background(), m.Client, tx)
+			if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+				ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
+				receipt, mineErr := bind.WaitMined(ctx, m.Client, tx)
 				if mineErr != nil {
+					cancel()
 					return mineErr
 				}
+				cancel()
 
 				if receipt.Status == 0 {
 					return errors.New("deployment transaction was reverted")
@@ -1109,20 +1185,39 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 			}
 
 			return err
-		}, retry.OnRetry(func(i uint, _ error) {
-			L.Debug().Uint("Attempt", i).Msg("Waiting for contract to be deployed")
+		}, retry.OnRetry(func(i uint, retryErr error) {
+			switch {
+			case errors.Is(retryErr, context.DeadlineExceeded):
+				var bumpErr error
+				tx, bumpErr = bumpGasOnTimeout(m, tx)
+				if bumpErr != nil {
+					L.Debug().Str("Current error", retryErr.Error()).Str("Bump error", bumpErr.Error()).Uint("Attempt", i+1).Msg("Failed to bump gas for contract deployment. Waiting without bump")
+					return
+				}
+			default:
+				// do nothing, just wait until mined again
+			}
+			L.Debug().Str("Current error", retryErr.Error()).Uint("Attempt", i+1).Msg("Waiting for contract to be deployed")
 		}),
 		retry.DelayType(retry.FixedDelay),
-		retry.Attempts(10),
-		retry.Delay(time.Duration(1)*time.Second),
+		// if gas bump retries are set to 0, we will retry 10 times, because what we will be retrying will be other errors (no code at address, etc.)
+		// downside is that if retries are enabled and their number is low other retry errors will be retried only that number of times
+		retry.Attempts(func() uint {
+			if m.Cfg.GasBumpRetries != 0 {
+				return m.Cfg.GasBumpRetries
+			}
+			return 10
+		}()),
 		retry.RetryIf(func(err error) bool {
 			return strings.Contains(strings.ToLower(err.Error()), "no contract code at given address") ||
-				strings.Contains(strings.ToLower(err.Error()), "no contract code after deployment")
+				strings.Contains(strings.ToLower(err.Error()), "no contract code after deployment") ||
+				(m.Cfg.GasBumpRetries != 0 && errors.Is(err, context.DeadlineExceeded))
 		}),
 	); err != nil {
-		// do not pass the error here, because it's not transaction submission error
-		_, _ = m.Decode(tx, nil)
-		return DeploymentData{}, wrapErrInMessageWithASuggestion(err)
+		// pass this specific error, so that Decode knows that it's not the actual revert reason
+		_, _ = m.Decode(tx, errors.New(ErrContractDeploymentFailed))
+
+		return DeploymentData{}, wrapErrInMessageWithASuggestion(m.rewriteDeploymentError(err))
 	}
 
 	L.Info().
@@ -1141,6 +1236,35 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 	}
 
 	return DeploymentData{Address: address, Transaction: tx, BoundContract: contract}, nil
+}
+
+// rewriteDeploymentError makes some known errors more human friendly
+func (m *Client) rewriteDeploymentError(err error) error {
+	var maybeRetryErr retry.Error
+	switch {
+	case errors.As(err, &maybeRetryErr):
+		areAllTimeouts := false
+		for _, e := range maybeRetryErr.WrappedErrors() {
+			if !errors.Is(e, context.DeadlineExceeded) {
+				break
+			}
+			areAllTimeouts = true
+		}
+
+		if areAllTimeouts {
+			newErr := retry.Error{}
+			for range maybeRetryErr.WrappedErrors() {
+				newErr = append(newErr, fmt.Errorf("deployment transaction was not mined within %s", m.Cfg.Network.TxnTimeout.Duration().String()))
+			}
+			err = newErr
+		}
+	case errors.Is(err, context.DeadlineExceeded):
+		{
+			err = fmt.Errorf("deployment transaction was not mined within %s", m.Cfg.Network.TxnTimeout.Duration().String())
+		}
+	}
+
+	return err
 }
 
 type DeploymentData struct {
