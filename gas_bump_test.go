@@ -28,7 +28,7 @@ func TestGasBumping_Contract_Deployment_Legacy_SufficientBumping(t *testing.T) {
 
 	gasBumps := 0
 
-	client.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
 		gasBumps++
 		newGasPrice := new(big.Int).Mul(gasPrice, big.NewInt(100))
 		// cap max gas price to avoid hitting upper bound
@@ -41,11 +41,11 @@ func TestGasBumping_Contract_Deployment_Legacy_SufficientBumping(t *testing.T) {
 	contractAbi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
 
-	// Send a transaction with a low gas price
+	// Send a transaction with low gas price
 	data, err := client.DeployContract(client.NewTXOpts(), "LinkToken", *contractAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
 	require.NoError(t, err, "contract wasn't deployed")
 	require.GreaterOrEqual(t, gasBumps, 1, "expected at least one gas bump")
-	require.Greater(t, data.Transaction.GasPrice().Int64(), 1, "expected gas price to be bumped")
+	require.Greater(t, data.Transaction.GasPrice().Int64(), int64(1), "expected gas price to be bumped")
 }
 
 func TestGasBumping_Contract_Deployment_Legacy_InsufficientBumping(t *testing.T) {
@@ -61,7 +61,7 @@ func TestGasBumping_Contract_Deployment_Legacy_InsufficientBumping(t *testing.T)
 
 	gasBumps := 0
 
-	client.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
 		gasBumps++
 		return new(big.Int).Add(gasPrice, big.NewInt(1))
 	}
@@ -90,7 +90,7 @@ func TestGasBumping_Contract_Deployment_Legacy_FailedBumping(t *testing.T) {
 	gasBumps := 0
 
 	// this results in a gas bump that is too high to be accepted
-	client.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
 		gasBumps++
 		return new(big.Int).Mul(gasPrice, big.NewInt(1000000000000))
 	}
@@ -116,7 +116,7 @@ func TestGasBumping_Contract_Deployment_Legacy_BumpingDisabled(t *testing.T) {
 
 	gasBumps := 0
 
-	client.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
 		gasBumps++
 		return gasPrice
 	}
@@ -128,6 +128,38 @@ func TestGasBumping_Contract_Deployment_Legacy_BumpingDisabled(t *testing.T) {
 	_, err = client.DeployContract(client.NewTXOpts(), "LinkToken", *contractAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
 	require.Error(t, err, "contract was deployed, but gas bumping is disabled")
 	require.GreaterOrEqual(t, gasBumps, 0, "expected no gas bumps")
+}
+
+func TestGasBumping_Contract_Deployment_Legacy_CustomBumpingFunction(t *testing.T) {
+	c := newClient(t)
+	customGasBumps := 0
+
+	config := seth.NewConfigBuilder().
+		WithRpcUrl(c.Cfg.Network.URLs[0]).
+		WithPrivateKeys(c.Cfg.Network.PrivateKeys).
+		WithGasPriceEstimations(false, 0, "").
+		WithEIP1559DynamicFees(false).
+		WithLegacyGasPrice(1).
+		WithTransactionTimeout(10*time.Second).
+		WithProtections(false, false).
+		WithGasBumping(5, func(gasPrice *big.Int) *big.Int {
+			customGasBumps++
+			return new(big.Int).Mul(gasPrice, big.NewInt(512))
+		}).
+		Build()
+
+	// we don't want to expose it in builder, but setting it to 0 (automatic gas limit estimation) doesn't work well with gas price of 1 wei
+	config.Network.GasLimit = 8_000_000
+
+	client, err := seth.NewClientWithConfig(config)
+	require.NoError(t, err)
+
+	contractAbi, err := link_token.LinkTokenMetaData.GetAbi()
+	require.NoError(t, err, "failed to get ABI")
+
+	_, err = client.DeployContract(client.NewTXOpts(), "LinkToken", *contractAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
+	require.NoError(t, err, "contract was not deployed")
+	require.GreaterOrEqual(t, customGasBumps, 1, "expected at least one custom gas bump")
 }
 
 func TestGasBumping_Contract_Deployment_EIP_1559_SufficientBumping(t *testing.T) {
@@ -145,7 +177,7 @@ func TestGasBumping_Contract_Deployment_EIP_1559_SufficientBumping(t *testing.T)
 
 	gasBumps := 0
 
-	client.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
 		gasBumps++
 		newGasPrice := new(big.Int).Mul(gasPrice, big.NewInt(100))
 		// cap max gas price to avoid hitting upper bound
@@ -190,7 +222,7 @@ func TestGasBumping_Contract_Deployment_EIP_1559_NonRootKey(t *testing.T) {
 
 	gasBumps := 0
 
-	client.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
 		gasBumps++
 		newGasPrice := new(big.Int).Mul(gasPrice, big.NewInt(100))
 		// cap max gas price to avoid hitting upper bound
@@ -229,7 +261,7 @@ func TestGasBumping_Contract_Deployment_EIP_1559_UnknownKey(t *testing.T) {
 	gasBumps := 0
 	removedAddress := client.Addresses[1]
 
-	client.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
 		// remove address from client to simulate an unlikely situation, where we try to bump a transaction with having sender's private key
 		client.Addresses = client.Addresses[:1]
 		gasBumps++
@@ -279,7 +311,7 @@ func TestGasBumping_Contract_Interaction_Legacy_SufficientBumping(t *testing.T) 
 
 	gasBumps := 0
 
-	client.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
 		gasBumps++
 		newGasPrice := new(big.Int).Mul(gasPrice, big.NewInt(100))
 		// cap max gas price to avoid hitting upper bound
@@ -344,7 +376,7 @@ func TestGasBumping_Contract_Interaction_Legacy_BumpingDisabled(t *testing.T) {
 	gasBumps := 0
 
 	// do not bump anything
-	client.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
 		gasBumps++
 		return gasPrice
 	}
@@ -403,7 +435,7 @@ func TestGasBumping_Contract_Interaction_Legacy_FailedBumping(t *testing.T) {
 	gasBumps := 0
 
 	// this results in a gas bump that is too high to be accepted
-	client.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
 		gasBumps++
 		return new(big.Int).Mul(gasPrice, big.NewInt(1000000000000))
 	}

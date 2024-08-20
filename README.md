@@ -25,7 +25,8 @@ Reliable and debug-friendly Ethereum client
 10. [DOT Graphs of transactions](#dot-graphs)
 11. [Using multiple private keys](#using-multiple-keys)
 12. [Experimental features](#experimental-features)
-13. [CLI](#cli)
+13. [Gas bumping for slow transactions](#gas-bumping-for-slow-transactions)
+14. [CLI](#cli)
    1. [Manual gas price estimation](#manual-gas-price-estimation)
    2. [Block Stats](#block-stats)
    3. [Single transaction tracing](#single-transaction-tracing)
@@ -68,6 +69,7 @@ Reliable and debug-friendly Ethereum client
 - [x] Block stats CLI
 - [x] Check if address has a pending nonce (transaction) and panic if it does
 - [x] DOT graph output for tracing
+- [x] Gas bumping for slow transactions
 
 You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
 
@@ -218,6 +220,8 @@ cfg := builder.
     WithEIP1559DynamicFees(true).
     WithDynamicGasPrices(120_000_000_000, 44_000_000_000).
     WithGasPriceEstimations(false, 10, seth.Priority_Fast).
+	// gas bumping
+    WithGasBumping(5, PriorityBasedGasBumpingStrategyFn).	
     Build()
 
 client, err := seth.NewClientWithConfig(cfg)
@@ -547,6 +551,57 @@ Here's what they do:
 
 - `slow_funds_return` will work only in `core` and when enabled it changes tx priority to `slow` and increases transaction timeout to 30 minutes.
 - `eip_1559_fee_equalizer` in case of EIP-1559 transactions if it detects that historical base fee and suggested/historical tip are more than 3 orders of magnitude apart, it will use the higher value for both (this helps in cases where base fee is almost 0 and transaction is never processed).
+
+## Gas bumping for slow transactions
+Seth has built-in gas bumping mechanism for slow transactions. If a transaction is not mined within a certain time frame (`Network`'s transaction timeout), Seth will automatically bump the gas price and resubmit the transaction. This feature is disabled by default and can be enabled by setting the `gas_bump_retries` to a non-zero number.
+Once enabled, by default the amount, by which gas price is bumped depends on `gas_price_estimation_tx_priority` setting and is calculated as follows:
+- `Priority_Fast`: 30% increase
+- `Priority_Standard`: 15% increase
+- `Priority_Slow`: 5% increase
+- everything else: no increase
+
+If you want to use a custom bumping strategy, you can use a function with [GasBumpStrategyFn](retry.go) type. Here's an example of a custom strategy that bumps the gas price by 100% for every retry:
+```go
+var customGasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+    return new(big.Int).Mul(gasPrice, big.NewInt(2))
+}
+```
+
+To use this strategy, you need to pass it to the `WithGasBumping` method in the `ConfigBuilder`:
+```go
+cfg := builder.
+    // other settings...
+    WithGasBumping(5, customGasBumpStrategyFn).
+    Build()
+```
+
+Since strategy function only accepts a single parameter, if you want to base its behaviour on anything else than that you will need to capture these values from the context, in which you define the strategy function. For example, you can use a closure to capture the initial gas price:
+```go
+gasOracleClient := NewGasOracleClient()
+
+var randomGasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+    // get the current gas price from the oracle
+    suggestedGasPrice := gasOracleClient.GetCurrentGasPrice()
+
+	// if oracle suggests a higher gas price, use it
+    if suggestedGasPrice.Cmp(gasPrice) == 1 {
+        return suggestedGasPrice
+    }
+
+	// otherwise bump by 100%
+    return new(big.Int).Mul(gasPrice, big.NewInt(2))
+}
+```
+
+Currently, the gas bumping mechanism is available for:
+* Legacy transactions
+* EIP-1559 transactions.
+
+Same strategy is applied to both types of transactions, for gas price and for gas fee cap and tip cap.
+
+When enabled, gas bumping is used in two places:
+* during contract deployment via `DeployContract` function
+* inside `Decode()` function, when transaction is not mined within the timeout
 
 ## CLI
 

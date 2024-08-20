@@ -52,6 +52,11 @@ test_cli:
 test_others:
 	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 -race `go list ./... | grep -v examples` -run "TestContractMap|TestGasEstimator|TestRPCHealtCheck|TestUtil|TestContract|TestConfig"
 
+.PHONY: test_gas_bumping
+test_gas_bumping:
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 -race `go list ./... | grep -v examples` -run "TestGasBumping"
+
+
 .PHONY: test+cover
 test_cover:
 	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -coverprofile cover.out -count 1 `go list ./... | grep -v examples` -run "TestAPI|TestSmoke|TestContract|TestGasEstimator"

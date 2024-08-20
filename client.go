@@ -71,7 +71,6 @@ type Client struct {
 	ContractAddressToNameMap ContractMap
 	ABIFinder                *ABIFinder
 	HeaderCache              *LFUHeaderCache
-	GasBumpStrategyFn        GasBumpStrategyFn
 }
 
 // NewClientWithConfig creates a new seth client with all deps setup from config
@@ -390,51 +389,15 @@ func NewClientRaw(
 		}
 	}
 
-	if c.Cfg.GasBumpRetries != 0 {
-		c.GasBumpStrategyFn = getGasBumpStrategyFn(c.Cfg.Network.GasPriceEstimationTxPriority)
-	} else {
-		c.GasBumpStrategyFn = NoOpGasBumpStrategyFn
+	if c.Cfg.GasBumpStrategyFn == nil {
+		if c.Cfg.GasBumpRetries != 0 {
+			c.Cfg.GasBumpStrategyFn = PriorityBasedGasBumpingStrategyFn(c.Cfg.Network.GasPriceEstimationTxPriority)
+		} else {
+			c.Cfg.GasBumpStrategyFn = NoOpGasBumpStrategyFn
+		}
 	}
 
 	return c, nil
-}
-
-func getGasBumpStrategyFn(priority string) GasBumpStrategyFn {
-	switch priority {
-	case Priority_Degen:
-		// +100%
-		return func(gasPrice *big.Int) *big.Int {
-			return gasPrice.Mul(gasPrice, big.NewInt(2))
-		}
-	case Priority_Fast:
-		// +30%
-		return func(gasPrice *big.Int) *big.Int {
-			gasPriceFloat, _ := gasPrice.Float64()
-			newGasPriceFloat := big.NewFloat(0.0).Mul(big.NewFloat(gasPriceFloat), big.NewFloat(1.5))
-			newGasPrice, _ := newGasPriceFloat.Int64()
-			return big.NewInt(newGasPrice)
-		}
-	case Priority_Standard:
-		// 15%
-		return func(gasPrice *big.Int) *big.Int {
-			gasPriceFloat, _ := gasPrice.Float64()
-			newGasPriceFloat := big.NewFloat(0.0).Mul(big.NewFloat(gasPriceFloat), big.NewFloat(1.15))
-			newGasPrice, _ := newGasPriceFloat.Int64()
-			return big.NewInt(newGasPrice)
-		}
-	case Priority_Slow:
-		// 5%
-		return func(gasPrice *big.Int) *big.Int {
-			gasPriceFloat, _ := gasPrice.Float64()
-			newGasPriceFloat := big.NewFloat(0.0).Mul(big.NewFloat(gasPriceFloat), big.NewFloat(1.05))
-			newGasPrice, _ := newGasPriceFloat.Int64()
-			return big.NewInt(newGasPrice)
-		}
-	default:
-		return func(gasPrice *big.Int) *big.Int {
-			return gasPrice
-		}
-	}
 }
 
 func (m *Client) checkRPCHealth() error {
@@ -507,7 +470,14 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 			}
 		}),
 		retry.DelayType(retry.FixedDelay),
-		retry.Attempts(m.Cfg.GasBumpRetries),
+		// unless attempts is at least 1 we Do won't execute at all!
+		retry.Attempts(func() uint {
+			if m.Cfg.GasBumpRetries == 0 {
+				return 1
+			} else {
+				return m.Cfg.GasBumpRetries
+			}
+		}()),
 		retry.RetryIf(func(err error) bool {
 			return m.Cfg.GasBumpRetries != 0 && errors.Is(err, context.DeadlineExceeded)
 		}),

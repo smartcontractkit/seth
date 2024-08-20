@@ -154,11 +154,11 @@ func (c *ConfigBuilder) WithTransferGasFee(gasFee int64) *ConfigBuilder {
 	return c
 }
 
-// WithGasBumpRetries sets the number of retries for gas bumping. If the transaction is not mined within this number of retries, it will be considered failed.
-// How aggressive the bumping is depends on gas_price_estimation_tx_priority value.
-// Default value is 0 retries (disabled).
-func (c *ConfigBuilder) WithGasBumpRetries(retries uint) *ConfigBuilder {
+// WithGasBumping sets the number of retries for gas bumping. If the transaction is not mined within this number of retries, it will be considered failed. You can also provide a custom bumping strategy.
+// Default value is 3 retries and a default bumping strategy (with gas increase % based on gas_price_estimation_tx_priority)
+func (c *ConfigBuilder) WithGasBumping(retries uint, customBumpingStrategy GasBumpStrategyFn) *ConfigBuilder {
 	c.config.GasBumpRetries = retries
+	c.config.GasBumpStrategyFn = customBumpingStrategy
 	return c
 }
 
