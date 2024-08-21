@@ -134,17 +134,30 @@ var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Trans
 		return nil, fmt.Errorf("sender address '%s' not found in loaded private keys", sender)
 	}
 
+	maxGasPrice := big.NewInt(client.Cfg.GasBump.MaxGasPrice)
 	privateKey := client.PrivateKeys[senderPkIdx]
-
 	var replacementTx *types.Transaction
 
-	//TODO maybe strategy should accept old tx as argument, so that it can decide what to do with it
-	//TODO and return replacement tx?
+	var checkMaxPrice = func(gasPrice, maxGasPrice *big.Int) error {
+		if maxGasPrice.Cmp(big.NewInt(0)) == 0 {
+			L.Debug().Msg("Max gas price for gas bump is not set, skipping check")
+			return nil
+		}
+
+		if gasPrice.Cmp(maxGasPrice) > 0 {
+			return fmt.Errorf("bumped gas price %s is higher than max gas price %s", gasPrice.String(), big.NewInt(client.Cfg.GasBump.MaxGasPrice).String())
+		}
+
+		return nil
+	}
 
 	// Legacy tx
 	switch tx.Type() {
 	case types.LegacyTxType:
-		gasPrice := client.Cfg.GasBumpStrategyFn(tx.GasPrice())
+		gasPrice := client.Cfg.GasBump.StrategyFn(tx.GasPrice())
+		if err := checkMaxPrice(gasPrice, maxGasPrice); err != nil {
+			return tx, err
+		}
 		L.Warn().Interface("Old gas price", tx.GasPrice()).Interface("New gas price", gasPrice).Msg("Bumping gas price for legacy transaction")
 		txData := &types.LegacyTx{
 			Nonce:    tx.Nonce(),
@@ -156,8 +169,11 @@ var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Trans
 		}
 		replacementTx, err = types.SignNewTx(privateKey, signer, txData)
 	case types.DynamicFeeTxType:
-		gasFeeCap := client.Cfg.GasBumpStrategyFn(tx.GasFeeCap())
-		gasTipCap := client.Cfg.GasBumpStrategyFn(tx.GasTipCap())
+		gasFeeCap := client.Cfg.GasBump.StrategyFn(tx.GasFeeCap())
+		gasTipCap := client.Cfg.GasBump.StrategyFn(tx.GasTipCap())
+		if err := checkMaxPrice(big.NewInt(0).Add(gasFeeCap, gasTipCap), maxGasPrice); err != nil {
+			return tx, err
+		}
 		L.Warn().Interface("Old gas fee cap", tx.GasFeeCap()).Interface("New gas fee cap", gasFeeCap).Interface("Old gas tip cap", tx.GasTipCap()).Interface("New gas tip cap", gasTipCap).Msg("Bumping gas fee cap and tip cap for EIP-1559 transaction")
 		txData := &types.DynamicFeeTx{
 			Nonce:     tx.Nonce(),

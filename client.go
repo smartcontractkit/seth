@@ -389,11 +389,11 @@ func NewClientRaw(
 		}
 	}
 
-	if c.Cfg.GasBumpStrategyFn == nil {
-		if c.Cfg.GasBumpRetries != 0 {
-			c.Cfg.GasBumpStrategyFn = PriorityBasedGasBumpingStrategyFn(c.Cfg.Network.GasPriceEstimationTxPriority)
+	if c.Cfg.GasBump != nil && c.Cfg.GasBump.StrategyFn == nil {
+		if c.Cfg.GasBumpRetries() != 0 {
+			c.Cfg.GasBump.StrategyFn = PriorityBasedGasBumpingStrategyFn(c.Cfg.Network.GasPriceEstimationTxPriority)
 		} else {
-			c.Cfg.GasBumpStrategyFn = NoOpGasBumpStrategyFn
+			c.Cfg.GasBump.StrategyFn = NoOpGasBumpStrategyFn
 		}
 	}
 
@@ -472,14 +472,14 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 		retry.DelayType(retry.FixedDelay),
 		// unless attempts is at least 1 we Do won't execute at all!
 		retry.Attempts(func() uint {
-			if m.Cfg.GasBumpRetries == 0 {
+			if m.Cfg.GasBumpRetries() == 0 {
 				return 1
 			} else {
-				return m.Cfg.GasBumpRetries
+				return m.Cfg.GasBumpRetries()
 			}
 		}()),
 		retry.RetryIf(func(err error) bool {
-			return m.Cfg.GasBumpRetries != 0 && errors.Is(err, context.DeadlineExceeded)
+			return m.Cfg.GasBumpRetries() != 0 && errors.Is(err, context.DeadlineExceeded)
 		}),
 	)
 
@@ -1173,15 +1173,15 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 		// if gas bump retries are set to 0, we will retry 10 times, because what we will be retrying will be other errors (no code at address, etc.)
 		// downside is that if retries are enabled and their number is low other retry errors will be retried only that number of times
 		retry.Attempts(func() uint {
-			if m.Cfg.GasBumpRetries != 0 {
-				return m.Cfg.GasBumpRetries
+			if m.Cfg.GasBumpRetries() != 0 {
+				return m.Cfg.GasBumpRetries()
 			}
 			return 10
 		}()),
 		retry.RetryIf(func(err error) bool {
 			return strings.Contains(strings.ToLower(err.Error()), "no contract code at given address") ||
 				strings.Contains(strings.ToLower(err.Error()), "no contract code after deployment") ||
-				(m.Cfg.GasBumpRetries != 0 && errors.Is(err, context.DeadlineExceeded))
+				(m.Cfg.GasBumpRetries() != 0 && errors.Is(err, context.DeadlineExceeded))
 		}),
 	); err != nil {
 		// pass this specific error, so that Decode knows that it's not the actual revert reason

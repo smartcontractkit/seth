@@ -18,7 +18,7 @@ Reliable and debug-friendly Ethereum client
    2. [Testing](#testing)
 6. [Configuration](#config)
    1. [Simplified configuration](#simplified-configuration)
-   2. [ConfigBuilder](#configbuilder)
+   2. [ClientBuilder](#clientbuilder)
    3. [Supported env vars](#supported-env-vars)
    4. [TOML configuration](#toml-configuration)
 9. [Automated gas price estimation](#automatic-gas-estimator)
@@ -195,11 +195,11 @@ This config uses what we consider reasonable defaults, such as:
 * checking of RPC node health on client creation
 * no ephemeral keys
 
-### ConfigBuilder
-You can also use a `ConfigBuilder` to build a config programmatically. Here's an extensive example:
+### ClientBuilder
+You can also use a `ClientBuilder` to build a config programmatically. Here's an extensive example:
 
 ```go
-cfg := builder.
+client, err := builder.
     // network
     WithNetworkName("my network").
     WithRpcUrl("ws://localhost:8546").
@@ -220,11 +220,10 @@ cfg := builder.
     WithEIP1559DynamicFees(true).
     WithDynamicGasPrices(120_000_000_000, 44_000_000_000).
     WithGasPriceEstimations(false, 10, seth.Priority_Fast).
-	// gas bumping
-    WithGasBumping(5, PriorityBasedGasBumpingStrategyFn).	
+	// gas bumping: retries, max gas price, bumping strategy function
+    WithGasBumping(5, 100_000_000_000, PriorityBasedGasBumpingStrategyFn).	
     Build()
 
-client, err := seth.NewClientWithConfig(cfg)
 if err != nil {
     log.Fatal(err)
 }
@@ -553,12 +552,29 @@ Here's what they do:
 - `eip_1559_fee_equalizer` in case of EIP-1559 transactions if it detects that historical base fee and suggested/historical tip are more than 3 orders of magnitude apart, it will use the higher value for both (this helps in cases where base fee is almost 0 and transaction is never processed).
 
 ## Gas bumping for slow transactions
-Seth has built-in gas bumping mechanism for slow transactions. If a transaction is not mined within a certain time frame (`Network`'s transaction timeout), Seth will automatically bump the gas price and resubmit the transaction. This feature is disabled by default and can be enabled by setting the `gas_bump_retries` to a non-zero number.
+Seth has built-in gas bumping mechanism for slow transactions. If a transaction is not mined within a certain time frame (`Network`'s transaction timeout), Seth will automatically bump the gas price and resubmit the transaction. This feature is disabled by default and can be enabled by setting the `[gas_bumps] retries` to a non-zero number:
+```toml
+[gas_bumps]
+retries = 5
+```    
+
 Once enabled, by default the amount, by which gas price is bumped depends on `gas_price_estimation_tx_priority` setting and is calculated as follows:
 - `Priority_Fast`: 30% increase
 - `Priority_Standard`: 15% increase
 - `Priority_Slow`: 5% increase
 - everything else: no increase
+
+You can cap max gas price by settings:
+```toml
+[gas_bumps]
+max_gas_price = 1000000000000
+```
+
+Once the gas price bump would go above the limit we stop bumping and use the last gas price that was below the limit.
+
+How gas price is calculated depends on transaction type:
+- for legacy transactions it's just the gas price
+- for EIP-1559 transactions it's the sum of gas fee cap and tip cap
 
 If you want to use a custom bumping strategy, you can use a function with [GasBumpStrategyFn](retry.go) type. Here's an example of a custom strategy that bumps the gas price by 100% for every retry:
 ```go
@@ -567,11 +583,12 @@ var customGasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
 }
 ```
 
-To use this strategy, you need to pass it to the `WithGasBumping` method in the `ConfigBuilder`:
+To use this strategy, you need to pass it to the `WithGasBumping` function in the `ClientBuilder`:
 ```go
-cfg := builder.
+var hundredGwei in64 = 100_000_000_000
+client, err := builder.
     // other settings...
-    WithGasBumping(5, customGasBumpStrategyFn).
+    WithGasBumping(5, hundredGwei, customGasBumpStrategyFn).
     Build()
 ```
 

@@ -37,6 +37,9 @@ func NewClientBuilder() *ClientBuilder {
 			CheckRpcHealthOnStart: true,
 			BlockStatsConfig:      &BlockStatsConfig{RPCRateLimit: 10},
 			NonceManager:          &NonceManagerCfg{KeySyncRateLimitSec: 10, KeySyncRetries: 3, KeySyncTimeout: MustMakeDuration(60 * time.Second), KeySyncRetryDelay: MustMakeDuration(5 * time.Second)},
+			GasBump: &GasBumpConfig{
+				Retries: 10,
+			},
 		},
 	}
 }
@@ -154,11 +157,15 @@ func (c *ClientBuilder) WithTransferGasFee(gasFee int64) *ClientBuilder {
 	return c
 }
 
-// WithGasBumping sets the number of retries for gas bumping. If the transaction is not mined within this number of retries, it will be considered failed. You can also provide a custom bumping strategy.
-// Default value is 3 retries and a default bumping strategy (with gas increase % based on gas_price_estimation_tx_priority)
-func (c *ClientBuilder) WithGasBumping(retries uint, customBumpingStrategy GasBumpStrategyFn) *ClientBuilder {
-	c.config.GasBumpRetries = retries
-	c.config.GasBumpStrategyFn = customBumpingStrategy
+// WithGasBumping sets the number of retries for gas bumping and max gas price. You can also provide a custom bumping strategy. If the transaction is not mined within this number of retries, it will be considered failed.
+// If the gas price is bumped to a value higher than max gas price, no more gas bumping will be attempted and previous gas price will be used by all subsequent attempts.
+// Default value is 10 retries, no max gas price and a default bumping strategy (with gas increase % based on gas_price_estimation_tx_priority)
+func (c *ClientBuilder) WithGasBumping(retries uint, maxGasPrice int64, customBumpingStrategy GasBumpStrategyFn) *ClientBuilder {
+	c.config.GasBump = &GasBumpConfig{
+		Retries:     retries,
+		MaxGasPrice: maxGasPrice,
+		StrategyFn:  customBumpingStrategy,
+	}
 	return c
 }
 

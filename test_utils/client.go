@@ -2,6 +2,7 @@ package test_utils
 
 import (
 	"context"
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"testing"
 
@@ -63,4 +64,44 @@ func NewClientWithAddresses(t *testing.T, addressCount int) *seth.Client {
 	require.NoError(t, err, "failed to initialize new Seth with private keys")
 
 	return newClient
+}
+
+func NewPrivateKeyWithFunds(t *testing.T, c *seth.Client, funds *big.Int) string {
+	addr, pk, err := seth.NewAddress()
+	require.NoError(t, err, "failed to generate new address")
+
+	gasPrice, err := c.GetSuggestedLegacyFees(context.Background(), seth.Priority_Standard)
+	if err != nil {
+		gasPrice = big.NewInt(c.Cfg.Network.GasPrice)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), c.Cfg.Network.TxnTimeout.Duration())
+	err = c.TransferETHFromKey(ctx, 0, addr, funds, gasPrice)
+	defer cancel()
+	require.NoError(t, err, "failed to transfer funds to subkeys")
+
+	return pk
+}
+
+func TransferAllFundsBetweenKeyAndAddress(client *seth.Client, keyNum int, toAddress common.Address) error {
+	err := client.NonceManager.UpdateNonces()
+	if err != nil {
+		return err
+	}
+
+	gasPrice, err := client.GetSuggestedLegacyFees(context.Background(), seth.Priority_Standard)
+	if err != nil {
+		gasPrice = big.NewInt(client.Cfg.Network.GasPrice)
+	}
+
+	balance, err := client.Client.BalanceAt(context.Background(), client.Addresses[0], nil)
+	if err != nil {
+		return err
+	}
+
+	toTransfer := new(big.Int).Sub(balance, big.NewInt(0).Mul(gasPrice, big.NewInt(client.Cfg.Network.TransferGasFee)))
+
+	ctx, cancel := context.WithTimeout(context.Background(), client.Cfg.Network.TxnTimeout.Duration())
+	defer cancel()
+	return client.TransferETHFromKey(ctx, keyNum, toAddress.Hex(), toTransfer, gasPrice)
 }

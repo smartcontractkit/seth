@@ -5,6 +5,7 @@ import (
 	"github.com/smartcontractkit/seth"
 )
 
+// CopyConfig creates a deep copy of Seth config
 func CopyConfig(config *seth.Config) (*seth.Config, error) {
 	marshalled, err := toml.Marshal(config)
 	if err != nil {

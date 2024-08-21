@@ -2,7 +2,6 @@ package seth_test
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/pelletier/go-toml/v2"
 	link_token "github.com/smartcontractkit/seth/contracts/bind/link"
 	"github.com/smartcontractkit/seth/contracts/bind/link_token_interface"
 	"github.com/smartcontractkit/seth/test_utils"
@@ -15,28 +14,38 @@ import (
 	"github.com/smartcontractkit/seth"
 )
 
+var oneEth = big.NewInt(1000000000000000000)
+
 func TestGasBumping_Contract_Deployment_Legacy_SufficientBumping(t *testing.T) {
 	c := newClient(t)
+	newPk := test_utils.NewPrivateKeyWithFunds(t, c, oneEth)
 
-	// Set a low gas price and a short timeout
-	c.Cfg.Network.GasPrice = 1
-	c.Cfg.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
-	c.Cfg.GasBumpRetries = 10
-
-	client, err := seth.NewClientWithConfig(c.Cfg)
-	require.NoError(t, err)
+	configCopy, err := test_utils.CopyConfig(c.Cfg)
+	require.NoError(t, err, "failed to copy config")
 
 	gasBumps := 0
 
-	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
-		gasBumps++
-		newGasPrice := new(big.Int).Mul(gasPrice, big.NewInt(100))
-		// cap max gas price to avoid hitting upper bound
-		if newGasPrice.Cmp(big.NewInt(100000000)) >= 0 {
-			return big.NewInt(0).Add(gasPrice, big.NewInt(1))
-		}
-		return newGasPrice
+	// Set a low gas price and a short timeout
+	configCopy.Network.PrivateKeys = []string{newPk}
+	configCopy.Network.GasPrice = 1
+	configCopy.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
+	configCopy.GasBump = &seth.GasBumpConfig{
+		Retries:     10,
+		MaxGasPrice: 100000000,
+		StrategyFn: func(gasPrice *big.Int) *big.Int {
+			gasBumps++
+			return new(big.Int).Mul(gasPrice, big.NewInt(100))
+		},
 	}
+
+	client, err := seth.NewClientWithConfig(configCopy)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		configCopy.Network.GasPrice = 1_000_000_000
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, c.Addresses[0])
+		require.NoError(t, err, "failed to transfer funds back to original root key")
+	})
 
 	contractAbi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -50,21 +59,33 @@ func TestGasBumping_Contract_Deployment_Legacy_SufficientBumping(t *testing.T) {
 
 func TestGasBumping_Contract_Deployment_Legacy_InsufficientBumping(t *testing.T) {
 	c := newClient(t)
+	newPk := test_utils.NewPrivateKeyWithFunds(t, c, oneEth)
 
-	// Set a low gas price and a short timeout
-	c.Cfg.Network.GasPrice = 1
-	c.Cfg.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
-	c.Cfg.GasBumpRetries = 2
-
-	client, err := seth.NewClientWithConfig(c.Cfg)
-	require.NoError(t, err)
+	configCopy, err := test_utils.CopyConfig(c.Cfg)
+	require.NoError(t, err, "failed to copy config")
 
 	gasBumps := 0
 
-	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
-		gasBumps++
-		return new(big.Int).Add(gasPrice, big.NewInt(1))
+	// Set a low gas price and a short timeout
+	configCopy.Network.PrivateKeys = []string{newPk}
+	configCopy.Network.GasPrice = 1
+	configCopy.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
+	configCopy.GasBump = &seth.GasBumpConfig{
+		Retries: 2,
+		StrategyFn: func(gasPrice *big.Int) *big.Int {
+			gasBumps++
+			return new(big.Int).Add(gasPrice, big.NewInt(1))
+		},
 	}
+
+	client, err := seth.NewClientWithConfig(configCopy)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		configCopy.Network.GasPrice = 1_000_000_000
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, c.Addresses[0])
+		require.NoError(t, err, "failed to transfer funds back to original root key")
+	})
 
 	contractAbi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -78,22 +99,33 @@ func TestGasBumping_Contract_Deployment_Legacy_InsufficientBumping(t *testing.T)
 
 func TestGasBumping_Contract_Deployment_Legacy_FailedBumping(t *testing.T) {
 	c := newClient(t)
+	newPk := test_utils.NewPrivateKeyWithFunds(t, c, oneEth)
 
-	// Set a low gas price and a short timeout
-	c.Cfg.Network.GasPrice = 1
-	c.Cfg.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
-	c.Cfg.GasBumpRetries = 2
-
-	client, err := seth.NewClientWithConfig(c.Cfg)
-	require.NoError(t, err)
+	configCopy, err := test_utils.CopyConfig(c.Cfg)
+	require.NoError(t, err, "failed to copy config")
 
 	gasBumps := 0
 
-	// this results in a gas bump that is too high to be accepted
-	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
-		gasBumps++
-		return new(big.Int).Mul(gasPrice, big.NewInt(1000000000000))
+	// Set a low gas price and a short timeout
+	configCopy.Network.PrivateKeys = []string{newPk}
+	configCopy.Network.GasPrice = 1
+	configCopy.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
+	configCopy.GasBump = &seth.GasBumpConfig{
+		Retries: 2,
+		StrategyFn: func(gasPrice *big.Int) *big.Int {
+			gasBumps++
+			return new(big.Int).Mul(gasPrice, big.NewInt(1000000000000))
+		},
 	}
+
+	client, err := seth.NewClientWithConfig(configCopy)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		configCopy.Network.GasPrice = 1_000_000_000
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, c.Addresses[0])
+		require.NoError(t, err, "failed to transfer funds back to original root key")
+	})
 
 	contractAbi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -106,20 +138,32 @@ func TestGasBumping_Contract_Deployment_Legacy_FailedBumping(t *testing.T) {
 
 func TestGasBumping_Contract_Deployment_Legacy_BumpingDisabled(t *testing.T) {
 	c := newClient(t)
+	newPk := test_utils.NewPrivateKeyWithFunds(t, c, oneEth)
 
-	// Set a low gas price and a short timeout, but disable gas bumping
-	c.Cfg.Network.GasPrice = 1
-	c.Cfg.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
-
-	client, err := seth.NewClientWithConfig(c.Cfg)
-	require.NoError(t, err)
+	configCopy, err := test_utils.CopyConfig(c.Cfg)
+	require.NoError(t, err, "failed to copy config")
 
 	gasBumps := 0
 
-	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
-		gasBumps++
-		return gasPrice
+	// Set a low gas price and a short timeout, but disable gas bumping
+	configCopy.Network.PrivateKeys = []string{newPk}
+	configCopy.Network.GasPrice = 1
+	configCopy.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
+	configCopy.GasBump = &seth.GasBumpConfig{
+		StrategyFn: func(gasPrice *big.Int) *big.Int {
+			gasBumps++
+			return gasPrice
+		},
 	}
+
+	client, err := seth.NewClientWithConfig(configCopy)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		configCopy.Network.GasPrice = 1_000_000_000
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, c.Addresses[0])
+		require.NoError(t, err, "failed to transfer funds back to original root key")
+	})
 
 	contractAbi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -132,22 +176,29 @@ func TestGasBumping_Contract_Deployment_Legacy_BumpingDisabled(t *testing.T) {
 
 func TestGasBumping_Contract_Deployment_Legacy_CustomBumpingFunction(t *testing.T) {
 	c := newClient(t)
+	newPk := test_utils.NewPrivateKeyWithFunds(t, c, oneEth)
+
 	customGasBumps := 0
 
 	client, err := seth.NewClientBuilder().
 		WithRpcUrl(c.Cfg.Network.URLs[0]).
-		WithPrivateKeys(c.Cfg.Network.PrivateKeys).
+		WithPrivateKeys([]string{newPk}).
 		WithGasPriceEstimations(false, 0, "").
 		WithEIP1559DynamicFees(false).
 		WithLegacyGasPrice(1).
 		WithTransactionTimeout(10*time.Second).
 		WithProtections(false, false).
-		WithGasBumping(5, func(gasPrice *big.Int) *big.Int {
+		WithGasBumping(5, 0, func(gasPrice *big.Int) *big.Int {
 			customGasBumps++
 			return new(big.Int).Mul(gasPrice, big.NewInt(512))
 		}).
 		Build()
 	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		client.Cfg.Network.GasPrice = 1_000_000_000
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, c.Addresses[0])
+	})
 
 	// we don't want to expose it in builder, but setting it to 0 (automatic gas limit estimation) doesn't work well with gas price of 1 wei
 	client.Cfg.Network.GasLimit = 8_000_000
@@ -160,30 +211,186 @@ func TestGasBumping_Contract_Deployment_Legacy_CustomBumpingFunction(t *testing.
 	require.GreaterOrEqual(t, customGasBumps, 1, "expected at least one custom gas bump")
 }
 
+func TestGasBumping_Contract_Interaction_Legacy_MaxGas(t *testing.T) {
+	spammer := test_utils.NewClientWithAddresses(t, 5)
+
+	t.Cleanup(func() {
+		err := spammer.NonceManager.UpdateNonces()
+		require.NoError(t, err, "failed to update nonces")
+		err = seth.ReturnFunds(spammer, spammer.Addresses[0].Hex())
+		require.NoError(t, err, "failed to return funds")
+	})
+
+	var zero int64 = 0
+	spammer.Cfg.EphemeralAddrs = &zero
+
+	configCopy, err := test_utils.CopyConfig(spammer.Cfg)
+	require.NoError(t, err, "failed to copy config")
+
+	newPk := test_utils.NewPrivateKeyWithFunds(t, spammer, oneEth)
+	configCopy.Network.PrivateKeys = []string{newPk}
+
+	client, err := seth.NewClientWithConfig(configCopy)
+	require.NoError(t, err, "failed to create client")
+
+	t.Cleanup(func() {
+		client.Cfg.Network.GasPrice = 100_000_000
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, spammer.Addresses[0])
+		require.NoError(t, err, "failed to transfer funds back to original root key")
+	})
+
+	contractAbi, err := link_token_interface.LinkTokenMetaData.GetAbi()
+	require.NoError(t, err, "failed to get ABI")
+
+	data, err := client.DeployContract(client.NewTXOpts(), "LinkToken", *contractAbi, common.FromHex(link_token_interface.LinkTokenMetaData.Bin))
+	require.NoError(t, err, "contract wasn't deployed")
+
+	linkContract, err := link_token.NewLinkToken(data.Address, client.Client)
+	require.NoError(t, err, "failed to instantiate contract")
+
+	var gasPrices []*big.Int
+
+	// Update config and set a low gas price and a short timeout
+	client.Cfg.Network.GasPrice = 1
+	client.Cfg.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
+	client.Cfg.GasBump = &seth.GasBumpConfig{
+		Retries:     5,
+		MaxGasPrice: 5, //after 2 retries gas price will be 5
+		StrategyFn: func(gasPrice *big.Int) *big.Int {
+			gasPrices = append(gasPrices, gasPrice)
+			return new(big.Int).Add(gasPrice, big.NewInt(2))
+		},
+	}
+
+	// introduce some traffic, so that bumping is necessary to mine the transaction
+	go func() {
+		for i := 0; i < 5; i++ {
+			_, _ = spammer.DeployContract(spammer.NewTXKeyOpts(spammer.AnySyncedKey()), "LinkToken", *contractAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
+		}
+	}()
+
+	// Send a transaction with a low gas price
+	_, _ = client.Decode(linkContract.Transfer(client.NewTXOpts(), client.Addresses[0], big.NewInt(1000000000000000000)))
+	require.NoError(t, err, "failed to transfer tokens")
+	require.GreaterOrEqual(t, len(gasPrices), 3, "expected 2 gas bumps")
+	require.True(t, func() bool {
+		for _, gasPrice := range gasPrices {
+			if gasPrice.Cmp(big.NewInt(client.Cfg.GasBump.MaxGasPrice)) > 0 {
+				return false
+			}
+		}
+		return true
+	}(), "at least one gas bump was too high")
+}
+
+func TestGasBumping_Contract_Interaction_EIP1559_MaxGas(t *testing.T) {
+	spammer := test_utils.NewClientWithAddresses(t, 5)
+
+	t.Cleanup(func() {
+		err := spammer.NonceManager.UpdateNonces()
+		require.NoError(t, err, "failed to update nonces")
+		err = seth.ReturnFunds(spammer, spammer.Addresses[0].Hex())
+		require.NoError(t, err, "failed to return funds")
+	})
+
+	var zero int64 = 0
+
+	configCopy, err := test_utils.CopyConfig(spammer.Cfg)
+	require.NoError(t, err, "failed to copy config")
+
+	newPk := test_utils.NewPrivateKeyWithFunds(t, spammer, oneEth)
+	configCopy.Network.PrivateKeys = []string{newPk}
+	configCopy.EphemeralAddrs = &zero
+
+	client, err := seth.NewClientWithConfig(configCopy)
+	require.NoError(t, err, "failed to create client")
+
+	t.Cleanup(func() {
+		client.Cfg.Network.GasPrice = 100_000_000
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, spammer.Addresses[0])
+		require.NoError(t, err, "failed to transfer funds back to original root key")
+	})
+
+	contractAbi, err := link_token_interface.LinkTokenMetaData.GetAbi()
+	require.NoError(t, err, "failed to get ABI")
+
+	data, err := client.DeployContract(client.NewTXOpts(), "LinkToken", *contractAbi, common.FromHex(link_token_interface.LinkTokenMetaData.Bin))
+	require.NoError(t, err, "contract wasn't deployed")
+
+	linkContract, err := link_token.NewLinkToken(data.Address, client.Client)
+	require.NoError(t, err, "failed to instantiate contract")
+
+	var gasPrices []*big.Int
+
+	// Update config and set a low gas price and a short timeout
+	client.Cfg.Network.GasFeeCap = 1
+	client.Cfg.Network.GasTipCap = 1
+	client.Cfg.Network.EIP1559DynamicFees = true
+	client.Cfg.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
+	client.Cfg.GasBump = &seth.GasBumpConfig{
+		Retries:     4,
+		MaxGasPrice: 5, // for both fee and tip, which means that after a single bump, the gas price will be 5 and no more bumps should ever occur
+		StrategyFn: func(gasPrice *big.Int) *big.Int {
+			gasPrices = append(gasPrices, gasPrice)
+			return new(big.Int).Add(gasPrice, big.NewInt(2))
+		},
+	}
+
+	// introduce some traffic, so that bumping is necessary to mine the transaction
+	go func() {
+		for i := 0; i < 5; i++ {
+			_, _ = spammer.DeployContract(spammer.NewTXKeyOpts(spammer.AnySyncedKey()), "LinkToken", *contractAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
+		}
+	}()
+
+	// Send a transaction with a low gas price
+	_, _ = client.Decode(linkContract.Transfer(client.NewTXOpts(), client.Addresses[0], big.NewInt(1000000000000000000)))
+	require.NoError(t, err, "failed to transfer tokens")
+	require.GreaterOrEqual(t, len(gasPrices), 3, "expected at least 3 gas bumps")
+	require.True(t, func() bool {
+		for _, gasPrice := range gasPrices {
+			// any other price higher than 2 would result in cumulated gas price (fee + cap) > 5
+			if gasPrice.Cmp(big.NewInt(2)) > 0 {
+				return false
+			}
+		}
+		return true
+	}(), "at least one gas bump was too high")
+}
+
 func TestGasBumping_Contract_Deployment_EIP_1559_SufficientBumping(t *testing.T) {
 	c := newClient(t)
+	newPk := test_utils.NewPrivateKeyWithFunds(t, c, oneEth)
 
-	// Set a low gas fee and tip cap and a short timeout
-	c.Cfg.Network.GasTipCap = 1
-	c.Cfg.Network.GasFeeCap = 1
-	c.Cfg.Network.EIP1559DynamicFees = true
-	c.Cfg.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
-	c.Cfg.GasBumpRetries = 10
-
-	client, err := seth.NewClientWithConfig(c.Cfg)
-	require.NoError(t, err)
+	configCopy, err := test_utils.CopyConfig(c.Cfg)
+	require.NoError(t, err, "failed to copy config")
 
 	gasBumps := 0
 
-	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
-		gasBumps++
-		newGasPrice := new(big.Int).Mul(gasPrice, big.NewInt(100))
-		// cap max gas price to avoid hitting upper bound
-		if newGasPrice.Cmp(big.NewInt(10000000)) >= 0 {
-			return big.NewInt(0).Add(newGasPrice, big.NewInt(1000))
-		}
-		return newGasPrice
+	// Set a low gas fee and tip cap and a short timeout
+	configCopy.Network.PrivateKeys = []string{newPk}
+	configCopy.Network.GasTipCap = 1
+	configCopy.Network.GasFeeCap = 1
+	configCopy.Network.EIP1559DynamicFees = true
+	configCopy.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
+	configCopy.GasBump = &seth.GasBumpConfig{
+		Retries:     10,
+		MaxGasPrice: 10000000,
+		StrategyFn: func(gasPrice *big.Int) *big.Int {
+			gasBumps++
+			return new(big.Int).Mul(gasPrice, big.NewInt(100))
+		},
 	}
+
+	client, err := seth.NewClientWithConfig(configCopy)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		client.Cfg.Network.GasTipCap = 50_000_000_000
+		client.Cfg.Network.GasFeeCap = 100_000_000_000
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, c.Addresses[0])
+		require.NoError(t, err, "failed to transfer funds back to original root key")
+	})
 
 	contractAbi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -198,17 +405,32 @@ func TestGasBumping_Contract_Deployment_EIP_1559_SufficientBumping(t *testing.T)
 
 func TestGasBumping_Contract_Deployment_EIP_1559_NonRootKey(t *testing.T) {
 	c := newClient(t)
+	newPk := test_utils.NewPrivateKeyWithFunds(t, c, big.NewInt(0).Mul(oneEth, big.NewInt(10)))
+
+	configCopy, err := test_utils.CopyConfig(c.Cfg)
+	require.NoError(t, err, "failed to copy config")
+
+	gasBumps := 0
+	var one int64 = 1
 
 	// Set a low gas fee and tip cap and a short timeout
-	c.Cfg.Network.GasTipCap = 1
-	c.Cfg.Network.GasFeeCap = 1
-	c.Cfg.Network.EIP1559DynamicFees = true
-	c.Cfg.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
-	c.Cfg.GasBumpRetries = 10
-	var one int64 = 1
-	c.Cfg.EphemeralAddrs = &one
+	configCopy.EphemeralAddrs = &one
+	configCopy.RootKeyFundsBuffer = &one
+	configCopy.Network.PrivateKeys = []string{newPk}
+	configCopy.Network.GasTipCap = 1
+	configCopy.Network.GasFeeCap = 1
+	configCopy.Network.EIP1559DynamicFees = true
+	configCopy.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
+	configCopy.GasBump = &seth.GasBumpConfig{
+		Retries:     10,
+		MaxGasPrice: 10000000,
+		StrategyFn: func(gasPrice *big.Int) *big.Int {
+			gasBumps++
+			return new(big.Int).Mul(gasPrice, big.NewInt(100))
+		},
+	}
 
-	client, err := seth.NewClientWithConfig(c.Cfg)
+	client, err := seth.NewClientWithConfig(configCopy)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -216,19 +438,9 @@ func TestGasBumping_Contract_Deployment_EIP_1559_NonRootKey(t *testing.T) {
 		require.NoError(t, err, "failed to update nonces")
 		err = seth.ReturnFunds(client, client.Addresses[0].Hex())
 		require.NoError(t, err, "failed to return funds")
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, c.Addresses[0])
+		require.NoError(t, err, "failed to transfer funds back to original root key")
 	})
-
-	gasBumps := 0
-
-	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
-		gasBumps++
-		newGasPrice := new(big.Int).Mul(gasPrice, big.NewInt(100))
-		// cap max gas price to avoid hitting upper bound
-		if newGasPrice.Cmp(big.NewInt(10000000)) >= 0 {
-			return big.NewInt(0).Add(newGasPrice, big.NewInt(1000))
-		}
-		return newGasPrice
-	}
 
 	contractAbi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -243,23 +455,33 @@ func TestGasBumping_Contract_Deployment_EIP_1559_NonRootKey(t *testing.T) {
 
 func TestGasBumping_Contract_Deployment_EIP_1559_UnknownKey(t *testing.T) {
 	c := newClient(t)
+	newPk := test_utils.NewPrivateKeyWithFunds(t, c, big.NewInt(0).Mul(oneEth, big.NewInt(10)))
+
+	configCopy, err := test_utils.CopyConfig(c.Cfg)
+	require.NoError(t, err, "failed to copy config")
+
+	var one int64 = 1
 
 	// Set a low gas fee and tip cap and a short timeout
-	c.Cfg.Network.GasTipCap = 1
-	c.Cfg.Network.GasFeeCap = 1
-	c.Cfg.Network.EIP1559DynamicFees = true
-	c.Cfg.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
-	c.Cfg.GasBumpRetries = 2
-	var one int64 = 1
-	c.Cfg.EphemeralAddrs = &one
+	configCopy.EphemeralAddrs = &one
+	configCopy.RootKeyFundsBuffer = &one
+	configCopy.Network.PrivateKeys = []string{newPk}
+	configCopy.Network.GasTipCap = 1
+	configCopy.Network.GasFeeCap = 1
+	configCopy.Network.EIP1559DynamicFees = true
+	configCopy.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
+	configCopy.GasBump = &seth.GasBumpConfig{
+		Retries: 2,
+	}
 
-	client, err := seth.NewClientWithConfig(c.Cfg)
+	client, err := seth.NewClientWithConfig(configCopy)
 	require.NoError(t, err)
 
-	gasBumps := 0
 	removedAddress := client.Addresses[1]
 
-	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+	gasBumps := 0
+
+	client.Cfg.GasBump.StrategyFn = func(gasPrice *big.Int) *big.Int {
 		// remove address from client to simulate an unlikely situation, where we try to bump a transaction with having sender's private key
 		client.Addresses = client.Addresses[:1]
 		gasBumps++
@@ -272,6 +494,8 @@ func TestGasBumping_Contract_Deployment_EIP_1559_UnknownKey(t *testing.T) {
 		require.NoError(t, err, "failed to update nonces")
 		err = seth.ReturnFunds(client, client.Addresses[0].Hex())
 		require.NoError(t, err, "failed to return funds")
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, c.Addresses[0])
+		require.NoError(t, err, "failed to transfer funds back to original root key")
 	})
 
 	contractAbi, err := link_token.LinkTokenMetaData.GetAbi()
@@ -293,40 +517,45 @@ func TestGasBumping_Contract_Interaction_Legacy_SufficientBumping(t *testing.T) 
 	})
 
 	var zero int64 = 0
-	spammer.Cfg.EphemeralAddrs = &zero
 
 	configCopy, err := test_utils.CopyConfig(spammer.Cfg)
 	require.NoError(t, err, "failed to copy config")
 
+	newPk := test_utils.NewPrivateKeyWithFunds(t, spammer, oneEth)
+	configCopy.Network.PrivateKeys = []string{newPk}
+	configCopy.EphemeralAddrs = &zero
+
 	client, err := seth.NewClientWithConfig(configCopy)
 	require.NoError(t, err, "failed to create client")
 
-	gasBumps := 0
-
-	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
-		gasBumps++
-		newGasPrice := new(big.Int).Mul(gasPrice, big.NewInt(100))
-		// cap max gas price to avoid hitting upper bound
-		if newGasPrice.Cmp(big.NewInt(100000000)) >= 0 {
-			return big.NewInt(0).Add(newGasPrice, big.NewInt(1))
-		}
-		return newGasPrice
-	}
+	t.Cleanup(func() {
+		client.Cfg.Network.GasPrice = 100_000_000
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, spammer.Addresses[0])
+		require.NoError(t, err, "failed to transfer funds back to original root key")
+	})
 
 	contractAbi, err := link_token_interface.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
 
-	// Send a transaction with a low gas price
 	data, err := client.DeployContract(client.NewTXOpts(), "LinkToken", *contractAbi, common.FromHex(link_token_interface.LinkTokenMetaData.Bin))
 	require.NoError(t, err, "contract wasn't deployed")
 
 	linkContract, err := link_token.NewLinkToken(data.Address, client.Client)
 	require.NoError(t, err, "failed to instantiate contract")
 
+	gasBumps := 0
+
 	// Update config and set a low gas price and a short timeout
 	client.Cfg.Network.GasPrice = 1
 	client.Cfg.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
-	client.Cfg.GasBumpRetries = 10
+	client.Cfg.GasBump = &seth.GasBumpConfig{
+		Retries:     10,
+		MaxGasPrice: 10000000,
+		StrategyFn: func(gasPrice *big.Int) *big.Int {
+			gasBumps++
+			return new(big.Int).Mul(gasPrice, big.NewInt(100))
+		},
+	}
 
 	// introduce some traffic, so that bumping is necessary to mine the transaction
 	go func() {
@@ -335,6 +564,7 @@ func TestGasBumping_Contract_Interaction_Legacy_SufficientBumping(t *testing.T) 
 		}
 	}()
 
+	// Send a transaction with a low gas price
 	_, err = client.Decode(linkContract.Transfer(client.NewTXOpts(), client.Addresses[0], big.NewInt(1000000000000000000)))
 	require.NoError(t, err, "failed to mint tokens")
 	require.GreaterOrEqual(t, gasBumps, 1, "expected at least one transaction gas bump")
@@ -351,41 +581,44 @@ func TestGasBumping_Contract_Interaction_Legacy_BumpingDisabled(t *testing.T) {
 	})
 
 	var zero int64 = 0
-	spammer.Cfg.EphemeralAddrs = &zero
 
-	marshalled, err := toml.Marshal(spammer.Cfg)
-	require.NoError(t, err)
+	configCopy, err := test_utils.CopyConfig(spammer.Cfg)
+	require.NoError(t, err, "failed to copy config")
 
-	var configCopy seth.Config
-	err = toml.Unmarshal(marshalled, &configCopy)
-	require.NoError(t, err)
+	newPk := test_utils.NewPrivateKeyWithFunds(t, spammer, oneEth)
+	configCopy.Network.PrivateKeys = []string{newPk}
+	configCopy.EphemeralAddrs = &zero
 
-	configCopy.Network.DialTimeout = seth.MustMakeDuration(1 * time.Minute)
+	client, err := seth.NewClientWithConfig(configCopy)
+	require.NoError(t, err, "failed to create client")
 
-	client, err := seth.NewClientWithConfig(&configCopy)
-	require.NoError(t, err)
-
-	gasBumps := 0
-
-	// do not bump anything
-	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
-		gasBumps++
-		return gasPrice
-	}
+	t.Cleanup(func() {
+		client.Cfg.Network.GasPrice = 100_000_000
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, spammer.Addresses[0])
+		require.NoError(t, err, "failed to transfer funds back to original root key")
+	})
 
 	contractAbi, err := link_token_interface.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
 
-	// Send a transaction with a low gas price
 	data, err := client.DeployContract(client.NewTXOpts(), "LinkToken", *contractAbi, common.FromHex(link_token_interface.LinkTokenMetaData.Bin))
 	require.NoError(t, err, "contract wasn't deployed")
 
 	linkContract, err := link_token.NewLinkToken(data.Address, client.Client)
 	require.NoError(t, err, "failed to instantiate contract")
 
+	gasBumps := 0
+
 	// Update config and set a low gas price and a short timeout
 	client.Cfg.Network.GasPrice = 1
 	client.Cfg.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
+	client.Cfg.GasBump = &seth.GasBumpConfig{
+		StrategyFn: func(gasPrice *big.Int) *big.Int {
+			gasBumps++
+			// do not bump anything
+			return gasPrice
+		},
+	}
 
 	// introduce some traffic, so that bumping is necessary to mine the transaction
 	go func() {
@@ -394,6 +627,7 @@ func TestGasBumping_Contract_Interaction_Legacy_BumpingDisabled(t *testing.T) {
 		}
 	}()
 
+	// Send a transaction with a low gas price
 	_, err = client.Decode(linkContract.Transfer(client.NewTXOpts(), client.Addresses[0], big.NewInt(1000000000000000000)))
 	require.Error(t, err, "did not fail to transfer tokens, even though gas bumping is disabled")
 	require.Equal(t, gasBumps, 0, "expected no gas bumps")
@@ -410,42 +644,45 @@ func TestGasBumping_Contract_Interaction_Legacy_FailedBumping(t *testing.T) {
 	})
 
 	var zero int64 = 0
-	spammer.Cfg.EphemeralAddrs = &zero
 
-	marshalled, err := toml.Marshal(spammer.Cfg)
-	require.NoError(t, err)
+	configCopy, err := test_utils.CopyConfig(spammer.Cfg)
+	require.NoError(t, err, "failed to copy config")
 
-	var configCopy seth.Config
-	err = toml.Unmarshal(marshalled, &configCopy)
-	require.NoError(t, err)
+	newPk := test_utils.NewPrivateKeyWithFunds(t, spammer, oneEth)
+	configCopy.Network.PrivateKeys = []string{newPk}
+	configCopy.EphemeralAddrs = &zero
 
-	configCopy.Network.DialTimeout = seth.MustMakeDuration(1 * time.Minute)
+	client, err := seth.NewClientWithConfig(configCopy)
+	require.NoError(t, err, "failed to create client")
 
-	client, err := seth.NewClientWithConfig(&configCopy)
-	require.NoError(t, err)
-
-	gasBumps := 0
-
-	// this results in a gas bump that is too high to be accepted
-	client.Cfg.GasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
-		gasBumps++
-		return new(big.Int).Mul(gasPrice, big.NewInt(1000000000000))
-	}
+	t.Cleanup(func() {
+		client.Cfg.Network.GasPrice = 100_000_000
+		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, spammer.Addresses[0])
+		require.NoError(t, err, "failed to transfer funds back to original root key")
+	})
 
 	contractAbi, err := link_token_interface.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
 
-	// Send a transaction with a low gas price
 	data, err := client.DeployContract(client.NewTXOpts(), "LinkToken", *contractAbi, common.FromHex(link_token_interface.LinkTokenMetaData.Bin))
 	require.NoError(t, err, "contract wasn't deployed")
 
 	linkContract, err := link_token.NewLinkToken(data.Address, client.Client)
 	require.NoError(t, err, "failed to instantiate contract")
 
+	gasBumps := 0
+
 	// Update config and set a low gas price and a short timeout
 	client.Cfg.Network.GasPrice = 1
 	client.Cfg.Network.TxnTimeout = seth.MustMakeDuration(10 * time.Second)
-	client.Cfg.GasBumpRetries = 3
+	client.Cfg.GasBump = &seth.GasBumpConfig{
+		Retries: 3,
+		StrategyFn: func(gasPrice *big.Int) *big.Int {
+			gasBumps++
+			// this results in a gas bump that is too high to be accepted
+			return new(big.Int).Mul(gasPrice, big.NewInt(1000000000000))
+		},
+	}
 
 	// introduce some traffic, so that bumping is necessary to mine the transaction
 	go func() {
@@ -454,6 +691,7 @@ func TestGasBumping_Contract_Interaction_Legacy_FailedBumping(t *testing.T) {
 		}
 	}()
 
+	// Send a transaction with a low gas price
 	_, err = client.Decode(linkContract.Transfer(client.NewTXOpts(), client.Addresses[0], big.NewInt(1000000000000000000)))
 	require.Error(t, err, "did not fail to transfer tokens, even though gas bumping is disabled")
 	require.Equal(t, 3, gasBumps, "expected 2 gas bumps")
