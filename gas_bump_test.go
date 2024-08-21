@@ -509,7 +509,9 @@ func TestGasBumping_Contract_Deployment_EIP_1559_UnknownKey(t *testing.T) {
 func TestGasBumping_Contract_Interaction_Legacy_SufficientBumping(t *testing.T) {
 	spammer := test_utils.NewClientWithAddresses(t, 5)
 
+	syncCleanupCh := make(chan struct{})
 	t.Cleanup(func() {
+		<-syncCleanupCh
 		err := spammer.NonceManager.UpdateNonces()
 		require.NoError(t, err, "failed to update nonces")
 		err = seth.ReturnFunds(spammer, spammer.Addresses[0].Hex())
@@ -561,6 +563,7 @@ func TestGasBumping_Contract_Interaction_Legacy_SufficientBumping(t *testing.T) 
 	go func() {
 		for i := 0; i < 5; i++ {
 			_, _ = spammer.DeployContract(spammer.NewTXKeyOpts(spammer.AnySyncedKey()), "LinkToken", *contractAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
+			syncCleanupCh <- struct{}{}
 		}
 	}()
 
@@ -573,7 +576,9 @@ func TestGasBumping_Contract_Interaction_Legacy_SufficientBumping(t *testing.T) 
 func TestGasBumping_Contract_Interaction_Legacy_BumpingDisabled(t *testing.T) {
 	spammer := test_utils.NewClientWithAddresses(t, 5)
 
+	syncCleanupCh := make(chan struct{})
 	t.Cleanup(func() {
+		<-syncCleanupCh
 		err := spammer.NonceManager.UpdateNonces()
 		require.NoError(t, err, "failed to update nonces")
 		err = seth.ReturnFunds(spammer, spammer.Addresses[0].Hex())
@@ -624,6 +629,7 @@ func TestGasBumping_Contract_Interaction_Legacy_BumpingDisabled(t *testing.T) {
 	go func() {
 		for i := 0; i < 5; i++ {
 			_, _ = spammer.DeployContract(spammer.NewTXKeyOpts(spammer.AnySyncedKey()), "LinkToken", *contractAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
+			syncCleanupCh <- struct{}{}
 		}
 	}()
 
@@ -636,7 +642,9 @@ func TestGasBumping_Contract_Interaction_Legacy_BumpingDisabled(t *testing.T) {
 func TestGasBumping_Contract_Interaction_Legacy_FailedBumping(t *testing.T) {
 	spammer := test_utils.NewClientWithAddresses(t, 5)
 
+	syncCleanupCh := make(chan struct{})
 	t.Cleanup(func() {
+		<-syncCleanupCh
 		err := spammer.NonceManager.UpdateNonces()
 		require.NoError(t, err, "failed to update nonces")
 		err = seth.ReturnFunds(spammer, spammer.Addresses[0].Hex())
@@ -688,6 +696,7 @@ func TestGasBumping_Contract_Interaction_Legacy_FailedBumping(t *testing.T) {
 	go func() {
 		for i := 0; i < 5; i++ {
 			_, _ = spammer.DeployContract(spammer.NewTXKeyOpts(spammer.AnySyncedKey()), "LinkToken", *contractAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
+			syncCleanupCh <- struct{}{}
 		}
 	}()
 

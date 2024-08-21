@@ -35,7 +35,7 @@ test:
 kill_node:
 	pkill -f geth || pkill -f anvil || true
 
-# this is the only one without -race flag, because zerolog is not thread safe and fails the run
+# this one is without -race flag, because zerolog is not thread safe and fails the run
 .PHONY: test_api
 test_api:
 	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run TestAPI
@@ -52,10 +52,10 @@ test_cli:
 test_others:
 	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 -race `go list ./... | grep -v examples` -run "TestContractMap|TestGasEstimator|TestRPCHealtCheck|TestUtil|TestContract|TestConfig"
 
+# this one is without -race flag, because zerolog is not thread safe and fails the run
 .PHONY: test_gas_bumping
 test_gas_bumping:
-	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 -race `go list ./... | grep -v examples` -run "TestGasBumping"
-
+	SETH_NETWORK=$(network) SETH_ROOT_PRIVATE_KEY=$(root_private_key) go test -v -count 1 `go list ./... | grep -v examples` -run "TestGasBumping"
 
 .PHONY: test+cover
 test_cover:
