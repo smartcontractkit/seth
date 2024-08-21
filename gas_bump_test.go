@@ -33,7 +33,7 @@ func TestGasBumping_Contract_Deployment_Legacy_SufficientBumping(t *testing.T) {
 		newGasPrice := new(big.Int).Mul(gasPrice, big.NewInt(100))
 		// cap max gas price to avoid hitting upper bound
 		if newGasPrice.Cmp(big.NewInt(100000000)) >= 0 {
-			return big.NewInt(0).Add(newGasPrice, big.NewInt(1))
+			return big.NewInt(0).Add(gasPrice, big.NewInt(1))
 		}
 		return newGasPrice
 	}
@@ -134,7 +134,7 @@ func TestGasBumping_Contract_Deployment_Legacy_CustomBumpingFunction(t *testing.
 	c := newClient(t)
 	customGasBumps := 0
 
-	config := seth.NewConfigBuilder().
+	client, err := seth.NewClientBuilder().
 		WithRpcUrl(c.Cfg.Network.URLs[0]).
 		WithPrivateKeys(c.Cfg.Network.PrivateKeys).
 		WithGasPriceEstimations(false, 0, "").
@@ -147,12 +147,10 @@ func TestGasBumping_Contract_Deployment_Legacy_CustomBumpingFunction(t *testing.
 			return new(big.Int).Mul(gasPrice, big.NewInt(512))
 		}).
 		Build()
+	require.NoError(t, err)
 
 	// we don't want to expose it in builder, but setting it to 0 (automatic gas limit estimation) doesn't work well with gas price of 1 wei
-	config.Network.GasLimit = 8_000_000
-
-	client, err := seth.NewClientWithConfig(config)
-	require.NoError(t, err)
+	client.Cfg.Network.GasLimit = 8_000_000
 
 	contractAbi, err := link_token.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -297,17 +295,11 @@ func TestGasBumping_Contract_Interaction_Legacy_SufficientBumping(t *testing.T) 
 	var zero int64 = 0
 	spammer.Cfg.EphemeralAddrs = &zero
 
-	marshalled, err := toml.Marshal(spammer.Cfg)
-	require.NoError(t, err)
+	configCopy, err := test_utils.CopyConfig(spammer.Cfg)
+	require.NoError(t, err, "failed to copy config")
 
-	var configCopy seth.Config
-	err = toml.Unmarshal(marshalled, &configCopy)
-	require.NoError(t, err)
-
-	configCopy.Network.DialTimeout = seth.MustMakeDuration(1 * time.Minute)
-
-	client, err := seth.NewClientWithConfig(&configCopy)
-	require.NoError(t, err)
+	client, err := seth.NewClientWithConfig(configCopy)
+	require.NoError(t, err, "failed to create client")
 
 	gasBumps := 0
 

@@ -138,6 +138,9 @@ var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Trans
 
 	var replacementTx *types.Transaction
 
+	//TODO maybe strategy should accept old tx as argument, so that it can decide what to do with it
+	//TODO and return replacement tx?
+
 	// Legacy tx
 	switch tx.Type() {
 	case types.LegacyTxType:

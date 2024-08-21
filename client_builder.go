@@ -4,12 +4,12 @@ import (
 	"time"
 )
 
-type ConfigBuilder struct {
+type ClientBuilder struct {
 	config *Config
 }
 
-// NewConfigBuilder creates a new ConfigBuilder with reasonable default values. You only need to pass private key(s) and RPC URL to build a usable config.
-func NewConfigBuilder() *ConfigBuilder {
+// NewClientBuilder creates a new ClientBuilder with reasonable default values. You only need to pass private key(s) and RPC URL to build a usable config.
+func NewClientBuilder() *ClientBuilder {
 	network := &Network{
 		Name:                         DefaultNetworkName,
 		EIP1559DynamicFees:           true,
@@ -24,7 +24,7 @@ func NewConfigBuilder() *ConfigBuilder {
 		GasTipCap:                    DefaultGasTipCap,
 	}
 
-	return &ConfigBuilder{
+	return &ClientBuilder{
 		config: &Config{
 			ArtifactsDir:          "seth_artifacts",
 			EphemeralAddrs:        &ZeroInt64,
@@ -43,7 +43,7 @@ func NewConfigBuilder() *ConfigBuilder {
 
 // WithRpcUrl sets the RPC URL for the config.
 // Default value is an empty string (which is an incorrect value).
-func (c *ConfigBuilder) WithRpcUrl(url string) *ConfigBuilder {
+func (c *ClientBuilder) WithRpcUrl(url string) *ClientBuilder {
 	c.config.Network.URLs = []string{url}
 	// defensive programming
 	if len(c.config.Networks) == 0 {
@@ -56,7 +56,7 @@ func (c *ConfigBuilder) WithRpcUrl(url string) *ConfigBuilder {
 
 // WithPrivateKeys sets the private keys for the config. At least one is required to build a valid config.
 // Default value is an empty slice (which is an incorrect value).
-func (c *ConfigBuilder) WithPrivateKeys(pks []string) *ConfigBuilder {
+func (c *ClientBuilder) WithPrivateKeys(pks []string) *ClientBuilder {
 	c.config.Network.PrivateKeys = pks
 	// defensive programming
 	if len(c.config.Networks) == 0 {
@@ -69,7 +69,7 @@ func (c *ConfigBuilder) WithPrivateKeys(pks []string) *ConfigBuilder {
 
 // WithNetworkName sets the network name, useful mostly for debugging and logging.
 // Default value is "default".
-func (c *ConfigBuilder) WithNetworkName(name string) *ConfigBuilder {
+func (c *ClientBuilder) WithNetworkName(name string) *ClientBuilder {
 	c.config.Network.Name = name
 	// defensive programming
 	if len(c.config.Networks) == 0 {
@@ -85,7 +85,7 @@ func (c *ConfigBuilder) WithNetworkName(name string) *ConfigBuilder {
 // ss they will be used as fallback values, if the estimations fail.
 // Following priorities are supported: "slow", "standard" and "fast"
 // Default values are true for enabled, 200 blocks for estimation and "standard" for priority.
-func (c *ConfigBuilder) WithGasPriceEstimations(enabled bool, estimationBlocks uint64, txPriority string) *ConfigBuilder {
+func (c *ClientBuilder) WithGasPriceEstimations(enabled bool, estimationBlocks uint64, txPriority string) *ClientBuilder {
 	c.config.Network.GasPriceEstimationEnabled = enabled
 	c.config.Network.GasPriceEstimationBlocks = estimationBlocks
 	c.config.Network.GasPriceEstimationTxPriority = txPriority
@@ -102,7 +102,7 @@ func (c *ConfigBuilder) WithGasPriceEstimations(enabled bool, estimationBlocks u
 
 // WithEIP1559DynamicFees enables or disables EIP-1559 dynamic fees. If enabled, you should set gas fee cap and gas tip cap with `WithDynamicGasPrices()`
 // Default value is true.
-func (c *ConfigBuilder) WithEIP1559DynamicFees(enabled bool) *ConfigBuilder {
+func (c *ClientBuilder) WithEIP1559DynamicFees(enabled bool) *ClientBuilder {
 	c.config.Network.EIP1559DynamicFees = enabled
 	// defensive programming
 	if len(c.config.Networks) == 0 {
@@ -115,7 +115,7 @@ func (c *ConfigBuilder) WithEIP1559DynamicFees(enabled bool) *ConfigBuilder {
 
 // WithLegacyGasPrice sets the gas price for legacy transactions that will be used only if EIP-1559 dynamic fees are disabled.
 // Default value is 1 gwei.
-func (c *ConfigBuilder) WithLegacyGasPrice(gasPrice int64) *ConfigBuilder {
+func (c *ClientBuilder) WithLegacyGasPrice(gasPrice int64) *ClientBuilder {
 	c.config.Network.GasPrice = gasPrice
 	// defensive programming
 	if len(c.config.Networks) == 0 {
@@ -128,7 +128,7 @@ func (c *ConfigBuilder) WithLegacyGasPrice(gasPrice int64) *ConfigBuilder {
 
 // WithDynamicGasPrices sets the gas fee cap and gas tip cap for EIP-1559 dynamic fees. These values will be used only if EIP-1559 dynamic fees are enabled.
 // Default values are 150 gwei for gas fee cap and 50 gwei for gas tip cap.
-func (c *ConfigBuilder) WithDynamicGasPrices(gasFeeCap, gasTipCap int64) *ConfigBuilder {
+func (c *ClientBuilder) WithDynamicGasPrices(gasFeeCap, gasTipCap int64) *ClientBuilder {
 	c.config.Network.GasFeeCap = gasFeeCap
 	c.config.Network.GasTipCap = gasTipCap
 	// defensive programming
@@ -143,7 +143,7 @@ func (c *ConfigBuilder) WithDynamicGasPrices(gasFeeCap, gasTipCap int64) *Config
 
 // WithTransferGasFee sets the gas fee for transfer transactions. This value is used, when sending funds to ephemeral keys or returning funds to root private key.
 // Default value is 21_000 wei.
-func (c *ConfigBuilder) WithTransferGasFee(gasFee int64) *ConfigBuilder {
+func (c *ClientBuilder) WithTransferGasFee(gasFee int64) *ClientBuilder {
 	c.config.Network.TransferGasFee = gasFee
 	// defensive programming
 	if len(c.config.Networks) == 0 {
@@ -156,7 +156,7 @@ func (c *ConfigBuilder) WithTransferGasFee(gasFee int64) *ConfigBuilder {
 
 // WithGasBumping sets the number of retries for gas bumping. If the transaction is not mined within this number of retries, it will be considered failed. You can also provide a custom bumping strategy.
 // Default value is 3 retries and a default bumping strategy (with gas increase % based on gas_price_estimation_tx_priority)
-func (c *ConfigBuilder) WithGasBumping(retries uint, customBumpingStrategy GasBumpStrategyFn) *ConfigBuilder {
+func (c *ClientBuilder) WithGasBumping(retries uint, customBumpingStrategy GasBumpStrategyFn) *ClientBuilder {
 	c.config.GasBumpRetries = retries
 	c.config.GasBumpStrategyFn = customBumpingStrategy
 	return c
@@ -164,7 +164,7 @@ func (c *ConfigBuilder) WithGasBumping(retries uint, customBumpingStrategy GasBu
 
 // WithTransactionTimeout sets the timeout for transactions. If the transaction is not mined within this time, it will be considered failed.
 // Default value is 5 minutes.
-func (c *ConfigBuilder) WithTransactionTimeout(timeout time.Duration) *ConfigBuilder {
+func (c *ClientBuilder) WithTransactionTimeout(timeout time.Duration) *ClientBuilder {
 	c.config.Network.TxnTimeout = MustMakeDuration(timeout)
 	// defensive programming
 	if len(c.config.Networks) == 0 {
@@ -177,7 +177,7 @@ func (c *ConfigBuilder) WithTransactionTimeout(timeout time.Duration) *ConfigBui
 
 // WithRpcDialTimeout sets the timeout for dialing the RPC server. If the connection is not established within this time, it will be considered failed.
 // Default value is 1 minute.
-func (c *ConfigBuilder) WithRpcDialTimeout(timeout time.Duration) *ConfigBuilder {
+func (c *ClientBuilder) WithRpcDialTimeout(timeout time.Duration) *ClientBuilder {
 	c.config.Network.DialTimeout = MustMakeDuration(timeout)
 	// defensive programming
 	if len(c.config.Networks) == 0 {
@@ -190,7 +190,7 @@ func (c *ConfigBuilder) WithRpcDialTimeout(timeout time.Duration) *ConfigBuilder
 
 // WithEphemeralAddresses sets the number of ephemeral addresses to generate and the amount of funds to keep in the root private key.
 // Default values are 0 for ephemeral addresses and 0 for root key funds buffer.
-func (c *ConfigBuilder) WithEphemeralAddresses(ephemeralAddressCount, rootKeyBufferAmount int64) *ConfigBuilder {
+func (c *ClientBuilder) WithEphemeralAddresses(ephemeralAddressCount, rootKeyBufferAmount int64) *ClientBuilder {
 	c.config.EphemeralAddrs = &ephemeralAddressCount
 	c.config.RootKeyFundsBuffer = &rootKeyBufferAmount
 
@@ -199,7 +199,7 @@ func (c *ConfigBuilder) WithEphemeralAddresses(ephemeralAddressCount, rootKeyBuf
 
 // WithTracing sets the tracing level and outputs. Tracing level can be one of: "all", "reverted", "none". Outputs can be one or more of: "console", "dot" or "json".
 // Default values are "reverted" and ["console", "dot"].
-func (c *ConfigBuilder) WithTracing(level string, outputs []string) *ConfigBuilder {
+func (c *ClientBuilder) WithTracing(level string, outputs []string) *ClientBuilder {
 	c.config.TracingLevel = level
 	c.config.TraceOutputs = outputs
 	return c
@@ -207,7 +207,7 @@ func (c *ConfigBuilder) WithTracing(level string, outputs []string) *ConfigBuild
 
 // WithProtections enables or disables nonce protection (fails, when key has a pending transaction and you try to submit another one) and node health check on startup.
 // Default values are false for nonce protection and true for node health check.
-func (c *ConfigBuilder) WithProtections(pendingNonceProtectionEnabled, nodeHealthStartupCheck bool) *ConfigBuilder {
+func (c *ClientBuilder) WithProtections(pendingNonceProtectionEnabled, nodeHealthStartupCheck bool) *ClientBuilder {
 	c.config.PendingNonceProtectionEnabled = pendingNonceProtectionEnabled
 	c.config.CheckRpcHealthOnStart = nodeHealthStartupCheck
 	return c
@@ -215,14 +215,14 @@ func (c *ConfigBuilder) WithProtections(pendingNonceProtectionEnabled, nodeHealt
 
 // WithArtifactsFolder sets the folder where the Seth artifacts such as DOT graphs or JSON will be saved.
 // Default value is "seth_artifacts".
-func (c *ConfigBuilder) WithArtifactsFolder(folder string) *ConfigBuilder {
+func (c *ClientBuilder) WithArtifactsFolder(folder string) *ClientBuilder {
 	c.config.ArtifactsDir = folder
 	return c
 }
 
 // WithNonceManager sets the rate limit for key sync, number of retries, timeout and retry delay.
 // Default values are 10 calls per second, 3 retires, 60s timeout and 5s retry delay.
-func (c *ConfigBuilder) WithNonceManager(rateLimitSec int, retries uint, timeout, retryDelay time.Duration) *ConfigBuilder {
+func (c *ClientBuilder) WithNonceManager(rateLimitSec int, retries uint, timeout, retryDelay time.Duration) *ClientBuilder {
 	c.config.NonceManager = &NonceManagerCfg{
 		KeySyncRateLimitSec: rateLimitSec,
 		KeySyncRetries:      retries,
@@ -233,7 +233,7 @@ func (c *ConfigBuilder) WithNonceManager(rateLimitSec int, retries uint, timeout
 	return c
 }
 
-// Build creates a new Config from the builder.
-func (c *ConfigBuilder) Build() *Config {
-	return c.config
+// Build creates a new Client from the builder.
+func (c *ClientBuilder) Build() (*Client, error) {
+	return NewClientWithConfig(c.config)
 }

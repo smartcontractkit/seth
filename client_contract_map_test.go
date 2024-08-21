@@ -2,14 +2,13 @@ package seth_test
 
 import (
 	"crypto/ecdsa"
-	"os"
-	"testing"
-	"time"
-
 	"github.com/barkimedes/go-deepcopy"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/smartcontractkit/seth"
+	"github.com/smartcontractkit/seth/test_utils"
 	"github.com/stretchr/testify/require"
+	"os"
+	"testing"
 )
 
 func TestContractMapSavesDeployedContractsToFileAndReadsThem(t *testing.T) {
@@ -95,13 +94,12 @@ func TestContractMapSimulatedClientDoesntSaveContractMap(t *testing.T) {
 }
 
 func TestContractMapNewClientIsCreatedEvenIfNoContractMapFileExists(t *testing.T) {
-	cfg := deepcopy.MustAnything(TestEnv.Client.Cfg).(*seth.Config)
+	cfg, err := test_utils.CopyConfig(TestEnv.Client.Cfg)
+	require.NoError(t, err, "failed to copy config")
 
 	cfg.SaveDeployedContractsMap = true
 	// change network name so that is not treated as simulated
 	cfg.Network.Name = "geth2"
-	// set timeout manually, because deep copy fails to copy it
-	cfg.Network.TxnTimeout = seth.MustMakeDuration(time.Duration(5) * time.Second)
 	cfg.ContractMapFile = cfg.GenerateContractMapFileName()
 	nm, err := seth.NewNonceManager(cfg, TestEnv.Client.Addresses, TestEnv.Client.PrivateKeys)
 	require.NoError(t, err, "failed to create nonce manager")
@@ -133,7 +131,8 @@ func TestContractMapNewClientIsNotCreatedWhenCorruptedContractMapFileExists(t *t
 	err = os.WriteFile(file.Name(), []byte("invalid toml"), 0600)
 	require.NoError(t, err, "failed to write invalid toml")
 
-	cfg := deepcopy.MustAnything(TestEnv.Client.Cfg).(*seth.Config)
+	cfg, err := test_utils.CopyConfig(TestEnv.Client.Cfg)
+	require.NoError(t, err, "failed to copy config")
 	addresses := deepcopy.MustAnything(TestEnv.Client.Addresses).([]common.Address)
 	pks := deepcopy.MustAnything(TestEnv.Client.PrivateKeys).([]*ecdsa.PrivateKey)
 	// change network name so that is not treated as simulated
@@ -152,7 +151,8 @@ func TestContractMapNewClientIsNotCreatedWhenCorruptedContractMapFileExists_Inva
 	err = seth.SaveDeployedContract(file.Name(), "contractName", "malformed")
 	require.NoError(t, err, "failed to write invalid toml")
 
-	cfg := deepcopy.MustAnything(TestEnv.Client.Cfg).(*seth.Config)
+	cfg, err := test_utils.CopyConfig(TestEnv.Client.Cfg)
+	require.NoError(t, err, "failed to copy config")
 	addresses := deepcopy.MustAnything(TestEnv.Client.Addresses).([]common.Address)
 	pks := deepcopy.MustAnything(TestEnv.Client.PrivateKeys).([]*ecdsa.PrivateKey)
 	// change network name so that is not treated as simulated

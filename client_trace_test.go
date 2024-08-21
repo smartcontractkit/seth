@@ -3,6 +3,7 @@ package seth_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/smartcontractkit/seth/test_utils"
 	"io"
 	"math/big"
 	"os"
@@ -11,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/barkimedes/go-deepcopy"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -1514,7 +1514,8 @@ func TestTraceeRevertReasonNonRootSender(t *testing.T) {
 }
 
 func TestTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing.T) {
-	cfg := deepcopy.MustAnything(TestEnv.Client.Cfg).(*seth.Config)
+	cfg, err := test_utils.CopyConfig(TestEnv.Client.Cfg)
+	require.NoError(t, err, "failed to copy config")
 
 	as, err := seth.NewContractStore(filepath.Join(cfg.ConfigDir, cfg.ABIDir), filepath.Join(cfg.ConfigDir, cfg.BINDir))
 	require.NoError(t, err, "failed to create contract store")
@@ -1563,7 +1564,8 @@ func TestTraceContractTracingClientIntialisesTracerIfTracingIsEnabled(t *testing
 }
 
 func TestTraceContractTracingSaveToJson(t *testing.T) {
-	cfg := deepcopy.MustAnything(TestEnv.Client.Cfg).(*seth.Config)
+	cfg, err := test_utils.CopyConfig(TestEnv.Client.Cfg)
+	require.NoError(t, err, "failed to copy config")
 
 	as, err := seth.NewContractStore(filepath.Join(cfg.ConfigDir, cfg.ABIDir), filepath.Join(cfg.ConfigDir, cfg.BINDir))
 	require.NoError(t, err, "failed to create contract store")

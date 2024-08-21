@@ -1,7 +1,6 @@
 package seth_test
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -12,11 +11,8 @@ import (
 	link_token "github.com/smartcontractkit/seth/contracts/bind/link"
 )
 
-func TestConfig_Default(t *testing.T) {
-	cfg := seth.DefaultConfig("ws://localhost:8546", []string{"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"})
-	require.NotNil(t, cfg, "failed to create default config")
-
-	client, err := seth.NewClientWithConfig(cfg)
+func TestConfig_DefaultClient(t *testing.T) {
+	client, err := seth.DefaultClient("ws://localhost:8546", []string{"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"})
 	require.NoError(t, err, "failed to create client with default config")
 	require.Equal(t, 1, len(client.PrivateKeys), "expected 1 private key")
 
@@ -28,10 +24,7 @@ func TestConfig_Default(t *testing.T) {
 }
 
 func TestConfig_Default_TwoPks(t *testing.T) {
-	cfg := seth.DefaultConfig("ws://localhost:8546", []string{"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"})
-	require.NotNil(t, cfg, "failed to create default config")
-
-	client, err := seth.NewClientWithConfig(cfg)
+	client, err := seth.DefaultClient("ws://localhost:8546", []string{"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"})
 	require.NoError(t, err, "failed to create client with default config")
 	require.Equal(t, 2, len(client.PrivateKeys), "expected 2 private keys")
 
@@ -42,45 +35,14 @@ func TestConfig_Default_TwoPks(t *testing.T) {
 	require.NoError(t, err, "failed to deploy LINK contract")
 }
 
-func TestConfig_Default_EmptyUrl(t *testing.T) {
-	cfg, err := seth.ValidatedDefaultConfig("", []string{"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"})
-	require.Nil(t, cfg, "expected nil config")
-	require.Error(t, err, "succeeded in creating default config")
-	require.Equal(t, seth.ErrEmptyRPCURL, err.Error(), "expected empty rpc url error")
-}
-
-func TestConfig_Default_NoPks(t *testing.T) {
-	cfg, err := seth.ValidatedDefaultConfig("ws://localhost:8546", []string{})
-	require.Nil(t, cfg, "expected nil config")
-	require.Error(t, err, "succeeded in creating default config")
-	require.Equal(t, seth.ErrNoPrivateKeysPassed, err.Error(), "expected no private keys error")
-}
-
-func TestConfig_Default_InvalidPk(t *testing.T) {
-	cfg, err := seth.ValidatedDefaultConfig("ws://localhost:8546", []string{"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff8"})
-	require.Nil(t, cfg, "expected nil config")
-	require.Error(t, err, "succeeded in creating default config")
-	require.Equal(t, fmt.Sprintf("%s: invalid hex data for private key", seth.ErrInvalidPrivateKey), err.Error(), "expected invalid private key error")
-}
-
-func TestConfig_Default_InvalidAndValidPk(t *testing.T) {
-	cfg, err := seth.ValidatedDefaultConfig("ws://localhost:8546", []string{"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff0", "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"})
-	require.Nil(t, cfg, "expected nil config")
-	require.Error(t, err, "succeeded in creating default config")
-	require.Equal(t, fmt.Sprintf("%s: invalid hex data for private key", seth.ErrInvalidPrivateKey), err.Error(), "expected invalid private key error")
-}
-
 func TestConfig_MinimalBuilder(t *testing.T) {
-	builder := seth.NewConfigBuilder()
+	builder := seth.NewClientBuilder()
 
-	cfg := builder.WithRpcUrl("ws://localhost:8546").
+	client, err := builder.WithRpcUrl("ws://localhost:8546").
 		WithPrivateKeys([]string{"ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"}).
 		Build()
+	require.NoError(t, err, "failed to build client")
 
-	require.NotNil(t, cfg, "failed to build config")
-
-	client, err := seth.NewClientWithConfig(cfg)
-	require.NoError(t, err, "failed to create client")
 	require.Equal(t, 1, len(client.PrivateKeys), "expected 1 private key")
 
 	linkAbi, err := link_token.LinkTokenMetaData.GetAbi()
@@ -91,9 +53,9 @@ func TestConfig_MinimalBuilder(t *testing.T) {
 }
 
 func TestConfig_MaximalBuilder(t *testing.T) {
-	builder := seth.NewConfigBuilder()
+	builder := seth.NewClientBuilder()
 
-	cfg := builder.
+	client, err := builder.
 		// network
 		WithNetworkName("my network").
 		WithRpcUrl("ws://localhost:8546").
@@ -112,9 +74,7 @@ func TestConfig_MaximalBuilder(t *testing.T) {
 		WithNonceManager(10, 3, 60, 5).
 		Build()
 
-	require.NotNil(t, cfg, "failed to build config")
-
-	client, err := seth.NewClientWithConfig(cfg)
+	require.NoError(t, err, "failed to build client")
 	require.NoError(t, err, "failed to create client")
 	require.Equal(t, 11, len(client.PrivateKeys), "expected 11 private keys")
 
@@ -131,9 +91,9 @@ func TestConfig_MaximalBuilder(t *testing.T) {
 }
 
 func TestConfig_LegacyGas_No_Estimations(t *testing.T) {
-	builder := seth.NewConfigBuilder()
+	builder := seth.NewClientBuilder()
 
-	cfg := builder.
+	client, err := builder.
 		// network
 		WithNetworkName("my network").
 		WithRpcUrl("ws://localhost:8546").
@@ -142,11 +102,7 @@ func TestConfig_LegacyGas_No_Estimations(t *testing.T) {
 		WithLegacyGasPrice(710_000_000).
 		WithGasPriceEstimations(false, 0, "").
 		Build()
-
-	require.NotNil(t, cfg, "failed to build config")
-
-	client, err := seth.NewClientWithConfig(cfg)
-	require.NoError(t, err, "failed to create client")
+	require.NoError(t, err, "failed to build client")
 	require.Equal(t, 1, len(client.PrivateKeys), "expected 1 private key")
 
 	linkAbi, err := link_token.LinkTokenMetaData.GetAbi()
@@ -157,9 +113,9 @@ func TestConfig_LegacyGas_No_Estimations(t *testing.T) {
 }
 
 func TestConfig_Eip1559Gas_With_Estimations(t *testing.T) {
-	builder := seth.NewConfigBuilder()
+	builder := seth.NewClientBuilder()
 
-	cfg := builder.
+	client, err := builder.
 		// network
 		WithNetworkName("my network").
 		WithRpcUrl("ws://localhost:8546").
@@ -170,10 +126,7 @@ func TestConfig_Eip1559Gas_With_Estimations(t *testing.T) {
 		WithGasPriceEstimations(false, 10, seth.Priority_Fast).
 		Build()
 
-	require.NotNil(t, cfg, "failed to build config")
-
-	client, err := seth.NewClientWithConfig(cfg)
-	require.NoError(t, err, "failed to create client")
+	require.NoError(t, err, "failed to build client")
 	require.Equal(t, 1, len(client.PrivateKeys), "expected 1 private key")
 
 	linkAbi, err := link_token.LinkTokenMetaData.GetAbi()
