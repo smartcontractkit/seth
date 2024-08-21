@@ -81,6 +81,7 @@ func (c *Config) GasBumpRetries() uint {
 	return c.GasBump.Retries
 }
 
+// HasMaxBumpGasPrice returns true if the max gas price for gas bumping is set
 func (c *Config) HasMaxBumpGasPrice() bool {
 	return c.GasBump != nil && c.GasBump.MaxGasPrice > 0
 }

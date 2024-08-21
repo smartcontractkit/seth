@@ -211,7 +211,7 @@ func TestAPIKeys(t *testing.T) {
 	}
 
 	keyCount := 60
-	c := test_utils.NewClientWithAddresses(t, keyCount)
+	c := test_utils.NewClientWithAddresses(t, keyCount, big.NewInt(3))
 
 	t.Cleanup(func() {
 		err := c.NonceManager.UpdateNonces()
@@ -280,7 +280,7 @@ func TestAPISyncKeysPool(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(seth.LogLevelEnvVar, "trace")
-			c := test_utils.NewClientWithAddresses(t, tc.keys)
+			c := test_utils.NewClientWithAddresses(t, tc.keys, big.NewInt(3))
 
 			t.Cleanup(func() {
 				err := c.NonceManager.UpdateNonces()

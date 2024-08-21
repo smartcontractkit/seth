@@ -100,14 +100,14 @@ var PriorityBasedGasBumpingStrategyFn = func(priority string) GasBumpStrategyFn 
 	}
 }
 
-// bumpGasOnTimeout bumps gas price of the transaction if it wasn't confirmed in time. It returns a signed replacement transaction.
+// prepareReplacementTransaction bumps gas price of the transaction if it wasn't confirmed in time. It returns a signed replacement transaction.
 // Errors might be returned, because transaction was no longer pending, max gas price was reached or there was an error sending the transaction (e.g. nonce too low, meaning that original transaction was mined).
-var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Transaction, error) {
+var prepareReplacementTransaction = func(client *Client, tx *types.Transaction) (*types.Transaction, error) {
 	L.Warn().Msgf("Transaction wasn't confirmed in %s. Bumping gas", client.Cfg.Network.TxnTimeout.String())
 
-	ctx, cancel := context.WithTimeout(context.Background(), client.Cfg.Network.TxnTimeout.Duration())
-	_, isPending, err := client.Client.TransactionByHash(ctx, tx.Hash())
-	cancel()
+	ctxPending, cancelPending := context.WithTimeout(context.Background(), client.Cfg.Network.TxnTimeout.Duration())
+	_, isPending, err := client.Client.TransactionByHash(ctxPending, tx.Hash())
+	defer cancelPending()
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Trans
 	var replacementTx *types.Transaction
 
 	var checkMaxPrice = func(gasPrice, maxGasPrice *big.Int) error {
-		if client.Cfg.HasMaxBumpGasPrice() {
+		if !client.Cfg.HasMaxBumpGasPrice() {
 			L.Debug().Msg("Max gas price for gas bump is not set, skipping check")
 			return nil
 		}
@@ -237,7 +237,7 @@ var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Trans
 		return nil, err
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), client.Cfg.Network.TxnTimeout.Duration())
+	ctx, cancel := context.WithTimeout(context.Background(), client.Cfg.Network.TxnTimeout.Duration())
 	defer cancel()
 	err = client.Client.SendTransaction(ctx, replacementTx)
 	if err != nil {

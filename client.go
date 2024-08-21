@@ -465,9 +465,9 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 
 			return err
 		}, retry.OnRetry(func(i uint, retryErr error) {
-			replacementTx, bumpErr := bumpGasOnTimeout(m, tx)
-			if bumpErr != nil {
-				L.Debug().Str("Bump error", bumpErr.Error()).Str("Current error", retryErr.Error()).Uint("Attempt", i).Msg("Failed to bump gas for transaction. Retrying without bump")
+			replacementTx, replacementErr := prepareReplacementTransaction(m, tx)
+			if replacementErr != nil {
+				L.Debug().Str("Replacement error", replacementErr.Error()).Str("Current error", retryErr.Error()).Uint("Attempt", i).Msg("Failed to prepare replacement transaction. Retrying without the original one")
 				return
 			} else {
 				L.Debug().Str("Current error", retryErr.Error()).Uint("Attempt", i).Msg("Waiting for transaction to be confirmed after gas bump")
@@ -1163,9 +1163,9 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 		}, retry.OnRetry(func(i uint, retryErr error) {
 			switch {
 			case errors.Is(retryErr, context.DeadlineExceeded):
-				replacementTx, bumpErr := bumpGasOnTimeout(m, tx)
-				if bumpErr != nil {
-					L.Debug().Str("Current error", retryErr.Error()).Str("Bump error", bumpErr.Error()).Uint("Attempt", i+1).Msg("Failed to bump gas for contract deployment. Waiting without bump")
+				replacementTx, replacementErr := prepareReplacementTransaction(m, tx)
+				if replacementErr != nil {
+					L.Debug().Str("Current error", retryErr.Error()).Str("Replacement error", replacementErr.Error()).Uint("Attempt", i+1).Msg("Failed to prepare replacement transaction for contract deployment. Retrying with the original one")
 					return
 				}
 				tx = replacementTx

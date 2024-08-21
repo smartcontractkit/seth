@@ -11,9 +11,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// NewClientWithAddresses creates a new Seth client with the given number of addresses. Each address is funded with the
-// calculated with the amount of ETH calculated by dividing the total balance of root key by the number of addresses (minus root key buffer amount).
-func NewClientWithAddresses(t *testing.T, addressCount int) *seth.Client {
+// NewClientWithAddresses creates a new Seth client with the given number of addresses. Each address is funded with the given amount of native tokens.
+func NewClientWithAddresses(t *testing.T, addressCount int, funding *big.Int) *seth.Client {
 	cfg, err := seth.ReadConfig()
 	require.NoError(t, err, "failed to read config")
 
@@ -38,9 +37,6 @@ func NewClientWithAddresses(t *testing.T, addressCount int) *seth.Client {
 		gasPrice = big.NewInt(c.Cfg.Network.GasPrice)
 	}
 
-	bd, err := c.CalculateSubKeyFunding(int64(addressCount), gasPrice.Int64(), *cfg.RootKeyFundsBuffer)
-	require.NoError(t, err, "failed to calculate subkey funding")
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	eg, egCtx := errgroup.WithContext(ctx)
@@ -48,7 +44,7 @@ func NewClientWithAddresses(t *testing.T, addressCount int) *seth.Client {
 	for _, addr := range addresses {
 		addr := addr
 		eg.Go(func() error {
-			return c.TransferETHFromKey(egCtx, 0, addr, bd.AddrFunding, gasPrice)
+			return c.TransferETHFromKey(egCtx, 0, addr, funding, gasPrice)
 		})
 	}
 	err = eg.Wait()

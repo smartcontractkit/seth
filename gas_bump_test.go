@@ -15,6 +15,7 @@ import (
 )
 
 var oneEth = big.NewInt(1000000000000000000)
+var zero int64 = 0
 
 func TestGasBumping_Contract_Deployment_Legacy_SufficientBumping(t *testing.T) {
 	c := newClient(t)
@@ -212,32 +213,17 @@ func TestGasBumping_Contract_Deployment_Legacy_CustomBumpingFunction(t *testing.
 }
 
 func TestGasBumping_Contract_Interaction_Legacy_MaxGas(t *testing.T) {
-	spammer := test_utils.NewClientWithAddresses(t, 5)
-
-	t.Cleanup(func() {
-		err := spammer.NonceManager.UpdateNonces()
-		require.NoError(t, err, "failed to update nonces")
-		err = seth.ReturnFunds(spammer, spammer.Addresses[0].Hex())
-		require.NoError(t, err, "failed to return funds")
-	})
-
-	var zero int64 = 0
-	spammer.Cfg.EphemeralAddrs = &zero
+	spammer := test_utils.NewClientWithAddresses(t, 5, oneEth)
 
 	configCopy, err := test_utils.CopyConfig(spammer.Cfg)
 	require.NoError(t, err, "failed to copy config")
 
 	newPk := test_utils.NewPrivateKeyWithFunds(t, spammer, oneEth)
 	configCopy.Network.PrivateKeys = []string{newPk}
+	configCopy.EphemeralAddrs = &zero
 
 	client, err := seth.NewClientWithConfig(configCopy)
 	require.NoError(t, err, "failed to create client")
-
-	t.Cleanup(func() {
-		client.Cfg.Network.GasPrice = 100_000_000
-		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, spammer.Addresses[0])
-		require.NoError(t, err, "failed to transfer funds back to original root key")
-	})
 
 	contractAbi, err := link_token_interface.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -284,16 +270,7 @@ func TestGasBumping_Contract_Interaction_Legacy_MaxGas(t *testing.T) {
 }
 
 func TestGasBumping_Contract_Interaction_EIP1559_MaxGas(t *testing.T) {
-	spammer := test_utils.NewClientWithAddresses(t, 5)
-
-	t.Cleanup(func() {
-		err := spammer.NonceManager.UpdateNonces()
-		require.NoError(t, err, "failed to update nonces")
-		err = seth.ReturnFunds(spammer, spammer.Addresses[0].Hex())
-		require.NoError(t, err, "failed to return funds")
-	})
-
-	var zero int64 = 0
+	spammer := test_utils.NewClientWithAddresses(t, 5, oneEth)
 
 	configCopy, err := test_utils.CopyConfig(spammer.Cfg)
 	require.NoError(t, err, "failed to copy config")
@@ -304,12 +281,6 @@ func TestGasBumping_Contract_Interaction_EIP1559_MaxGas(t *testing.T) {
 
 	client, err := seth.NewClientWithConfig(configCopy)
 	require.NoError(t, err, "failed to create client")
-
-	t.Cleanup(func() {
-		client.Cfg.Network.GasPrice = 100_000_000
-		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, spammer.Addresses[0])
-		require.NoError(t, err, "failed to transfer funds back to original root key")
-	})
 
 	contractAbi, err := link_token_interface.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -507,18 +478,7 @@ func TestGasBumping_Contract_Deployment_EIP_1559_UnknownKey(t *testing.T) {
 }
 
 func TestGasBumping_Contract_Interaction_Legacy_SufficientBumping(t *testing.T) {
-	spammer := test_utils.NewClientWithAddresses(t, 5)
-
-	syncCleanupCh := make(chan struct{})
-	t.Cleanup(func() {
-		<-syncCleanupCh
-		err := spammer.NonceManager.UpdateNonces()
-		require.NoError(t, err, "failed to update nonces")
-		err = seth.ReturnFunds(spammer, spammer.Addresses[0].Hex())
-		require.NoError(t, err, "failed to return funds")
-	})
-
-	var zero int64 = 0
+	spammer := test_utils.NewClientWithAddresses(t, 5, oneEth)
 
 	configCopy, err := test_utils.CopyConfig(spammer.Cfg)
 	require.NoError(t, err, "failed to copy config")
@@ -529,12 +489,6 @@ func TestGasBumping_Contract_Interaction_Legacy_SufficientBumping(t *testing.T) 
 
 	client, err := seth.NewClientWithConfig(configCopy)
 	require.NoError(t, err, "failed to create client")
-
-	t.Cleanup(func() {
-		client.Cfg.Network.GasPrice = 100_000_000
-		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, spammer.Addresses[0])
-		require.NoError(t, err, "failed to transfer funds back to original root key")
-	})
 
 	contractAbi, err := link_token_interface.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -563,7 +517,6 @@ func TestGasBumping_Contract_Interaction_Legacy_SufficientBumping(t *testing.T) 
 	go func() {
 		for i := 0; i < 5; i++ {
 			_, _ = spammer.DeployContract(spammer.NewTXKeyOpts(spammer.AnySyncedKey()), "LinkToken", *contractAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
-			syncCleanupCh <- struct{}{}
 		}
 	}()
 
@@ -574,18 +527,7 @@ func TestGasBumping_Contract_Interaction_Legacy_SufficientBumping(t *testing.T) 
 }
 
 func TestGasBumping_Contract_Interaction_Legacy_BumpingDisabled(t *testing.T) {
-	spammer := test_utils.NewClientWithAddresses(t, 5)
-
-	syncCleanupCh := make(chan struct{})
-	t.Cleanup(func() {
-		<-syncCleanupCh
-		err := spammer.NonceManager.UpdateNonces()
-		require.NoError(t, err, "failed to update nonces")
-		err = seth.ReturnFunds(spammer, spammer.Addresses[0].Hex())
-		require.NoError(t, err, "failed to return funds")
-	})
-
-	var zero int64 = 0
+	spammer := test_utils.NewClientWithAddresses(t, 5, oneEth)
 
 	configCopy, err := test_utils.CopyConfig(spammer.Cfg)
 	require.NoError(t, err, "failed to copy config")
@@ -596,12 +538,6 @@ func TestGasBumping_Contract_Interaction_Legacy_BumpingDisabled(t *testing.T) {
 
 	client, err := seth.NewClientWithConfig(configCopy)
 	require.NoError(t, err, "failed to create client")
-
-	t.Cleanup(func() {
-		client.Cfg.Network.GasPrice = 100_000_000
-		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, spammer.Addresses[0])
-		require.NoError(t, err, "failed to transfer funds back to original root key")
-	})
 
 	contractAbi, err := link_token_interface.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -629,7 +565,6 @@ func TestGasBumping_Contract_Interaction_Legacy_BumpingDisabled(t *testing.T) {
 	go func() {
 		for i := 0; i < 5; i++ {
 			_, _ = spammer.DeployContract(spammer.NewTXKeyOpts(spammer.AnySyncedKey()), "LinkToken", *contractAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
-			syncCleanupCh <- struct{}{}
 		}
 	}()
 
@@ -640,18 +575,7 @@ func TestGasBumping_Contract_Interaction_Legacy_BumpingDisabled(t *testing.T) {
 }
 
 func TestGasBumping_Contract_Interaction_Legacy_FailedBumping(t *testing.T) {
-	spammer := test_utils.NewClientWithAddresses(t, 5)
-
-	syncCleanupCh := make(chan struct{})
-	t.Cleanup(func() {
-		<-syncCleanupCh
-		err := spammer.NonceManager.UpdateNonces()
-		require.NoError(t, err, "failed to update nonces")
-		err = seth.ReturnFunds(spammer, spammer.Addresses[0].Hex())
-		require.NoError(t, err, "failed to return funds")
-	})
-
-	var zero int64 = 0
+	spammer := test_utils.NewClientWithAddresses(t, 5, oneEth)
 
 	configCopy, err := test_utils.CopyConfig(spammer.Cfg)
 	require.NoError(t, err, "failed to copy config")
@@ -662,12 +586,6 @@ func TestGasBumping_Contract_Interaction_Legacy_FailedBumping(t *testing.T) {
 
 	client, err := seth.NewClientWithConfig(configCopy)
 	require.NoError(t, err, "failed to create client")
-
-	t.Cleanup(func() {
-		client.Cfg.Network.GasPrice = 100_000_000
-		err = test_utils.TransferAllFundsBetweenKeyAndAddress(client, 0, spammer.Addresses[0])
-		require.NoError(t, err, "failed to transfer funds back to original root key")
-	})
 
 	contractAbi, err := link_token_interface.LinkTokenMetaData.GetAbi()
 	require.NoError(t, err, "failed to get ABI")
@@ -696,7 +614,6 @@ func TestGasBumping_Contract_Interaction_Legacy_FailedBumping(t *testing.T) {
 	go func() {
 		for i := 0; i < 5; i++ {
 			_, _ = spammer.DeployContract(spammer.NewTXKeyOpts(spammer.AnySyncedKey()), "LinkToken", *contractAbi, common.FromHex(link_token.LinkTokenMetaData.Bin))
-			syncCleanupCh <- struct{}{}
 		}
 	}()
 
