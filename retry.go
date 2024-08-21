@@ -3,6 +3,7 @@ package seth
 import (
 	"context"
 	"fmt"
+	"github.com/holiman/uint256"
 	"math/big"
 	"strings"
 	"time"
@@ -99,8 +100,8 @@ var PriorityBasedGasBumpingStrategyFn = func(priority string) GasBumpStrategyFn 
 	}
 }
 
-// bumpGasOnTimeout bumps gas price of the transaction if it wasn't confirmed in time. It returns replacement transaction.
-// If there's an error, it returns the original transaction and the error.
+// bumpGasOnTimeout bumps gas price of the transaction if it wasn't confirmed in time. It returns a signed replacement transaction.
+// Errors might be returned, because transaction was no longer pending, max gas price was reached or there was an error sending the transaction (e.g. nonce too low, meaning that original transaction was mined).
 var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Transaction, error) {
 	L.Warn().Msgf("Transaction wasn't confirmed in %s. Bumping gas", client.Cfg.Network.TxnTimeout.String())
 
@@ -113,7 +114,7 @@ var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Trans
 
 	if !isPending {
 		L.Debug().Str("Tx hash", tx.Hash().Hex()).Msg("Transaction was confirmed before bumping gas")
-		return tx, nil
+		return nil, errors.New("transaction was confirmed before bumping gas")
 	}
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
@@ -139,7 +140,7 @@ var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Trans
 	var replacementTx *types.Transaction
 
 	var checkMaxPrice = func(gasPrice, maxGasPrice *big.Int) error {
-		if maxGasPrice.Cmp(big.NewInt(0)) == 0 {
+		if client.Cfg.HasMaxBumpGasPrice() {
 			L.Debug().Msg("Max gas price for gas bump is not set, skipping check")
 			return nil
 		}
@@ -151,12 +152,11 @@ var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Trans
 		return nil
 	}
 
-	// Legacy tx
 	switch tx.Type() {
 	case types.LegacyTxType:
 		gasPrice := client.Cfg.GasBump.StrategyFn(tx.GasPrice())
 		if err := checkMaxPrice(gasPrice, maxGasPrice); err != nil {
-			return tx, err
+			return nil, err
 		}
 		L.Warn().Interface("Old gas price", tx.GasPrice()).Interface("New gas price", gasPrice).Msg("Bumping gas price for legacy transaction")
 		txData := &types.LegacyTx{
@@ -172,7 +172,7 @@ var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Trans
 		gasFeeCap := client.Cfg.GasBump.StrategyFn(tx.GasFeeCap())
 		gasTipCap := client.Cfg.GasBump.StrategyFn(tx.GasTipCap())
 		if err := checkMaxPrice(big.NewInt(0).Add(gasFeeCap, gasTipCap), maxGasPrice); err != nil {
-			return tx, err
+			return nil, err
 		}
 		L.Warn().Interface("Old gas fee cap", tx.GasFeeCap()).Interface("New gas fee cap", gasFeeCap).Interface("Old gas tip cap", tx.GasTipCap()).Interface("New gas tip cap", gasTipCap).Msg("Bumping gas fee cap and tip cap for EIP-1559 transaction")
 		txData := &types.DynamicFeeTx{
@@ -186,6 +186,49 @@ var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Trans
 		}
 
 		replacementTx, err = types.SignNewTx(privateKey, signer, txData)
+	case types.BlobTxType:
+		if tx.To() == nil {
+			return nil, fmt.Errorf("blob tx with nil recipient is not supported")
+		}
+		gasFeeCap := client.Cfg.GasBump.StrategyFn(tx.GasFeeCap())
+		gasTipCap := client.Cfg.GasBump.StrategyFn(tx.GasTipCap())
+		blobFeeCap := client.Cfg.GasBump.StrategyFn(tx.BlobGasFeeCap())
+		if err := checkMaxPrice(big.NewInt(0).Add(gasFeeCap, big.NewInt(0).Add(gasTipCap, blobFeeCap)), maxGasPrice); err != nil {
+			return nil, err
+		}
+
+		L.Warn().Interface("Old gas fee cap", tx.GasFeeCap()).Interface("Old max fee per blob", tx.BlobGasFeeCap()).Interface("New max fee per blob", blobFeeCap).Interface("New gas fee cap", gasFeeCap).Interface("Old gas tip cap", tx.GasTipCap()).Interface("New gas tip cap", gasTipCap).Msg("Bumping gas fee cap and tip cap for Blob transaction")
+		txData := &types.BlobTx{
+			Nonce:      tx.Nonce(),
+			To:         *tx.To(),
+			Value:      uint256.NewInt(tx.Value().Uint64()),
+			Gas:        tx.Gas(),
+			GasFeeCap:  uint256.NewInt(gasFeeCap.Uint64()),
+			GasTipCap:  uint256.NewInt(gasTipCap.Uint64()),
+			BlobFeeCap: uint256.NewInt(blobFeeCap.Uint64()),
+			BlobHashes: tx.BlobHashes(),
+			Data:       tx.Data(),
+		}
+
+		replacementTx, err = types.SignNewTx(privateKey, signer, txData)
+	case types.AccessListTxType:
+		gasPrice := client.Cfg.GasBump.StrategyFn(tx.GasPrice())
+		if err := checkMaxPrice(gasPrice, maxGasPrice); err != nil {
+			return nil, err
+		}
+		L.Warn().Interface("Old gas price", tx.GasPrice()).Interface("New gas price", gasPrice).Msg("Bumping gas price for access list transaction")
+
+		txData := &types.AccessListTx{
+			Nonce:      tx.Nonce(),
+			To:         tx.To(),
+			Value:      tx.Value(),
+			Gas:        tx.Gas(),
+			Data:       tx.Data(),
+			AccessList: tx.AccessList(),
+		}
+
+		replacementTx, err = types.SignNewTx(privateKey, signer, txData)
+
 	default:
 		return nil, fmt.Errorf("unsupported tx type %d", tx.Type())
 	}
@@ -197,11 +240,8 @@ var bumpGasOnTimeout = func(client *Client, tx *types.Transaction) (*types.Trans
 	ctx, cancel = context.WithTimeout(context.Background(), client.Cfg.Network.TxnTimeout.Duration())
 	defer cancel()
 	err = client.Client.SendTransaction(ctx, replacementTx)
-	// contrary to convention we return initial tx here, so that next retry will bump gas again using original tx
-	// what could have happened here is that the tx was mined in the meantime and if that happened we need to have the original tx hash
-	// we do not want to check for explicit error here, like 'nonce too low', because it might differ for each Ethereum client
 	if err != nil {
-		return tx, err
+		return nil, err
 	}
 
 	return replacementTx, nil

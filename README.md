@@ -219,7 +219,7 @@ client, err := builder.
     // EIP-1559 and gas estimations
     WithEIP1559DynamicFees(true).
     WithDynamicGasPrices(120_000_000_000, 44_000_000_000).
-    WithGasPriceEstimations(false, 10, seth.Priority_Fast).
+    WithGasPriceEstimations(false, 10, seth.Priority_Fast). 
 	// gas bumping: retries, max gas price, bumping strategy function
     WithGasBumping(5, 100_000_000_000, PriorityBasedGasBumpingStrategyFn).	
     Build()
@@ -564,7 +564,7 @@ Once enabled, by default the amount, by which gas price is bumped depends on `ga
 - `Priority_Slow`: 5% increase
 - everything else: no increase
 
-You can cap max gas price by settings:
+You can cap max gas price by settings (in wei):
 ```toml
 [gas_bumps]
 max_gas_price = 1000000000000
@@ -575,6 +575,10 @@ Once the gas price bump would go above the limit we stop bumping and use the las
 How gas price is calculated depends on transaction type:
 - for legacy transactions it's just the gas price
 - for EIP-1559 transactions it's the sum of gas fee cap and tip cap
+- for Blob transactions (EIP-4844) it's the sum of gas fee cap and tip cap and max fee per blob
+- for AccessList transactions (EIP-2930) it's just the gas price
+
+Please note that Blob and AccessList 
 
 If you want to use a custom bumping strategy, you can use a function with [GasBumpStrategyFn](retry.go) type. Here's an example of a custom strategy that bumps the gas price by 100% for every retry:
 ```go
@@ -592,11 +596,17 @@ client, err := builder.
     Build()
 ```
 
+Or set it directly on Seth's config:
+```go
+// assuming sethClient is already created
+sethClient.Config.GasBumps.StrategyFn = customGasBumpStrategyFn
+```
+
 Since strategy function only accepts a single parameter, if you want to base its behaviour on anything else than that you will need to capture these values from the context, in which you define the strategy function. For example, you can use a closure to capture the initial gas price:
 ```go
 gasOracleClient := NewGasOracleClient()
 
-var randomGasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+var oracleGasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
     // get the current gas price from the oracle
     suggestedGasPrice := gasOracleClient.GetCurrentGasPrice()
 
@@ -613,12 +623,19 @@ var randomGasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
 Currently, the gas bumping mechanism is available for:
 * Legacy transactions
 * EIP-1559 transactions.
+* Blob transactions (EIP-4844)
+* AccessList transactions (EIP-2930)
 
-Same strategy is applied to both types of transactions, for gas price and for gas fee cap and tip cap.
+Same strategy is applied to all types of transactions, regardless whether it's gas price, gas fee cap, gas tip cap or max blob fee.
 
 When enabled, gas bumping is used in two places:
 * during contract deployment via `DeployContract` function
-* inside `Decode()` function, when transaction is not mined within the timeout
+* inside `Decode()` function
+
+It is recommended to decrease transaction timeout when using gas bumping, as it will be effectively increased by the number of retries. So if you were running with 5 minutes timeout and 0 retries, you should set it to 1 minute and 5 retries
+or 30 seconds and 10 retries.
+
+Don't worry if while bumping logic executes previous transaction gets mined. In that case sending replacement transaction with higher gas will fail (because it is using the same nonce as original transaction) and we will retry waiting for the mining of the original transaction.
 
 ## CLI
 

@@ -81,6 +81,10 @@ func (c *Config) GasBumpRetries() uint {
 	return c.GasBump.Retries
 }
 
+func (c *Config) HasMaxBumpGasPrice() bool {
+	return c.GasBump != nil && c.GasBump.MaxGasPrice > 0
+}
+
 type NonceManagerCfg struct {
 	KeySyncRateLimitSec int       `toml:"key_sync_rate_limit_per_sec"`
 	KeySyncTimeout      *Duration `toml:"key_sync_timeout"`

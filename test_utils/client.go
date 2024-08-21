@@ -66,6 +66,7 @@ func NewClientWithAddresses(t *testing.T, addressCount int) *seth.Client {
 	return newClient
 }
 
+// NewPrivateKeyWithFunds generates a new private key and funds it with the given amount of native tokens.
 func NewPrivateKeyWithFunds(t *testing.T, c *seth.Client, funds *big.Int) string {
 	addr, pk, err := seth.NewAddress()
 	require.NoError(t, err, "failed to generate new address")
@@ -83,6 +84,7 @@ func NewPrivateKeyWithFunds(t *testing.T, c *seth.Client, funds *big.Int) string
 	return pk
 }
 
+// TransferAllFundsBetweenKeyAndAddress transfers all funds key at specified index has to the given address.
 func TransferAllFundsBetweenKeyAndAddress(client *seth.Client, keyNum int, toAddress common.Address) error {
 	err := client.NonceManager.UpdateNonces()
 	if err != nil {

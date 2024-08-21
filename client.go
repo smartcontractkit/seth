@@ -389,6 +389,7 @@ func NewClientRaw(
 		}
 	}
 
+	// if gas bumping is enabled, but no strategy is set, we set the default one; otherwise we set the no-op strategy (defensive programming to avoid NPE)
 	if c.Cfg.GasBump != nil && c.Cfg.GasBump.StrategyFn == nil {
 		if c.Cfg.GasBumpRetries() != 0 {
 			c.Cfg.GasBump.StrategyFn = PriorityBasedGasBumpingStrategyFn(c.Cfg.Network.GasPriceEstimationTxPriority)
@@ -421,9 +422,10 @@ func (m *Client) checkRPCHealth() error {
 
 // Decode waits for transaction to be minted, then decodes transaction inputs, outputs, logs and events and
 // depending on 'tracing_level' it either returns immediately or if the level matches it traces all calls.
-// If 'tracing_to_json' is saved we also save to JSON all that information.
-// If transaction was reverted the error return will be revert error, not decoding error (that one if any will be logged).
-// It means it can return both error and decoded transaction!
+// Where tracing results go depends on the 'trace_outputs' field in the config.
+// If transaction was reverted the error returned will be revert error, not decoding error (that one, if any, will be logged).
+// At the same time we also return decoded transaction, so contrary to go convention you might get both error and result.
+// Last, but not least, if gas bumps are enabled, we will try to bump gas on transaction timeout and resubmit it with higher gas.
 func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction, error) {
 	if len(m.Errors) > 0 {
 		return nil, verr.Join(m.Errors...)
@@ -451,6 +453,8 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 
 	l := L.With().Str("Transaction", tx.Hash().Hex()).Logger()
 
+	// if transaction was not mined, we will retry it with gas bumping, but only if gas bumping is enabled
+	// and if the transaction was not mined in time, other errors will be returned as is
 	var receipt *types.Receipt
 	err := retry.Do(
 		func() error {
@@ -461,16 +465,17 @@ func (m *Client) Decode(tx *types.Transaction, txErr error) (*DecodedTransaction
 
 			return err
 		}, retry.OnRetry(func(i uint, retryErr error) {
-			var bumpErr error
-			tx, bumpErr = bumpGasOnTimeout(m, tx)
+			replacementTx, bumpErr := bumpGasOnTimeout(m, tx)
 			if bumpErr != nil {
 				L.Debug().Str("Bump error", bumpErr.Error()).Str("Current error", retryErr.Error()).Uint("Attempt", i).Msg("Failed to bump gas for transaction. Retrying without bump")
+				return
 			} else {
 				L.Debug().Str("Current error", retryErr.Error()).Uint("Attempt", i).Msg("Waiting for transaction to be confirmed after gas bump")
 			}
+			tx = replacementTx
 		}),
 		retry.DelayType(retry.FixedDelay),
-		// unless attempts is at least 1 we Do won't execute at all!
+		// unless attempts is at least 1 retry.Do won't execute at all
 		retry.Attempts(func() uint {
 			if m.Cfg.GasBumpRetries() == 0 {
 				return 1
@@ -1158,20 +1163,21 @@ func (m *Client) DeployContract(auth *bind.TransactOpts, name string, abi abi.AB
 		}, retry.OnRetry(func(i uint, retryErr error) {
 			switch {
 			case errors.Is(retryErr, context.DeadlineExceeded):
-				var bumpErr error
-				tx, bumpErr = bumpGasOnTimeout(m, tx)
+				replacementTx, bumpErr := bumpGasOnTimeout(m, tx)
 				if bumpErr != nil {
 					L.Debug().Str("Current error", retryErr.Error()).Str("Bump error", bumpErr.Error()).Uint("Attempt", i+1).Msg("Failed to bump gas for contract deployment. Waiting without bump")
 					return
 				}
+				tx = replacementTx
 			default:
-				// do nothing, just wait until mined again
+				// do nothing, just wait again until it's mined
 			}
 			L.Debug().Str("Current error", retryErr.Error()).Uint("Attempt", i+1).Msg("Waiting for contract to be deployed")
 		}),
 		retry.DelayType(retry.FixedDelay),
-		// if gas bump retries are set to 0, we will retry 10 times, because what we will be retrying will be other errors (no code at address, etc.)
+		// if gas bump retries are set to 0, we still want to retry 10 times, because what we will be retrying will be other errors (no code at address, etc.)
 		// downside is that if retries are enabled and their number is low other retry errors will be retried only that number of times
+		// (we could have custom logic for different retry count per error, but that seemed like an overkill, so it wasn't implemented)
 		retry.Attempts(func() uint {
 			if m.Cfg.GasBumpRetries() != 0 {
 				return m.Cfg.GasBumpRetries()
