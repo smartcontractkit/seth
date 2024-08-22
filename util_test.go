@@ -1,10 +1,16 @@
 package seth_test
 
 import (
+	"context"
 	"errors"
+	network_sub_contract "github.com/smartcontractkit/seth/contracts/bind/sub"
+	"math/big"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/smartcontractkit/seth"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestUtilDecodePragmaVersion(t *testing.T) {
@@ -116,5 +122,108 @@ func TestUtilDoesPragmaSupportCustomRevert(t *testing.T) {
 			result := seth.DoesPragmaSupportCustomRevert(tt.input)
 			require.Equal(t, tt.expected, result)
 		})
+	}
+}
+
+func TestUtilPendingNonce(t *testing.T) {
+	c := newClient(t)
+	c.Cfg.Network.PrivateKeys = append(c.Cfg.Network.PrivateKeys, c.Cfg.Network.PrivateKeys[0])
+	c.Addresses = append(c.Addresses, c.Addresses[0])
+	c.PrivateKeys = append(c.PrivateKeys, c.PrivateKeys[0])
+
+	type tc struct {
+		name       string
+		keyNum     int
+		timeout    time.Duration
+		shouldFail bool
+	}
+
+	tests := []tc{
+		{
+			name:       "processes all in time",
+			keyNum:     0,
+			timeout:    1 * time.Minute,
+			shouldFail: false,
+		},
+		{
+			name:       "times out",
+			keyNum:     1,
+			timeout:    1 * time.Second,
+			shouldFail: true,
+		},
+	}
+
+	for _, testCase := range tests {
+		started := make(chan struct{})
+		nonce, err := c.Client.NonceAt(context.Background(), c.Addresses[testCase.keyNum], nil)
+		require.NoError(t, err, "Error getting nonce")
+
+		nonceMutex := sync.Mutex{}
+
+		var getNonceAndIncrement = func() uint64 {
+			nonceMutex.Lock()
+			defer nonceMutex.Unlock()
+			currentNonce := nonce
+			nonce++
+			return currentNonce
+		}
+
+		nonceCh := make(chan uint64, 100)
+
+		go func() {
+			for nonce := range nonceCh {
+				_ = nonce
+			}
+		}()
+
+		go func() {
+			for i := 1; i <= 5000; i++ {
+				go func(index int) {
+					seth.L.Debug().Msgf("Starting tx %d", index)
+
+					opts := c.NewTXOpts()
+					nonceToUse := int64(getNonceAndIncrement())
+					opts.Nonce = big.NewInt(nonceToUse)
+					defer seth.L.Debug().Msgf("Finished tx %d with nonce %d", index, nonceToUse)
+
+					_, _, _, err := network_sub_contract.DeployNetworkDebugSubContract(opts, c.Client)
+					require.NoError(t, err, "Error adding counter")
+
+					if index == 50 {
+						started <- struct{}{}
+					}
+					nonceCh <- uint64(nonceToUse)
+				}(i)
+			}
+		}()
+
+		<-started
+		pendingNonce, err := c.Client.PendingNonceAt(context.Background(), c.Addresses[testCase.keyNum])
+		require.NoError(t, err, "Error getting pending nonce")
+
+		lastNonce, err := c.Client.NonceAt(context.Background(), c.Addresses[testCase.keyNum], nil)
+		require.NoError(t, err, "Error getting last nonce")
+		require.Greater(t, int64(pendingNonce), int64(lastNonce), "Pending nonce should be greater than last nonce")
+
+		if testCase.keyNum == 0 {
+			err = c.WaitUntilNoPendingTxForRootKey(testCase.timeout)
+		} else {
+			err = c.WaitUntilNoPendingTxFoKeyNum(testCase.keyNum, testCase.timeout)
+		}
+		if testCase.shouldFail {
+			require.Error(t, err, "No error, when waiting for pending tx to be processed")
+		} else {
+			require.NoError(t, err, "Error waiting for pending tx")
+		}
+	}
+}
+
+func TestUtilPendingNonce_InvalidKey(t *testing.T) {
+	c := newClient(t)
+
+	invalidKeys := []int{-1, 100}
+	for _, key := range invalidKeys {
+		err := c.WaitUntilNoPendingTxFoKeyNum(key, 1*time.Second)
+		require.Error(t, err, "No error, when passing invalid key num")
 	}
 }
