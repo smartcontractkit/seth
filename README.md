@@ -12,24 +12,25 @@ Reliable and debug-friendly Ethereum client
 # Content
 1. [Goals](#goals)
 2. [Features](#features)
-2. [Examples](#examples)
-3. [Setup](#setup)
-   4. [Building test contracts](#building-test-contracts)
-   5. [Testing](#testing)
+3. [Examples](#examples)
+4. [Setup](#setup)
+   1. [Building test contracts](#building-test-contracts)
+   2. [Testing](#testing)
 6. [Configuration](#config)
-   6. [Simplified configuration](#simplified-configuration)
-   7. [ConfigBuilder](#configbuilder)
-   7. [Supported env vars](#supported-env-vars)
-   8. [TOML configuration](#toml-configuration)
+   1. [Simplified configuration](#simplified-configuration)
+   2. [ClientBuilder](#clientbuilder)
+   3. [Supported env vars](#supported-env-vars)
+   4. [TOML configuration](#toml-configuration)
 9. [Automated gas price estimation](#automatic-gas-estimator)
 10. [DOT Graphs of transactions](#dot-graphs)
 11. [Using multiple private keys](#using-multiple-keys)
 12. [Experimental features](#experimental-features)
-13. [CLI](#cli)
-    14. [Manual gas price estimation](#manual-gas-price-estimation)
-    15. [Block Stats](#block-stats)
-    15. [Single transaction tracing](#single-transaction-tracing)
-    16. [Bulk transaction tracing](#bulk-transaction-tracing)
+13. [Gas bumping for slow transactions](#gas-bumping-for-slow-transactions)
+14. [CLI](#cli)
+   1. [Manual gas price estimation](#manual-gas-price-estimation)
+   2. [Block Stats](#block-stats)
+   3. [Single transaction tracing](#single-transaction-tracing)
+   4. [Bulk transaction tracing](#bulk-transaction-tracing)
 
 ## Goals
 
@@ -68,6 +69,7 @@ Reliable and debug-friendly Ethereum client
 - [x] Block stats CLI
 - [x] Check if address has a pending nonce (transaction) and panic if it does
 - [x] DOT graph output for tracing
+- [x] Gas bumping for slow transactions
 
 You can read more about how ABI finding and contract map works [here](./docs/abi_finder_contract_map.md) and about contract store here [here](./docs/contract_store.md).
 
@@ -193,11 +195,11 @@ This config uses what we consider reasonable defaults, such as:
 * checking of RPC node health on client creation
 * no ephemeral keys
 
-### ConfigBuilder
-You can also use a `ConfigBuilder` to build a config programmatically. Here's an extensive example:
+### ClientBuilder
+You can also use a `ClientBuilder` to build a config programmatically. Here's an extensive example:
 
 ```go
-cfg := builder.
+client, err := builder.
     // network
     WithNetworkName("my network").
     WithRpcUrl("ws://localhost:8546").
@@ -217,10 +219,11 @@ cfg := builder.
     // EIP-1559 and gas estimations
     WithEIP1559DynamicFees(true).
     WithDynamicGasPrices(120_000_000_000, 44_000_000_000).
-    WithGasPriceEstimations(false, 10, seth.Priority_Fast).
+    WithGasPriceEstimations(false, 10, seth.Priority_Fast). 
+	// gas bumping: retries, max gas price, bumping strategy function
+    WithGasBumping(5, 100_000_000_000, PriorityBasedGasBumpingStrategyFn).	
     Build()
 
-client, err := seth.NewClientWithConfig(cfg)
 if err != nil {
     log.Fatal(err)
 }
@@ -547,6 +550,88 @@ Here's what they do:
 
 - `slow_funds_return` will work only in `core` and when enabled it changes tx priority to `slow` and increases transaction timeout to 30 minutes.
 - `eip_1559_fee_equalizer` in case of EIP-1559 transactions if it detects that historical base fee and suggested/historical tip are more than 3 orders of magnitude apart, it will use the higher value for both (this helps in cases where base fee is almost 0 and transaction is never processed).
+
+## Gas bumping for slow transactions
+Seth has built-in gas bumping mechanism for slow transactions. If a transaction is not mined within a certain time frame (`Network`'s transaction timeout), Seth will automatically bump the gas price and resubmit the transaction. This feature is disabled by default and can be enabled by setting the `[gas_bumps] retries` to a non-zero number:
+```toml
+[gas_bumps]
+retries = 5
+```    
+
+Once enabled, by default the amount, by which gas price is bumped depends on `gas_price_estimation_tx_priority` setting and is calculated as follows:
+- `Priority_Fast`: 30% increase
+- `Priority_Standard`: 15% increase
+- `Priority_Slow`: 5% increase
+- everything else: no increase
+
+You can cap max gas price by settings (in wei):
+```toml
+[gas_bumps]
+max_gas_price = 1000000000000
+```
+
+Once the gas price bump would go above the limit we stop bumping and use the last gas price that was below the limit.
+
+How gas price is calculated depends on transaction type:
+- for legacy transactions it's just the gas price
+- for EIP-1559 transactions it's the sum of gas fee cap and tip cap
+- for Blob transactions (EIP-4844) it's the sum of gas fee cap and tip cap and max fee per blob
+- for AccessList transactions (EIP-2930) it's just the gas price
+
+Please note that Blob and AccessList support remains experimental and is not tested.
+
+If you want to use a custom bumping strategy, you can use a function with [GasBumpStrategyFn](retry.go) type. Here's an example of a custom strategy that bumps the gas price by 100% for every retry:
+```go
+var customGasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+    return new(big.Int).Mul(gasPrice, big.NewInt(2))
+}
+```
+
+To use this strategy, you need to pass it to the `WithGasBumping` function in the `ClientBuilder`:
+```go
+var hundredGwei in64 = 100_000_000_000
+client, err := builder.
+    // other settings...
+    WithGasBumping(5, hundredGwei, customGasBumpStrategyFn).
+    Build()
+```
+
+Or set it directly on Seth's config:
+```go
+// assuming sethClient is already created
+sethClient.Config.GasBumps.StrategyFn = customGasBumpStrategyFn
+```
+
+Since strategy function only accepts a single parameter, if you want to base its behaviour on anything else than that you will need to capture these values from the context, in which you define the strategy function. For example, you can use a closure to capture the initial gas price:
+```go
+gasOracleClient := NewGasOracleClient()
+
+var oracleGasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
+    // get the current gas price from the oracle
+    suggestedGasPrice := gasOracleClient.GetCurrentGasPrice()
+
+	// if oracle suggests a higher gas price, use it
+    if suggestedGasPrice.Cmp(gasPrice) == 1 {
+        return suggestedGasPrice
+    }
+
+	// otherwise bump by 100%
+    return new(big.Int).Mul(gasPrice, big.NewInt(2))
+}
+```
+
+Same strategy is applied to all types of transactions, regardless whether it's gas price, gas fee cap, gas tip cap or max blob fee.
+
+When enabled, gas bumping is used in two places:
+* during contract deployment via `DeployContract` function
+* inside `Decode()` function
+
+It is recommended to decrease transaction timeout when using gas bumping, as it will be effectively increased by the number of retries. So if you were running with 5 minutes timeout and 0 retries, you should set it to 1 minute and 5 retries
+or 30 seconds and 10 retries.
+
+Don't worry if while bumping logic executes previous transaction gets mined. In that case sending replacement transaction with higher gas will fail (because it is using the same nonce as original transaction) and we will retry waiting for the mining of the original transaction.
+
+**Gas bumping is only applied for submitted transaction. If transaction was rejected by the node (e.g. because of too low base fee) we will not bump the gas price nor try to submit it, because original transaction submission happens outside of Seth.**
 
 ## CLI
 

@@ -19,9 +19,6 @@ const (
 	ErrReadSethConfig      = "failed to read TOML config for seth"
 	ErrUnmarshalSethConfig = "failed to unmarshal TOML config for seth"
 	ErrEmptyRootPrivateKey = "no root private key were set, set %s=..."
-	ErrNoPrivateKeysPassed = "you must pass at least one private key (root key)"
-	ErrInvalidPrivateKey   = "invalid private key"
-	ErrEmptyRPCURL         = "RPC URL cannot be empty"
 
 	GETH  = "Geth"
 	ANVIL = "Anvil"
@@ -66,6 +63,27 @@ type Config struct {
 	ExperimentsEnabled            []string          `toml:"experiments_enabled"`
 	CheckRpcHealthOnStart         bool              `toml:"check_rpc_health_on_start"`
 	BlockStatsConfig              *BlockStatsConfig `toml:"block_stats"`
+	GasBump                       *GasBumpConfig    `toml:"gas_bump"`
+}
+
+type GasBumpConfig struct {
+	Retries     uint              `toml:"retries"`
+	MaxGasPrice int64             `toml:"max_gas_price"`
+	StrategyFn  GasBumpStrategyFn `toml:"-"`
+}
+
+// GasBumpRetries returns the number of retries for gas bumping
+func (c *Config) GasBumpRetries() uint {
+	if c.GasBump == nil {
+		return 0
+	}
+
+	return c.GasBump.Retries
+}
+
+// HasMaxBumpGasPrice returns true if the max gas price for gas bumping is set
+func (c *Config) HasMaxBumpGasPrice() bool {
+	return c.GasBump != nil && c.GasBump.MaxGasPrice > 0
 }
 
 type NonceManagerCfg struct {
@@ -95,32 +113,10 @@ type Network struct {
 	ChainID string
 }
 
-// DefaultConfig returns a reasonable default config with the specified RPC URL and private keys. It doesn't validate the inputs in any way, but you should pass at least 1 private key.
+// DefaultClient returns a Client with reasonable default config with the specified RPC URL and private keys. You should pass at least 1 private key.
 // It assumes that network is EIP-1559 compatible (if it's not, the client will later automatically update its configuration to reflect it).
-func DefaultConfig(rpcUrl string, privateKeys []string) *Config {
-	return NewConfigBuilder().WithRpcUrl(rpcUrl).WithPrivateKeys(privateKeys).Build()
-}
-
-// ValidatedDefaultConfig returns a reasonable default config with the specified RPC URL and private keys. It validates whether
-// at least 1 private key has been passed and whether each private key is valid ECDSA key. It doesn't validate the URL, because
-// "net/url" validation will accept almost anything as a valid URL.
-func ValidatedDefaultConfig(rpcUrl string, privateKeys []string) (*Config, error) {
-	if len(privateKeys) == 0 {
-		return nil, errors.New(ErrNoPrivateKeysPassed)
-	}
-
-	for _, maybePk := range privateKeys {
-		_, err := crypto.HexToECDSA(maybePk)
-		if err != nil {
-			return nil, errors.Wrap(err, ErrInvalidPrivateKey)
-		}
-	}
-
-	if rpcUrl == "" {
-		return nil, errors.New(ErrEmptyRPCURL)
-	}
-
-	return DefaultConfig(rpcUrl, privateKeys), nil
+func DefaultClient(rpcUrl string, privateKeys []string) (*Client, error) {
+	return NewClientBuilder().WithRpcUrl(rpcUrl).WithPrivateKeys(privateKeys).Build()
 }
 
 // ReadConfig reads the TOML config file from location specified by env var "SETH_CONFIG_PATH" and returns a Config struct
