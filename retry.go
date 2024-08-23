@@ -73,7 +73,7 @@ var PriorityBasedGasBumpingStrategyFn = func(priority string) GasBumpStrategyFn 
 		// +30%
 		return func(gasPrice *big.Int) *big.Int {
 			gasPriceFloat, _ := gasPrice.Float64()
-			newGasPriceFloat := big.NewFloat(0.0).Mul(big.NewFloat(gasPriceFloat), big.NewFloat(1.5))
+			newGasPriceFloat := big.NewFloat(0.0).Mul(big.NewFloat(gasPriceFloat), big.NewFloat(1.3))
 			newGasPrice, _ := newGasPriceFloat.Int64()
 			return big.NewInt(newGasPrice)
 		}

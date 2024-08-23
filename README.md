@@ -578,7 +578,7 @@ How gas price is calculated depends on transaction type:
 - for Blob transactions (EIP-4844) it's the sum of gas fee cap and tip cap and max fee per blob
 - for AccessList transactions (EIP-2930) it's just the gas price
 
-Please note that Blob and AccessList 
+Please note that Blob and AccessList support remains experimental and is not tested.
 
 If you want to use a custom bumping strategy, you can use a function with [GasBumpStrategyFn](retry.go) type. Here's an example of a custom strategy that bumps the gas price by 100% for every retry:
 ```go
@@ -619,12 +619,6 @@ var oracleGasBumpStrategyFn = func(gasPrice *big.Int) *big.Int {
     return new(big.Int).Mul(gasPrice, big.NewInt(2))
 }
 ```
-
-Currently, the gas bumping mechanism is available for:
-* Legacy transactions
-* EIP-1559 transactions.
-* Blob transactions (EIP-4844)
-* AccessList transactions (EIP-2930)
 
 Same strategy is applied to all types of transactions, regardless whether it's gas price, gas fee cap, gas tip cap or max blob fee.
 
