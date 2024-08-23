@@ -884,16 +884,16 @@ type NonceStatus struct {
 	PendingNonce uint64
 }
 
-func (m *Client) getNonceStatus(keyNum int) (NonceStatus, error) {
+func (m *Client) getNonceStatus(address common.Address) (NonceStatus, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), m.Cfg.Network.TxnTimeout.Duration())
 	defer cancel()
-	pendingNonce, err := m.Client.PendingNonceAt(ctx, m.Addresses[keyNum])
+	pendingNonce, err := m.Client.PendingNonceAt(ctx, address)
 	if err != nil {
 		L.Error().Err(err).Msg("Failed to get pending nonce")
 		return NonceStatus{}, err
 	}
 
-	lastNonce, err := m.Client.NonceAt(ctx, m.Addresses[keyNum], nil)
+	lastNonce, err := m.Client.NonceAt(ctx, address, nil)
 	if err != nil {
 		return NonceStatus{}, err
 	}
@@ -906,7 +906,7 @@ func (m *Client) getNonceStatus(keyNum int) (NonceStatus, error) {
 
 // getProposedTransactionOptions gets all the tx info that network proposed
 func (m *Client) getProposedTransactionOptions(keyNum int) (*bind.TransactOpts, NonceStatus, GasEstimations) {
-	nonceStatus, err := m.getNonceStatus(keyNum)
+	nonceStatus, err := m.getNonceStatus(m.Addresses[keyNum])
 	if err != nil {
 		m.Errors = append(m.Errors, err)
 		// can't return nil, otherwise RPC wrapper will panic
@@ -1323,6 +1323,50 @@ func (m *Client) decodeContractLogs(l zerolog.Logger, logs []types.Log, a abi.AB
 		}
 	}
 	return eventsParsed, nil
+}
+
+// WaitUntilNoPendingTxForRootKey waits until there's no pending transaction for root key. If after timeout there are still pending transactions, it returns error.
+func (m *Client) WaitUntilNoPendingTxForRootKey(timeout time.Duration) error {
+	return m.WaitUntilNoPendingTx(m.MustGetRootKeyAddress(), timeout)
+}
+
+// WaitUntilNoPendingTxFoKeyNum waits until there's no pending transaction for key at index `keyNum`. If index is out of range or
+// if after timeout there are still pending transactions, it returns error.
+func (m *Client) WaitUntilNoPendingTxFoKeyNum(keyNum int, timeout time.Duration) error {
+	if keyNum > len(m.Addresses)-1 || keyNum < 0 {
+		return fmt.Errorf("keyNum is out of range. Expected %d-%d. Got: %d", 0, len(m.Addresses)-1, keyNum)
+	}
+	return m.WaitUntilNoPendingTx(m.Addresses[keyNum], timeout)
+}
+
+// WaitUntilNoPendingTx waits until there's no pending transaction for address. If after timeout there are still pending transactions, it returns error.
+func (m *Client) WaitUntilNoPendingTx(address common.Address, timeout time.Duration) error {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	waitTimeout := time.NewTimer(timeout)
+	defer waitTimeout.Stop()
+
+	for {
+		select {
+		case <-waitTimeout.C:
+			return fmt.Errorf("after '%s' address '%s' still had pending transactions", timeout, address)
+		case <-ticker.C:
+			nonceStatus, err := m.getNonceStatus(address)
+			// if there is an error, we can't be sure if there are pending transactions or not, let's retry on next tick
+			if err != nil {
+				L.Debug().Err(err).Msg("Failed to get nonce status")
+				continue
+			}
+			L.Debug().Msgf("Nonce status for address %s: %v", address.Hex(), nonceStatus)
+
+			if nonceStatus.PendingNonce > nonceStatus.LastNonce {
+				L.Debug().Uint64("Pending transactions", nonceStatus.PendingNonce-nonceStatus.LastNonce).Msgf("There are still pending transactions for %s", address.Hex())
+				continue
+			}
+
+			return nil
+		}
+	}
 }
 
 // mergeLogMeta add metadata from log
