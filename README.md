@@ -9,6 +9,8 @@ Reliable and debug-friendly Ethereum client
 [![Integration tests (testnets)](https://github.com/smartcontractkit/seth/actions/workflows/test_decode_testnet.yml/badge.svg)](https://github.com/smartcontractkit/seth/actions/workflows/test_decode_testnet.yml)
 <br/>
 
+*DISCLAIMER*: This repository is archived, there will be no new commits or support, all development is moved to https://github.com/smartcontractkit/chainlink-testing-framework
+
 # Content
 1. [Goals](#goals)
 2. [Features](#features)
